@@ -1,0 +1,27 @@
+ .gitignore                                 |    4 +
+ README.md                                  |   31 +
+ package-lock.json                          | 4092 ++++++++++++++++++++++++++++
+ src/main/ipc-handlers.ts                   |  131 +-
+ src/main/main.ts                           |   49 +-
+ src/preload/preload.ts                     |   48 +-
+ src/renderer/App.tsx                       |  323 +--
+ src/renderer/components/DocumentDetail.tsx |   87 -
+ src/renderer/components/DocumentList.tsx   |  116 +-
+ src/renderer/components/DocumentViewer.tsx |  150 +
+ src/renderer/components/ImportPanel.tsx    |   34 -
+ src/renderer/components/QaPanel.tsx        |  152 ++
+ src/renderer/components/QuestionPanel.tsx  |   61 -
+ src/renderer/components/StatusBar.tsx      |   55 +-
+ src/renderer/index.html                    |   13 +-
+ src/renderer/main.tsx                      |    3 +-
+ src/renderer/styles.css                    |  163 ++
+ src/renderer/types.d.ts                    |   21 +-
+ src/services/document-service.ts           |   95 +-
+ src/services/indexing-service.ts           |  226 +-
+ src/services/persistence-service.ts        |   99 +-
+ src/services/qa-service.ts                 |  390 ++-
+ src/services/retrieval.ts                  |   86 +
+ src/shared/types.ts                        |   51 +-
+ tests/services.test.ts                     |  308 +++
+ vitest.config.ts                           |    9 +
+ 26 files changed, 6009 insertions(+), 788 deletions(-)

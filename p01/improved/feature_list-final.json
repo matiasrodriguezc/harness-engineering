@@ -1,0 +1,102 @@
+{
+  "project": "project-01",
+  "description": "Baseline Electron knowledge base with minimal harness",
+  "features": [
+    {
+      "id": "window-launch",
+      "name": "Window Launch",
+      "description": "Electron app opens a BrowserWindow with correct dimensions and preload script",
+      "status": "pass",
+      "evidence": "Smoke test (npm run smoke) launches real app: window visible at 1200x800, preload bridge window.knowledgeBase reachable, no renderer console errors.",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "document-list",
+      "name": "Document List Panel",
+      "description": "Left sidebar shows imported documents with empty state message",
+      "status": "pass",
+      "evidence": "Smoke test asserts \"No documents imported yet\" empty state, then lists 3 imported docs with status badge/size/chunk count; clicking an item opens it.",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "question-panel",
+      "name": "Question Panel",
+      "description": "Bottom input bar accepts questions and submits via IPC",
+      "status": "pass",
+      "evidence": "Smoke test types into the question input and submits the form; answer arrives via qa:ask IPC and renders with citations. Button disables while a question is in flight.",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "data-directory",
+      "name": "Data Directory",
+      "description": "PersistenceService creates and manages userData/knowledge-base-data directory",
+      "status": "pass",
+      "evidence": "PersistenceService creates userData/knowledge-base-data (documents/, content/, chunks/, index/index-meta.json); smoke test checks index-meta exists. Writes are atomic (tmp+rename) and paths cannot escape the dir (unit tested).",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "document-import",
+      "name": "Document Import",
+      "description": "Import .txt/.md via native file dialog or drag-and-drop; rejects other types and files >10 MB; auto-indexes on import",
+      "status": "pass",
+      "evidence": "Unit tests cover type/size validation and same-name files; smoke test imports 3 sample docs via IPC and they reach status \"indexed\".",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "document-viewer",
+      "name": "Document Viewer",
+      "description": "Show full document text and its chunks with metadata",
+      "status": "pass",
+      "evidence": "Smoke test opens meeting-summary and asserts its text renders in the Content tab; Chunks tab lists chunks with char/word counts.",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "indexing",
+      "name": "Text Indexing",
+      "description": "Paragraph-aware ~500-char chunking; index a single document or all unindexed documents",
+      "status": "pass",
+      "evidence": "Unit tests: chunks stay <=500 chars incl. oversized paragraphs; single-doc indexing registers in index and sets status \"indexed\"; index-all skips already-indexed docs.",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "grounded-qa",
+      "name": "Grounded Q&A",
+      "description": "Answers quote matching sentences/list items from indexed chunks with citations; confidence 0.85 with citations, 0.30 without",
+      "status": "pass",
+      "evidence": "Unit test asserts every quoted line appears verbatim in a cited chunk; no-match and empty-library cases return 0.30 with no citations.",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "citation-navigation",
+      "name": "Citation Navigation",
+      "description": "Clicking a citation opens the source document and highlights the cited chunk",
+      "status": "pass",
+      "evidence": "Smoke test clicks the first citation and asserts a highlighted chunk is shown.",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "document-delete",
+      "name": "Document Delete",
+      "description": "Delete removes metadata, content, original copy, chunks and index entry",
+      "status": "pass",
+      "evidence": "Unit test + smoke test: after delete, status shows 2 loaded / 2 indexed and no chunks remain for the deleted doc.",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "status-bar",
+      "name": "Status Bar",
+      "description": "Shows index status (idle/indexing/ready/error), document and indexed counts, last activity",
+      "status": "pass",
+      "evidence": "app:status IPC now registered and returns AppStatus; smoke test verifies {documentsLoaded:3, documentsIndexed:3, indexStatus:\"ready\"}.",
+      "testedAt": "2026-11-15"
+    },
+    {
+      "id": "qa-history",
+      "name": "Q&A History",
+      "description": "Q&A history persists across sessions and is browsable in the UI",
+      "status": "pass",
+      "evidence": "Unit test reads history from a fresh QaService instance; UI restores the last answer on launch and lists previous questions.",
+      "testedAt": "2026-11-15"
+    }
+  ]
+}
