@@ -2,7 +2,7 @@
 
 Ocho experimentos medidos con Claude Code sobre el curso [Learn Harness Engineering](https://github.com/walkinglabs/learn-harness-engineering) (WalkingLabs, licencia MIT): cómo el entorno alrededor de un agente de IA (instrucciones, herramientas, entorno, estado y verificación) cambia lo que entrega el mismo modelo.
 
-**Demo:** [`index.html`](index.html) resume todo el trabajo en una página (lista para GitHub Pages).
+**Demo en vivo:** https://harness-engineering-flax.vercel.app (el código de la página es [`index.html`](index.html); Vercel publica solo ese archivo, ver `.vercelignore`).
 
 - **48 sesiones** de agente (Claude Opus 5.5, modo no interactivo), todas con transcript guardado · **US$53,86** en total
 - En cada proyecto, la misma tarea con el mismo modelo, cambiando solo el harness
