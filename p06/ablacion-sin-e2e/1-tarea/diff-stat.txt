@@ -1,0 +1,6 @@
+a5789dd docs: architecture for feedback/reset/conversation, session handoff and progress
+
+ claude-progress.md   |  7 +++++++
+ docs/ARCHITECTURE.md | 34 +++++++++++++++++++---------------
+ session-handoff.md   | 40 ++++++++++++++++++++++++++--------------
+ 3 files changed, 52 insertions(+), 29 deletions(-)

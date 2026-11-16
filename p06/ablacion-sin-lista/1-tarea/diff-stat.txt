@@ -1,0 +1,5 @@
+ab28fc3 chore: session handoff and progress log
+
+ claude-progress.md |  8 ++++++++
+ session-handoff.md | 38 +++++++++++++++++++++++++-------------
+ 2 files changed, 33 insertions(+), 13 deletions(-)

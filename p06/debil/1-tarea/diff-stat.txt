@@ -1,0 +1,20 @@
+a6c430e fin de sesión: 1-tarea
+
+ package-lock.json                               | 4092 +++++++++++++++++++++++
+ src/main/ipc-handlers.ts                        |   21 +-
+ src/main/main.ts                                |    6 +
+ src/preload/preload.ts                          |   11 +-
+ src/renderer/App.tsx                            |  247 +-
+ src/renderer/components/ConversationHistory.tsx |  270 +-
+ src/renderer/components/DocumentDetail.tsx      |    4 +-
+ src/renderer/components/DocumentList.tsx        |    3 +-
+ src/renderer/components/ImportPanel.tsx         |    4 +-
+ src/renderer/components/QuestionPanel.tsx       |  135 +-
+ src/renderer/components/ResetDialog.tsx         |   93 +
+ src/renderer/components/StatusBar.tsx           |    3 +-
+ src/renderer/types.d.ts                         |   16 +-
+ src/services/feedback-service.ts                |   48 +
+ src/services/indexing-service.ts                |    9 +-
+ src/services/qa-service.ts                      |   22 +-
+ src/shared/types.ts                             |   22 +
+ 17 files changed, 4794 insertions(+), 212 deletions(-)

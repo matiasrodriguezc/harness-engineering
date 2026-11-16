@@ -1,0 +1,6 @@
+ab28fc3 chore: session handoff and progress log
+70262c4 feat(F3-conversation): full Q&A history as a conversation in the question panel
+451a1fe feat(F2-reset): reset all data with confirmation
+30892ab feat(F1-feedback): rate answers helpful / not helpful
+82817d4 fix(baseline): repair renderer type errors and bundle preload for the sandbox
+e2ed141 starter P06 (sin-lista)

@@ -1,0 +1,6 @@
+0f5ba64 docs: session handoff, progress log, architecture updated for feedback/reset/preload bundling
+
+ claude-progress.md   |  8 ++++++++
+ docs/ARCHITECTURE.md | 31 +++++++++++++++++++------------
+ session-handoff.md   | 32 ++++++++++++++++++--------------
+ 3 files changed, 45 insertions(+), 26 deletions(-)

@@ -1,0 +1,75 @@
+commit 4ff4daded88cbd98f6dfc7bc1ab60dafcecc3aa6
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 23:35:18 2026 -0300
+
+    chore(cleanup): add .gitignore, mark unimplemented scripts in RELIABILITY.md, re-verify all passing features
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..b947077
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,2 @@
++node_modules/
++dist/
+diff --git a/claude-progress.md b/claude-progress.md
+index bd3dc11..12b4c22 100644
+--- a/claude-progress.md
++++ b/claude-progress.md
+@@ -9,3 +9,4 @@ Log de sesiones: qué se hizo, qué se verificó y con qué comando.
+ - reset-all-data -> passing (a157385). Verified: npm test, smoke-bridge, scripts/e2e/reset-all-data.mjs 6/6 including restart.
+ - conversation-history -> passing (743f509). Verified: npm test (22/22), smoke-bridge, scripts/e2e/conversation-history.mjs 13/13 including reload and restart; earlier e2e suites re-run as regression.
+ - Left for next session: StatusBar status shape mismatch, UI import picker (see session-handoff.md).
++- Cleanup pass (no new features): `bash init.sh` OK, `npm test` 22/22, smoke-bridge PASS, e2e re-run answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13 -> all three `passing` features still pass. Added `.gitignore`; marked benchmark.sh/cleanup-scanner.sh as not implemented in docs/RELIABILITY.md.
+diff --git a/docs/RELIABILITY.md b/docs/RELIABILITY.md
+index 6ee8854..58d4a6b 100644
+--- a/docs/RELIABILITY.md
++++ b/docs/RELIABILITY.md
+@@ -107,6 +107,8 @@ Use the `clean-state-checklist.md` to verify:
+ 
+ ## Benchmarking
+ 
++> **Not implemented yet.** `scripts/benchmark.sh` does not exist in the repo; this section describes the planned script.
++
+ ### Overview
+ 
+ The `scripts/benchmark.sh` script measures application performance across key operations. It uses file-based simulation to test the services layer without launching the Electron window.
+@@ -145,6 +147,8 @@ Output example:
+ 
+ ## Cleanup Scanner
+ 
++> **Not implemented yet.** `scripts/cleanup-scanner.sh` does not exist in the repo; this section describes the planned script.
++
+ ### Overview
+ 
+ The `scripts/cleanup-scanner.sh` script checks the data directory for stale or inconsistent artifacts.
+diff --git a/session-handoff.md b/session-handoff.md
+index 19390c3..33651de 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -3,10 +3,14 @@
+ ## Verified Now
+ 
+ - What is currently working: all three features in feature_list.json are `passing`: answer-feedback, reset-all-data, conversation-history. The UI reaches `window.knowledgeBase` (documents, indexing, qa, feedback, app).
+-- What verification actually ran (2026-11-15): `bash init.sh` (OK), `npm test` (22/22), `bash scripts/smoke-bridge.sh` (PASS), and the three real-app e2e scripts: `scripts/e2e/answer-feedback.mjs` 7/7, `scripts/e2e/reset-all-data.mjs` 6/6, `scripts/e2e/conversation-history.mjs` 13/13 (each includes a real app restart on the same data dir).
++- What verification actually ran (2026-11-15, cleanup pass, no feature work): `bash init.sh` -> 'init.sh OK' (types, build, 'PASS: All architecture boundary checks passed', smoke keys 'documents,indexing,qa,feedback,app' 'PASS: the running app exposes window.knowledgeBase'); `npm test` -> 'Test Files 4 passed (4), Tests 22 passed (22)'; real-app e2e re-run: `scripts/e2e/answer-feedback.mjs` 7/7, `scripts/e2e/reset-all-data.mjs` 6/6, `scripts/e2e/conversation-history.mjs` 13/13 (each includes a real app restart on the same data dir and deletes its temp data dir).
+ 
+ ## Changed This Session
+ 
++- Cleanup pass (latest): added `.gitignore` (`node_modules/`, `dist/`; before, these were only ignored via `.git/info/exclude`, so a fresh clone would see them as untracked). `docs/RELIABILITY.md` now says `scripts/benchmark.sh` and `scripts/cleanup-scanner.sh` are not implemented (the doc described them as existing). No source or feature changes.
++
++Earlier in the session:
++
+ - Baseline fix (own commit): the preload required `../shared/types`, which a sandboxed preload cannot load, so `window.knowledgeBase` was undefined in the running app. It is now bundled with esbuild (`scripts/build-preload.js`, wired into `npm run build` and `scripts/dev.js`). Fixed renderer type errors (wrong shared-types path, unused React imports).
+ - answer-feedback: `QAResponse.id` (uuid; old history entries get a stable id on first read), `FeedbackService` (feedback.json, one rating per answer, rejects bad ratings and unknown answer ids), `feedback:submit`/`feedback:list` IPC, `AnswerFeedback` buttons.
+ - reset-all-data: `app:reset` -> `PersistenceService.resetAll()`, `window.knowledgeBase.app.reset()`, `ResetDataButton` with in-page confirmation dialog.
+@@ -18,6 +22,9 @@
+ - Known defect (pre-existing, not fixed): StatusBar shows "Index:" and "Documents:" with no values. `indexing.status()` returns `{status, currentIndexed, totalDocuments}` but the renderer types it as `AppStatus {indexStatus, documentsLoaded, lastActivity}`.
+ - Known gap (pre-existing): the "+ Import" button only logs; there is no file picker in the UI. Import works through `window.knowledgeBase.documents.import(path)`. `ImportPanel` exists but is unused.
+ - Unverified path: the DocumentDetail "Index Document" button does not refresh the document list afterwards.
++- Stale doc: `quality-document.md` is the starter's grading snapshot (says no tests, no feedback, no reset). It no longer matches the repo; left untouched as a historical document.
++- Missing tooling: `scripts/benchmark.sh` and `scripts/cleanup-scanner.sh` (described in docs/RELIABILITY.md) do not exist.
++- Outside the repo: `$TMPDIR/kb-e2e-XXXXXX` dirs (4, dated 2026-11-15 20:49-20:54) predate this repo (created 23:24) and are not produced by any script here; left alone.
+ - Design choices to know: feedback for an unknown answer id is rejected; rating an answer again replaces the earlier rating, so `feedback.list()` has at most one entry per answer.
+ 
+ ## Next Best Step

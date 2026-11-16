@@ -1,0 +1,7 @@
+a5789dd docs: architecture for feedback/reset/conversation, session handoff and progress
+a12774c feat(conversation-history): question panel shows the full Q&A conversation with expandable citations, confidence indicator and rating buttons
+7b9fc41 feat(reset-all-data): app.reset() over app:reset, header 'Reset all data' with in-page confirmation
+34ac1c9 feat(answer-feedback): answer ids, feedback.submit/list, persisted ratings, rating buttons
+d0da99f fix(baseline): bundle preload so window.knowledgeBase exists
+a28b626 fix(baseline): type errors, status shape, working import, single-doc indexing, vitest config
+f410f3c starter P06 (sin-e2e)

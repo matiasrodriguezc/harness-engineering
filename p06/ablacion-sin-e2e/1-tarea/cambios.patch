@@ -1,0 +1,158 @@
+commit a5789dd40cce84c9ebdf11810c7834e1d9679ff6
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 23:46:37 2026 -0300
+
+    docs: architecture for feedback/reset/conversation, session handoff and progress
+
+diff --git a/claude-progress.md b/claude-progress.md
+index 2efb8ba..92d8c36 100644
+--- a/claude-progress.md
++++ b/claude-progress.md
+@@ -1,3 +1,10 @@
+ # claude-progress.md
+ 
+ Log de sesiones: qué se hizo, qué se verificó y con qué comando.
++
++## 2026-11-15
++
++- Baseline was broken: `init.sh` failed on type errors, and in the running app `window.knowledgeBase` was undefined because the sandboxed preload couldn't load (`module not found: ../shared/types`). Fixed both in two baseline commits, along with the status shape, the import stub and single-document indexing.
++- Implemented answer-feedback, reset-all-data and conversation-history, one commit each. All three are `passing` with evidence in feature_list.json.
++- Added `scripts/verify-app.sh`, which verifies features in the real Electron app with restarts between phases.
++- Verified: `bash init.sh` -> init.sh OK; `npm test` -> 22/22 passed; `bash scripts/verify-app.sh` -> verify-app OK.
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index eb35700..80847bd 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -50,24 +50,28 @@ The preload script exposes a typed API via `contextBridge`:
+ 
+ ```typescript
+ window.knowledgeBase = {
+-  documents: { list, import, get, delete },
++  documents: { list, import, get, delete, pathForFile },
+   indexing:   { start, status, chunks },
+-  qa:         { ask, history, clearHistory },
+-  feedback:   { submit, list },
+-  app:        { resetData },
++  qa:         { ask, history, clearHistory },   // every QAResponse has a unique `id`
++  feedback:   { submit(answerId, 'up'|'down'), list() -> [{answerId, rating, timestamp}] },
++  app:        { reset },
+ }
+ ```
+ 
++The preload is bundled with esbuild (`npm run build:preload`): Electron sandboxes
++preloads, and a sandboxed preload cannot `require` local modules such as `../shared/types`.
++
+ ### Renderer (`src/renderer/`)
+ 
+ React 18 application bundled by Vite:
+ 
+-- `App.tsx` -- Root layout with view mode switching (documents/history), reset button.
++- `App.tsx` -- Root layout; owns documents, Q&A history and ratings; header "Reset all data" control.
+ - `DocumentList` -- Sidebar listing of imported documents with status and chunk counts.
+ - `DocumentDetail` -- Shows metadata, chunks, indexing controls, and delete button.
+-- `ImportPanel` -- File input for importing .txt and .md documents.
+-- `QuestionPanel` -- Text input for asking questions.
+-- `ConversationHistory` -- Chat-style Q&A history with expandable citations, confidence indicators, feedback buttons, and clear history.
++- `ImportPanel` -- "+ Import" button over a hidden file input (.txt/.md); paths via `documents.pathForFile`.
++- `QuestionPanel` -- The full conversation (via ConversationHistory) above the ask box; clear history.
++- `ConversationHistory` -- Chat-style Q&A history: `<details>` citations that expand to the excerpt, `ConfidenceIndicator`, `FeedbackButtons`.
++- `ResetControl` -- "Reset all data" button with an in-page confirmation step.
+ - `StatusBar` -- Shows index status, document count, indexed count, and last activity.
+ 
+ ### Services (`src/services/`)
+@@ -123,10 +127,10 @@ React 18 application bundled by Vite:
+ 
+ ```
+ 1. User clicks thumbs up/down on a response
+-2. App.tsx calls window.knowledgeBase.feedback.submit(timestamp, question, rating)
++2. App.tsx calls window.knowledgeBase.feedback.submit(answerId, 'up' | 'down')
+ 3. QaService.submitFeedback():
+-   a. Creates FeedbackEntry with UUID, timestamp, rating
+-   b. Appends to feedback.json
++   a. Rejects unknown answer ids and ratings other than 'up' | 'down'
++   b. Stores {answerId, rating, timestamp} in feedback.json (re-rating replaces)
+    c. Logs structured event
+ 4. Feedback persists across sessions
+ ```
+@@ -134,9 +138,9 @@ React 18 application bundled by Vite:
+ ### Clean State Reset Flow
+ 
+ ```
+-1. User clicks Reset button in header
+-2. Confirmation dialog appears
+-3. App.tsx calls window.knowledgeBase.app.resetData()
++1. User clicks "Reset all data" in the header
++2. An in-page confirmation appears (confirm / cancel)
++3. App.tsx calls window.knowledgeBase.app.reset()
+ 4. PersistenceService.resetAll():
+    a. Removes entire data directory (rmSync recursive)
+    b. Recreates directory structure
+@@ -145,7 +149,7 @@ React 18 application bundled by Vite:
+ 6. refreshDocuments() reloads empty state
+ ```
+ 
+-## IPC Channels (14 total)
++## IPC Channels (14 total; `conversation:get` is declared but unused)
+ 
+ | Channel | Direction | Handler | Purpose |
+ |---------|-----------|---------|---------|
+diff --git a/session-handoff.md b/session-handoff.md
+index c37cf46..951b9c2 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -2,29 +2,41 @@
+ 
+ ## Verified Now
+ 
+-- What is currently working:
+-- What verification actually ran:
++- What is currently working: all three features in `feature_list.json` are `passing`
++  (answer-feedback, reset-all-data, conversation-history), verified in the real Electron app.
++- What verification actually ran (2026-11-15, end of session):
++  - `bash init.sh` -> `init.sh OK` (types, build, architecture)
++  - `npm test` -> 7 files, 22 tests passed
++  - `bash scripts/verify-app.sh` -> `verify-app OK` (all three features, Electron restarted between phases)
+ 
+ ## Changed This Session
+ 
+-- Code or behavior added:
+-- Infrastructure or harness changes:
++- Baseline fixes (separate commits, before feature work):
++  - renderer type errors (wrong `shared/types` path, unused React imports)
++  - `indexing.status()` shape did not match what the UI read (`AppStatus` now has `indexStatus`, `documentsLoaded`, `indexedCount`, `lastActivity`)
++  - indexing a single document never updated `index-meta.json` or the document status, so Q&A could not cite it
++  - "+ Import" was a stub; `File.path` is gone in Electron 33 -> `documents.pathForFile` (webUtils) in preload
++  - **preload never loaded**: sandboxed preloads cannot `require('../shared/types')`. The preload is now bundled with esbuild (`npm run build:preload`, also in `scripts/dev.js`)
++  - `vitest.config.ts` added (vite.config's `root: src/renderer` hid tests)
++- Features: answer ids + `feedback.submit/list` (feedback.json); `app.reset()` (`app:reset` -> `PersistenceService.resetAll`) with an in-page confirm; question panel = full conversation (`ConversationHistory`, `ConfidenceIndicator`, `FeedbackButtons`, `ResetControl`). The old "Show History" toggle and single last-answer card are gone.
++- Harness: `scripts/verify-app.sh [feature...]` + `scripts/verify-app/{driver.js,steps.js}` drive the built app inside Electron on a temp data dir (renderer only uses `window.knowledgeBase` + DOM). Driver extras: `reload` step, `screenshot=<file.png>` step, `EXTRA_STEPS=<file.js>` for ad-hoc debug steps.
+ 
+ ## Broken Or Unverified
+ 
+-- Known defect:
+-- Unverified path:
+-- Risk for the next session:
++- Known defect (pre-existing, not touched): `documents.delete` removes metadata and the file copy but leaves `content/<id>.txt`, `chunks/<id>.json` and the index entry, so deleted documents can still be cited ("Unknown Document" title).
++- `submitFeedback` rejects ids that are not in Q&A history. After "Clear history", old feedback entries stay in feedback.json (not deleted, just orphaned).
++- Calling `app.reset()` from devtools doesn't refresh the already-open UI (the UI button does). Restarting or clicking Refresh shows the empty state.
++- Not verified: the native file picker behind "+ Import" (verification imports through `documents.import(path)`; the picker path was only exercised by type checks).
++- Answer text is still the mock generator (it appends a truncated excerpt). Unchanged.
+ 
+ ## Next Best Step
+ 
+-- Highest-priority unfinished feature:
+-- Why it is next:
+-- What counts as passing:
+-- What must not change during that step:
++- Highest-priority unfinished feature: none in `feature_list.json`. Candidate: fix document deletion so it also removes content, chunks and the index entry.
++- What counts as passing: unit test proving no orphan chunks after delete + a verify-app step deleting a doc and asking a question with no citation to it.
++- What must not change: the `window.knowledgeBase` API (`qa.ask` returning `id`, `feedback.submit/list`, `app.reset`), the aria-labels 'Mark answer helpful', 'Mark answer not helpful', 'Reset all data', and the esbuild preload bundle.
+ 
+ ## Commands
+ 
+-- Startup:
+-- Verification:
+-- Focused debug command:
++- Startup: `env -u NODE_OPTIONS npm run dev`
++- Verification: `bash init.sh && npm test && bash scripts/verify-app.sh`
++- Focused debug command: `bash scripts/verify-app.sh conversation-history` (or `answer-feedback`, `reset-all-data`)

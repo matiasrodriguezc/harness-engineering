@@ -1,0 +1,45 @@
+{
+  "project": "project-06",
+  "rules": "Each feature moves to 'passing' only after its verification ran and passed. States: not_started, active, blocked, passing.",
+  "features": [
+    {
+      "id": "answer-feedback",
+      "behavior": "Every answer from window.knowledgeBase.qa.ask has a unique string id. window.knowledgeBase.feedback.submit(answerId, 'up'|'down') stores a rating and window.knowledgeBase.feedback.list() returns [{answerId, rating, timestamp}]. Ratings persist across restarts. Each answer in the UI has buttons with aria-label 'Mark answer helpful' and 'Mark answer not helpful'.",
+      "verification": "npm test (tests for submit, list and persistence) + bash scripts/smoke-bridge.sh + in the running app: ask a question, submit a rating through window.knowledgeBase.feedback.submit, restart, and confirm feedback.list() still has it; confirm both buttons render for an answer",
+      "state": "passing",
+      "evidence": {
+        "date": "2026-11-15",
+        "static": "npm run check -> no errors; bash scripts/check-architecture.sh -> 'PASS: All architecture boundary checks passed'",
+        "tests": "npm test -> 'Test Files 2 passed (2), Tests 10 passed (10)' (tests/answer-feedback.test.ts: unique ids, id backfill, submit/list, one rating per answer, validation, persistence across new services on same data dir; tests/bridge.test.ts: preload exposes feedback.submit/list on the right channels, every preload channel has a main handler, feedback over IPC)",
+        "smoke": "bash scripts/smoke-bridge.sh -> keys 'documents,indexing,qa,feedback', 'PASS: the running app exposes window.knowledgeBase'",
+        "e2e": "npm run build && node --experimental-websocket scripts/e2e/answer-feedback.mjs -> 'answer-feedback e2e: all 7 checks passed': qa.ask returns string id, ids unique, feedback.submit returns {answerId,rating,timestamp}, invalid rating rejected, UI answer renders 'Mark answer helpful' and 'Mark answer not helpful', clicking the button stored a 'down' rating, after a real app restart (same --user-data-dir) feedback.list() still has both ratings"
+      }
+    },
+    {
+      "id": "reset-all-data",
+      "behavior": "window.knowledgeBase.app.reset() deletes all documents, chunks, Q&A history and feedback; the empty state persists after restart. The UI has a button with aria-label 'Reset all data' that asks for confirmation first.",
+      "verification": "npm test (reset clears every store) + in the running app: import documents, ask, rate, call app.reset(), confirm documents.list(), qa.history() and feedback.list() are empty, restart and confirm they stay empty; confirm the button asks for confirmation",
+      "state": "passing",
+      "evidence": {
+        "date": "2026-11-15",
+        "static": "npm run check -> no errors; bash scripts/check-architecture.sh -> 'PASS: All architecture boundary checks passed'",
+        "tests": "npm test -> 'Tests 14 passed (14)' (tests/reset-all-data.test.ts: app:reset handler empties documents, chunks, history, feedback and leaves no files; empty state persists across a restart; app works after reset and old answer ids are rejected; tests/bridge.test.ts: app.reset invokes app:reset)",
+        "smoke": "bash scripts/smoke-bridge.sh -> keys 'documents,indexing,qa,feedback,app', 'PASS: the running app exposes window.knowledgeBase'",
+        "e2e": "npm run build && node --experimental-websocket scripts/e2e/reset-all-data.mjs -> 'reset-all-data e2e: all 6 checks passed': imported 3 docs + indexed + asked + rated; app.reset() -> documents.list(), qa.history(), feedback.list() all empty, currentIndexed 0; 'Reset all data' button opens a confirmation dialog without deleting; Cancel keeps data; confirming empties everything and UI shows 'Documents (0)'; after a real app restart everything is still empty"
+      }
+    },
+    {
+      "id": "conversation-history",
+      "behavior": "The question panel shows the full Q&A history as a conversation; each answer shows its citations (expandable to the excerpt) and a confidence indicator.",
+      "verification": "npm test + in the running app: ask two questions, reload, confirm both exchanges render with citations that expand to an excerpt and a confidence indicator",
+      "state": "passing",
+      "evidence": {
+        "date": "2026-11-15",
+        "static": "npm run check -> no errors; bash scripts/check-architecture.sh -> 'PASS: All architecture boundary checks passed'",
+        "tests": "npm test -> 'Tests 22 passed (22)' (tests/conversation-history.test.tsx: confidence high/medium/low mapping + clamping; history keeps both exchanges with citations/excerpts/confidence across a restart; ConversationHistory renders every exchange, collapsed citation toggles with hidden excerpts, a confidence meter per answer, feedback buttons pressed for the stored rating, empty and pending states)",
+        "smoke": "bash scripts/smoke-bridge.sh -> 'PASS: the running app exposes window.knowledgeBase'",
+        "e2e": "npm run build && node --experimental-websocket scripts/e2e/conversation-history.mjs -> 'conversation-history e2e: all 13 checks passed': asked two questions through the question box; before reload, after reload and after a real app restart both exchanges render in order, each with citations (collapsed) and a confidence indicator ('High confidence (85%)'); after reload each citation expands (aria-expanded=true, aria-controls matches) to the stored excerpt and collapses again; document view and back. Regression: answer-feedback e2e 7/7 and reset-all-data e2e 6/6 re-run after the UI change"
+      }
+    }
+  ]
+}

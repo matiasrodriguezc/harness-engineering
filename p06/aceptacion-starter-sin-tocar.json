@@ -1,0 +1,12 @@
+{
+  "app": "/private/tmp/claude-501/-Users-matiasrodriguezc-Desktop-learn-harness-engineering/6417c26e-cf5e-44f4-95d4-2b8686b7c4df/scratchpad/p06-tooltest",
+  "passed": 0,
+  "total": 12,
+  "results": [
+    {
+      "name": "1. La interfaz tiene el puente (window.knowledgeBase)",
+      "ok": false,
+      "detail": "undefined"
+    }
+  ]
+}

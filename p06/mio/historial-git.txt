@@ -1,0 +1,7 @@
+4ff4dad chore(cleanup): add .gitignore, mark unimplemented scripts in RELIABILITY.md, re-verify all passing features
+0f5ba64 docs: session handoff, progress log, architecture updated for feedback/reset/preload bundling
+743f509 feat(conversation-history): question panel shows the full Q&A history as a chat with expandable citations and confidence
+a157385 feat(reset-all-data): app.reset() wipes documents, chunks, history and feedback; confirmed Reset button
+89b9ce6 feat(answer-feedback): answer ids, feedback.submit/list with persistence, helpful/not helpful buttons
+94d60d9 fix(baseline): bundle preload with esbuild so the sandboxed preload exposes window.knowledgeBase; fix renderer type errors
+2e7feff starter P06 (mio)

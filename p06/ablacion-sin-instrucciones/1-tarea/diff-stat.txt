@@ -1,0 +1,28 @@
+b62f6c6 fin de sesión: 1-tarea
+
+ claude-progress.md                              |    8 +
+ feature_list.json                               |   12 +-
+ package-lock.json                               | 4093 +++++++++++++++++++++++
+ package.json                                    |    7 +-
+ scripts/dev.js                                  |   12 +-
+ scripts/e2e-features.mjs                        |  184 +
+ session-handoff.md                              |   28 +-
+ src/main/ipc-handlers.ts                        |   19 +-
+ src/main/main.ts                                |    3 +
+ src/preload/preload.ts                          |    9 +
+ src/renderer/App.tsx                            |  190 +-
+ src/renderer/components/ConversationHistory.tsx |  265 +-
+ src/renderer/components/DocumentDetail.tsx      |    4 +-
+ src/renderer/components/DocumentList.tsx        |    3 +-
+ src/renderer/components/ImportPanel.tsx         |    5 +-
+ src/renderer/components/QuestionPanel.tsx       |  125 +-
+ src/renderer/components/ResetButton.tsx         |   63 +
+ src/renderer/components/StatusBar.tsx           |    8 +-
+ src/renderer/types.d.ts                         |   15 +-
+ src/services/feedback-service.ts                |   49 +
+ src/services/indexing-service.ts                |    9 +-
+ src/services/qa-service.ts                      |   21 +-
+ src/shared/types.ts                             |   22 +
+ tests/services.test.ts                          |  118 +
+ vitest.config.mts                               |   10 +
+ 25 files changed, 5035 insertions(+), 247 deletions(-)

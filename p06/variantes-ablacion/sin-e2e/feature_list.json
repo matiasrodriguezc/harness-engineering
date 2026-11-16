@@ -1,0 +1,27 @@
+{
+  "project": "project-06",
+  "rules": "Each feature moves to 'passing' only after its verification ran and passed. States: not_started, active, blocked, passing.",
+  "features": [
+    {
+      "id": "answer-feedback",
+      "behavior": "Every answer from window.knowledgeBase.qa.ask has a unique string id. window.knowledgeBase.feedback.submit(answerId, 'up'|'down') stores a rating and window.knowledgeBase.feedback.list() returns [{answerId, rating, timestamp}]. Ratings persist across restarts. Each answer in the UI has buttons with aria-label 'Mark answer helpful' and 'Mark answer not helpful'.",
+      "verification": "npm test (tests for submit, list and persistence) + in the running app: ask a question, submit a rating through window.knowledgeBase.feedback.submit, restart, and confirm feedback.list() still has it; confirm both buttons render for an answer",
+      "state": "not_started",
+      "evidence": null
+    },
+    {
+      "id": "reset-all-data",
+      "behavior": "window.knowledgeBase.app.reset() deletes all documents, chunks, Q&A history and feedback; the empty state persists after restart. The UI has a button with aria-label 'Reset all data' that asks for confirmation first.",
+      "verification": "npm test (reset clears every store) + in the running app: import documents, ask, rate, call app.reset(), confirm documents.list(), qa.history() and feedback.list() are empty, restart and confirm they stay empty; confirm the button asks for confirmation",
+      "state": "not_started",
+      "evidence": null
+    },
+    {
+      "id": "conversation-history",
+      "behavior": "The question panel shows the full Q&A history as a conversation; each answer shows its citations (expandable to the excerpt) and a confidence indicator.",
+      "verification": "npm test + in the running app: ask two questions, reload, confirm both exchanges render with citations that expand to an excerpt and a confidence indicator",
+      "state": "not_started",
+      "evidence": null
+    }
+  ]
+}

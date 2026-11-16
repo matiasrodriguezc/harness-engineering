@@ -1,0 +1,1263 @@
+commit a6c430ea130ac4011750820da58e9774c3d6d031
+Author: run <run@local>
+Date:   Sun Nov 15 23:24:25 2026 -0300
+
+    fin de sesión: 1-tarea
+
+diff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts
+index acc20df..a59e0a3 100644
+--- a/src/main/ipc-handlers.ts
++++ b/src/main/ipc-handlers.ts
+@@ -2,6 +2,7 @@ import { IpcMain } from 'electron';
+ import { DocumentService } from '../services/document-service';
+ import { IndexingService } from '../services/indexing-service';
+ import { QaService } from '../services/qa-service';
++import { FeedbackService } from '../services/feedback-service';
+ import { PersistenceService } from '../services/persistence-service';
+ import { IPC_CHANNELS } from '../shared/types';
+ import { logger } from '../services/logger';
+@@ -12,11 +13,12 @@ export interface Services {
+   documentService: DocumentService;
+   indexingService: IndexingService;
+   qaService: QaService;
++  feedbackService: FeedbackService;
+   persistence: PersistenceService;
+ }
+ 
+ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+-  const { documentService, indexingService, qaService, persistence } = services;
++  const { documentService, indexingService, qaService, feedbackService, persistence } = services;
+ 
+   // Document operations
+   ipcMain.handle(IPC_CHANNELS.LIST_DOCUMENTS, async () => {
+@@ -69,6 +71,23 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+     return qaService.clearHistory();
+   });
+ 
++  // Feedback
++  ipcMain.handle(IPC_CHANNELS.SUBMIT_FEEDBACK, async (_event, answerId: unknown, rating: unknown) => {
++    logger.info(SERVICE, 'IPC: SUBMIT_FEEDBACK', { answerId: String(answerId), rating: String(rating) });
++    return feedbackService.submit(answerId, rating);
++  });
++
++  ipcMain.handle(IPC_CHANNELS.LIST_FEEDBACK, async () => {
++    return feedbackService.list();
++  });
++
++  // Clean state: removes documents, chunks, index, Q&A history and feedback.
++  ipcMain.handle(IPC_CHANNELS.RESET_APP, async () => {
++    logger.warn(SERVICE, 'IPC: RESET_APP - deleting all data');
++    persistence.resetAll();
++    return true;
++  });
++
+   // App status
+   ipcMain.handle(IPC_CHANNELS.GET_STATUS, async () => {
+     return indexingService.getStatus();
+diff --git a/src/main/main.ts b/src/main/main.ts
+index 825116a..4778441 100644
+--- a/src/main/main.ts
++++ b/src/main/main.ts
+@@ -4,6 +4,7 @@ import { registerIpcHandlers } from './ipc-handlers';
+ import { DocumentService } from '../services/document-service';
+ import { QaService } from '../services/qa-service';
+ import { IndexingService } from '../services/indexing-service';
++import { FeedbackService } from '../services/feedback-service';
+ import { PersistenceService } from '../services/persistence-service';
+ import { logger } from '../services/logger';
+ 
+@@ -19,6 +20,9 @@ function createWindow() {
+       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+       contextIsolation: true,
+       nodeIntegration: false,
++      // The compiled preload requires ../shared/types (IPC channel names),
++      // which a sandboxed preload cannot load.
++      sandbox: false,
+     },
+     title: 'Knowledge Base',
+   });
+@@ -44,11 +48,13 @@ function initializeServices() {
+   const documentService = new DocumentService(persistence);
+   const indexingService = new IndexingService(persistence);
+   const qaService = new QaService(persistence, indexingService);
++  const feedbackService = new FeedbackService(persistence);
+ 
+   registerIpcHandlers(ipcMain, {
+     documentService,
+     indexingService,
+     qaService,
++    feedbackService,
+     persistence,
+   });
+ 
+diff --git a/src/preload/preload.ts b/src/preload/preload.ts
+index 2a5393d..39dbdd3 100644
+--- a/src/preload/preload.ts
++++ b/src/preload/preload.ts
+@@ -1,5 +1,5 @@
+ import { contextBridge, ipcRenderer } from 'electron';
+-import { IPC_CHANNELS } from '../shared/types';
++import { IPC_CHANNELS, FeedbackRating } from '../shared/types';
+ 
+ const api = {
+   documents: {
+@@ -18,6 +18,15 @@ const api = {
+     history: () => ipcRenderer.invoke(IPC_CHANNELS.GET_HISTORY),
+     clearHistory: () => ipcRenderer.invoke(IPC_CHANNELS.CLEAR_HISTORY),
+   },
++  feedback: {
++    submit: (answerId: string, rating: FeedbackRating) =>
++      ipcRenderer.invoke(IPC_CHANNELS.SUBMIT_FEEDBACK, answerId, rating),
++    list: () => ipcRenderer.invoke(IPC_CHANNELS.LIST_FEEDBACK),
++  },
++  app: {
++    status: () => ipcRenderer.invoke(IPC_CHANNELS.GET_STATUS),
++    reset: () => ipcRenderer.invoke(IPC_CHANNELS.RESET_APP),
++  },
+ };
+ 
+ contextBridge.exposeInMainWorld('knowledgeBase', api);
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index 17a011d..2fa5cf0 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -1,57 +1,137 @@
+-import React, { useState, useCallback, useEffect } from 'react';
++import { useState, useCallback, useEffect } from 'react';
+ import { DocumentList } from './components/DocumentList';
+ import { QuestionPanel } from './components/QuestionPanel';
+ import { DocumentDetail } from './components/DocumentDetail';
+-import { ConversationHistory } from './components/ConversationHistory';
++import { ResetDialog } from './components/ResetDialog';
+ import { StatusBar } from './components/StatusBar';
+-import { Document, AppStatus, QAResponse } from '../../shared/types';
++import { Document, AppStatus, FeedbackRating, IndexStatus, QAHistory } from '../shared/types';
++
++const EMPTY_STATUS: AppStatus = { documentsLoaded: 0, indexStatus: 'idle', lastActivity: '' };
++
++function toAppStatus(status: IndexStatus): AppStatus {
++  return {
++    documentsLoaded: status.totalDocuments,
++    indexStatus: status.status,
++    lastActivity: status.lastIndexed ?? '',
++  };
++}
++
++function errorMessage(err: unknown): string {
++  return err instanceof Error ? err.message : String(err);
++}
++
++const headerButton: React.CSSProperties = {
++  padding: '6px 14px',
++  background: '#0f3460',
++  color: '#e0e0e0',
++  border: '1px solid #1a1a4e',
++  borderRadius: '4px',
++  cursor: 'pointer',
++  fontSize: '13px',
++};
+ 
+ export function App() {
+   const [documents, setDocuments] = useState<Document[]>([]);
+   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+-  const [appStatus, setAppStatus] = useState<AppStatus>({
+-    documentsLoaded: 0,
+-    indexStatus: 'idle',
+-    lastActivity: '',
+-  });
+-  const [lastResponse, setLastResponse] = useState<QAResponse | null>(null);
+-  const [showHistory, setShowHistory] = useState(false);
++  const [appStatus, setAppStatus] = useState<AppStatus>(EMPTY_STATUS);
++  const [history, setHistory] = useState<QAHistory[]>([]);
++  const [feedback, setFeedback] = useState<Record<string, FeedbackRating>>({});
++  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
++  const [qaError, setQaError] = useState<string | null>(null);
++  const [confirmingReset, setConfirmingReset] = useState(false);
++  const [resetting, setResetting] = useState(false);
+ 
+   const refreshDocuments = useCallback(async () => {
+     try {
+-      const docs = await window.knowledgeBase.documents.list();
++      const [docs, status] = await Promise.all([
++        window.knowledgeBase.documents.list(),
++        window.knowledgeBase.indexing.status(),
++      ]);
+       setDocuments(docs);
+-      const status = await window.knowledgeBase.indexing.status();
+-      setAppStatus(status);
++      setAppStatus(toAppStatus(status));
++      setSelectedDoc(current => (current ? docs.find(d => d.id === current.id) ?? null : null));
+     } catch (err) {
+       console.error('Failed to refresh documents:', err);
+     }
+   }, []);
+ 
++  const refreshConversation = useCallback(async () => {
++    try {
++      const [items, entries] = await Promise.all([
++        window.knowledgeBase.qa.history(),
++        window.knowledgeBase.feedback.list(),
++      ]);
++      setHistory(items);
++      const map: Record<string, FeedbackRating> = {};
++      for (const e of entries) map[e.answerId] = e.rating;
++      setFeedback(map);
++    } catch (err) {
++      console.error('Failed to load conversation:', err);
++    }
++  }, []);
++
++  const refreshAll = useCallback(async () => {
++    await Promise.all([refreshDocuments(), refreshConversation()]);
++  }, [refreshDocuments, refreshConversation]);
++
+   useEffect(() => {
+-    refreshDocuments();
+-  }, [refreshDocuments]);
++    refreshAll();
++  }, [refreshAll]);
+ 
+   const handleImport = useCallback(async () => {
+     console.log('Import triggered - use window.knowledgeBase.documents.import(filePath)');
+   }, []);
+ 
+-  const handleSelectDocument = useCallback((doc: Document) => {
+-    setSelectedDoc(doc);
+-  }, []);
+-
+   const handleAskQuestion = useCallback(async (question: string) => {
++    setQaError(null);
++    setPendingQuestion(question);
+     try {
+       const response = await window.knowledgeBase.qa.ask(question);
+-      setLastResponse(response);
+-      // Refresh status after Q&A
++      setHistory(prev => [...prev, { question, response }]);
+       const status = await window.knowledgeBase.indexing.status();
+-      setAppStatus(status);
++      setAppStatus(toAppStatus(status));
+     } catch (err) {
+       console.error('Q&A failed:', err);
++      setQaError(`Could not answer the question: ${errorMessage(err)}`);
++    } finally {
++      setPendingQuestion(null);
++    }
++  }, []);
++
++  const handleRate = useCallback(async (answerId: string, rating: FeedbackRating) => {
++    try {
++      const entry = await window.knowledgeBase.feedback.submit(answerId, rating);
++      setFeedback(prev => ({ ...prev, [entry.answerId]: entry.rating }));
++    } catch (err) {
++      console.error('Feedback failed:', err);
+     }
+   }, []);
+ 
++  const handleClearHistory = useCallback(async () => {
++    try {
++      await window.knowledgeBase.qa.clearHistory();
++      setHistory([]);
++      setQaError(null);
++    } catch (err) {
++      console.error('Clear history failed:', err);
++    }
++  }, []);
++
++  const handleReset = useCallback(async () => {
++    setResetting(true);
++    try {
++      await window.knowledgeBase.app.reset();
++      setSelectedDoc(null);
++      setQaError(null);
++      await refreshAll();
++      setConfirmingReset(false);
++    } catch (err) {
++      console.error('Reset failed:', err);
++    } finally {
++      setResetting(false);
++    }
++  }, [refreshAll]);
++
+   return (
+     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+       <header style={{
+@@ -64,33 +144,18 @@ export function App() {
+       }}>
+         <h1 style={{ fontSize: '18px', fontWeight: 600 }}>Knowledge Base</h1>
+         <div style={{ display: 'flex', gap: '8px' }}>
+-          <button
+-            onClick={() => setShowHistory(!showHistory)}
+-            style={{
+-              padding: '6px 14px',
+-              background: showHistory ? '#533483' : '#0f3460',
+-              color: '#e0e0e0',
+-              border: '1px solid #1a1a4e',
+-              borderRadius: '4px',
+-              cursor: 'pointer',
+-              fontSize: '13px',
+-            }}
+-          >
+-            {showHistory ? 'Hide' : 'Show'} History
++          <button type="button" onClick={refreshAll} style={headerButton}>
++            Refresh
+           </button>
+           <button
+-            onClick={refreshDocuments}
+-            style={{
+-              padding: '6px 14px',
+-              background: '#0f3460',
+-              color: '#e0e0e0',
+-              border: '1px solid #1a1a4e',
+-              borderRadius: '4px',
+-              cursor: 'pointer',
+-              fontSize: '13px',
+-            }}
++            type="button"
++            aria-label="Reset all data"
++            aria-haspopup="dialog"
++            onClick={() => setConfirmingReset(true)}
++            disabled={pendingQuestion !== null}
++            style={{ ...headerButton, background: '#5a1f2a', border: '1px solid #d9534f' }}
+           >
+-            Refresh
++            Reset all data
+           </button>
+         </div>
+       </header>
+@@ -115,6 +180,7 @@ export function App() {
+               Documents ({documents.length})
+             </span>
+             <button
++              type="button"
+               onClick={handleImport}
+               style={{
+                 padding: '4px 10px',
+@@ -131,58 +197,63 @@ export function App() {
+           </div>
+           <DocumentList
+             documents={documents}
+-            onSelect={handleSelectDocument}
++            onSelect={setSelectedDoc}
+             selectedId={selectedDoc?.id ?? null}
+           />
+         </div>
+ 
+-        {/* Right panel: Document detail + Q&A + History */}
++        {/* Right panel: optional document detail above the conversation */}
+         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+-          <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+-            {showHistory ? (
+-              <ConversationHistory />
+-            ) : (
+-              <>
+-                {selectedDoc ? (
+-                  <DocumentDetail document={selectedDoc} />
+-                ) : (
+-                  <div style={{ color: '#666', textAlign: 'center', paddingTop: '40px' }}>
+-                    Select a document or ask a question to get started
+-                  </div>
+-                )}
+-                {lastResponse && (
+-                  <div style={{
+-                    marginTop: '16px',
+-                    padding: '16px',
+-                    background: '#1a1a3e',
+-                    borderRadius: '6px',
+-                    border: '1px solid #0f3460',
+-                  }}>
+-                    <div style={{ fontSize: '14px', lineHeight: 1.6 }}>{lastResponse.answer}</div>
+-                    {lastResponse.citations.length > 0 && (
+-                      <div style={{ marginTop: '10px', fontSize: '12px', color: '#8888bb' }}>
+-                        <strong>Citations:</strong>
+-                        {lastResponse.citations.map((c, i) => (
+-                          <div key={i} style={{ marginTop: '4px', paddingLeft: '8px', borderLeft: '2px solid #533483' }}>
+-                            {c.documentTitle} (chunk {c.chunkIndex}): {c.excerpt.substring(0, 100)}...
+-                          </div>
+-                        ))}
+-                      </div>
+-                    )}
+-                    <div style={{ marginTop: '8px', fontSize: '11px', color: '#666' }}>
+-                      Confidence: {(lastResponse.confidence * 100).toFixed(0)}%
+-                    </div>
+-                  </div>
+-                )}
+-              </>
+-            )}
+-          </div>
++          {selectedDoc && (
++            <div style={{
++              maxHeight: '40%',
++              overflow: 'auto',
++              padding: '16px 20px',
++              borderBottom: '1px solid #0f3460',
++              position: 'relative',
++            }}>
++              <button
++                type="button"
++                aria-label="Close document"
++                onClick={() => setSelectedDoc(null)}
++                style={{
++                  position: 'absolute',
++                  top: '10px',
++                  right: '14px',
++                  background: 'none',
++                  border: 'none',
++                  color: '#888',
++                  cursor: 'pointer',
++                  fontSize: '16px',
++                }}
++              >
++                ×
++              </button>
++              <DocumentDetail document={selectedDoc} />
++            </div>
++          )}
+ 
+-          <QuestionPanel onAsk={handleAskQuestion} />
++          <QuestionPanel
++            history={history}
++            feedback={feedback}
++            pendingQuestion={pendingQuestion}
++            error={qaError}
++            onAsk={handleAskQuestion}
++            onRate={handleRate}
++            onClearHistory={handleClearHistory}
++          />
+         </div>
+       </div>
+ 
+       <StatusBar status={appStatus} />
++
++      {confirmingReset && (
++        <ResetDialog
++          busy={resetting}
++          onCancel={() => setConfirmingReset(false)}
++          onConfirm={handleReset}
++        />
++      )}
+     </div>
+   );
+ }
+diff --git a/src/renderer/components/ConversationHistory.tsx b/src/renderer/components/ConversationHistory.tsx
+index 6ceb16f..0bf700d 100644
+--- a/src/renderer/components/ConversationHistory.tsx
++++ b/src/renderer/components/ConversationHistory.tsx
+@@ -1,79 +1,227 @@
+-import React, { useEffect, useState } from 'react';
+-import { QAHistory } from '../../../shared/types';
++import { useEffect, useRef, useState } from 'react';
++import { Citation, FeedbackRating, QAHistory, QAResponse } from '../../shared/types';
+ 
+-/**
+- * ConversationHistory -- starter version.
+- *
+- * Displays Q&A history as a simple list.
+- * The solution version adds chat bubbles, citation expansion,
+- * follow-up suggestions, and feedback buttons.
+- */
+-export function ConversationHistory() {
+-  const [history, setHistory] = useState<QAHistory[]>([]);
++interface Props {
++  history: QAHistory[];
++  feedback: Record<string, FeedbackRating>;
++  pendingQuestion: string | null;
++  error: string | null;
++  onRate: (answerId: string, rating: FeedbackRating) => void;
++}
++
++/** Full Q&A history rendered as a chat-style conversation. */
++export function ConversationHistory({ history, feedback, pendingQuestion, error, onRate }: Props) {
++  const endRef = useRef<HTMLDivElement>(null);
+ 
+   useEffect(() => {
+-    window.knowledgeBase.qa.history().then(setHistory);
+-  }, []);
++    endRef.current?.scrollIntoView?.({ block: 'end' });
++  }, [history.length, pendingQuestion, error]);
+ 
+-  if (history.length === 0) {
++  if (history.length === 0 && !pendingQuestion && !error) {
+     return (
+       <div style={{ color: '#666', textAlign: 'center', paddingTop: '40px' }}>
+-        No conversation history yet. Ask a question to get started.
++        No conversation yet. Ask a question about your documents to get started.
+       </div>
+     );
+   }
+ 
+   return (
+-    <div>
+-      <div style={{
+-        display: 'flex',
+-        justifyContent: 'space-between',
+-        alignItems: 'center',
+-        marginBottom: '16px',
+-      }}>
+-        <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Conversation History</h3>
+-        <button
+-          onClick={() => {
+-            window.knowledgeBase.qa.clearHistory();
+-            setHistory([]);
+-          }}
+-          style={{
+-            padding: '4px 10px',
+-            background: '#d9534f',
+-            color: '#fff',
+-            border: 'none',
+-            borderRadius: '3px',
+-            cursor: 'pointer',
+-            fontSize: '12px',
+-          }}
+-        >
+-          Clear History
+-        </button>
+-      </div>
++    <div role="log" aria-label="Conversation history" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+       {history.map((item, index) => (
+-        <div key={index} style={{
+-          marginBottom: '16px',
+-          padding: '12px',
+-          background: '#1a1a3e',
+-          borderRadius: '6px',
+-          border: '1px solid #0f3460',
+-        }}>
+-          <div style={{ fontSize: '13px', fontWeight: 500, color: '#b088f9' }}>
+-            Q: {item.question}
+-          </div>
+-          <div style={{ fontSize: '13px', marginTop: '8px', lineHeight: 1.5 }}>
+-            {item.response.answer}
++        <div key={item.response.id ?? index} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
++          <UserBubble text={item.question} />
++          <AnswerBubble
++            response={item.response}
++            rating={item.response.id ? feedback[item.response.id] : undefined}
++            onRate={onRate}
++          />
++        </div>
++      ))}
++      {pendingQuestion && (
++        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
++          <UserBubble text={pendingQuestion} />
++          <div role="status" style={{ ...bubbleBase, alignSelf: 'flex-start', color: '#8888bb', fontStyle: 'italic' }}>
++            Thinking…
+           </div>
+-          {item.response.citations.length > 0 && (
+-            <div style={{ marginTop: '6px', fontSize: '11px', color: '#8888bb' }}>
+-              {item.response.citations.length} citation(s) | Confidence: {(item.response.confidence * 100).toFixed(0)}%
+-            </div>
+-          )}
+-          <div style={{ marginTop: '6px', fontSize: '10px', color: '#555' }}>
+-            {new Date(item.response.timestamp).toLocaleString()}
++        </div>
++      )}
++      {error && (
++        <div role="alert" style={{ ...bubbleBase, alignSelf: 'flex-start', border: '1px solid #d9534f', color: '#f0a0a0' }}>
++          {error}
++        </div>
++      )}
++      <div ref={endRef} />
++    </div>
++  );
++}
++
++const bubbleBase: React.CSSProperties = {
++  maxWidth: '80%',
++  padding: '10px 14px',
++  borderRadius: '10px',
++  fontSize: '14px',
++  lineHeight: 1.55,
++  whiteSpace: 'pre-wrap',
++  wordBreak: 'break-word',
++};
++
++function UserBubble({ text }: { text: string }) {
++  return (
++    <div
++      aria-label="Question"
++      style={{ ...bubbleBase, alignSelf: 'flex-end', background: '#533483', color: '#fff', borderBottomRightRadius: '2px' }}
++    >
++      {text}
++    </div>
++  );
++}
++
++interface AnswerProps {
++  response: QAResponse;
++  rating: FeedbackRating | undefined;
++  onRate: (answerId: string, rating: FeedbackRating) => void;
++}
++
++function AnswerBubble({ response, rating, onRate }: AnswerProps) {
++  return (
++    <article
++      aria-label="Answer"
++      data-answer-id={response.id}
++      style={{
++        ...bubbleBase,
++        alignSelf: 'flex-start',
++        background: '#1a1a3e',
++        border: '1px solid #0f3460',
++        borderBottomLeftRadius: '2px',
++        whiteSpace: 'normal',
++      }}
++    >
++      <div style={{ whiteSpace: 'pre-wrap' }}>{response.answer}</div>
++
++      {response.citations.length > 0 && (
++        <div style={{ marginTop: '10px' }}>
++          <div style={{ fontSize: '11px', fontWeight: 600, color: '#8888bb', marginBottom: '4px' }}>
++            Citations ({response.citations.length})
+           </div>
++          {response.citations.map((c, i) => (
++            <CitationItem key={`${c.documentId}-${c.chunkIndex}-${i}`} citation={c} number={i + 1} />
++          ))}
+         </div>
+-      ))}
++      )}
++
++      <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
++        <ConfidenceIndicator confidence={response.confidence} />
++        <span style={{ fontSize: '10px', color: '#666' }}>
++          {new Date(response.timestamp).toLocaleString()}
++        </span>
++        {response.id && (
++          <span style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
++            <FeedbackButton
++              label="Mark answer helpful"
++              symbol="👍"
++              active={rating === 'up'}
++              onClick={() => onRate(response.id, 'up')}
++            />
++            <FeedbackButton
++              label="Mark answer not helpful"
++              symbol="👎"
++              active={rating === 'down'}
++              onClick={() => onRate(response.id, 'down')}
++            />
++          </span>
++        )}
++      </div>
++    </article>
++  );
++}
++
++function CitationItem({ citation, number }: { citation: Citation; number: number }) {
++  const [open, setOpen] = useState(false);
++  return (
++    <div style={{ marginTop: '4px', borderLeft: '2px solid #533483', paddingLeft: '8px' }}>
++      <button
++        type="button"
++        aria-expanded={open}
++        onClick={() => setOpen(o => !o)}
++        style={{
++          background: 'none',
++          border: 'none',
++          color: '#b088f9',
++          cursor: 'pointer',
++          fontSize: '12px',
++          padding: 0,
++          textAlign: 'left',
++        }}
++      >
++        {open ? '▾' : '▸'} [{number}] {citation.documentTitle} (chunk {citation.chunkIndex})
++      </button>
++      {open && (
++        <blockquote
++          style={{
++            margin: '4px 0 2px',
++            fontSize: '12px',
++            color: '#c0c0d8',
++            background: '#14142e',
++            padding: '6px 8px',
++            borderRadius: '4px',
++            whiteSpace: 'pre-wrap',
++          }}
++        >
++          {citation.excerpt}
++        </blockquote>
++      )}
+     </div>
+   );
+ }
++
++function ConfidenceIndicator({ confidence }: { confidence: number }) {
++  const pct = Math.round(Math.max(0, Math.min(1, confidence)) * 100);
++  const level = pct >= 70 ? 'High' : pct >= 40 ? 'Medium' : 'Low';
++  const color = pct >= 70 ? '#5cb85c' : pct >= 40 ? '#f0ad4e' : '#d9534f';
++  return (
++    <span
++      role="meter"
++      aria-label="Confidence"
++      aria-valuemin={0}
++      aria-valuemax={100}
++      aria-valuenow={pct}
++      aria-valuetext={`${level} confidence, ${pct}%`}
++      title={`${level} confidence`}
++      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#aaa' }}
++    >
++      <span style={{ width: '60px', height: '6px', background: '#2a2a4e', borderRadius: '3px', overflow: 'hidden' }}>
++        <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: color }} />
++      </span>
++      {level} confidence ({pct}%)
++    </span>
++  );
++}
++
++interface FeedbackButtonProps {
++  label: string;
++  symbol: string;
++  active: boolean;
++  onClick: () => void;
++}
++
++function FeedbackButton({ label, symbol, active, onClick }: FeedbackButtonProps) {
++  return (
++    <button
++      type="button"
++      aria-label={label}
++      aria-pressed={active}
++      title={label}
++      onClick={onClick}
++      style={{
++        padding: '2px 8px',
++        background: active ? '#533483' : 'transparent',
++        border: `1px solid ${active ? '#b088f9' : '#0f3460'}`,
++        borderRadius: '4px',
++        cursor: 'pointer',
++        fontSize: '13px',
++      }}
++    >
++      {symbol}
++    </button>
++  );
++}
+diff --git a/src/renderer/components/DocumentDetail.tsx b/src/renderer/components/DocumentDetail.tsx
+index b2787ef..cb90602 100644
+--- a/src/renderer/components/DocumentDetail.tsx
++++ b/src/renderer/components/DocumentDetail.tsx
+@@ -1,5 +1,5 @@
+-import React, { useEffect, useState } from 'react';
+-import { Document, Chunk } from '../../../shared/types';
++import { useEffect, useState } from 'react';
++import { Document, Chunk } from '../../shared/types';
+ 
+ interface Props {
+   document: Document;
+diff --git a/src/renderer/components/DocumentList.tsx b/src/renderer/components/DocumentList.tsx
+index 00b8fc1..889f781 100644
+--- a/src/renderer/components/DocumentList.tsx
++++ b/src/renderer/components/DocumentList.tsx
+@@ -1,5 +1,4 @@
+-import React from 'react';
+-import { Document } from '../../../shared/types';
++import { Document } from '../../shared/types';
+ 
+ interface Props {
+   documents: Document[];
+diff --git a/src/renderer/components/ImportPanel.tsx b/src/renderer/components/ImportPanel.tsx
+index 29ca5cd..3570eb6 100644
+--- a/src/renderer/components/ImportPanel.tsx
++++ b/src/renderer/components/ImportPanel.tsx
+@@ -1,4 +1,3 @@
+-import React from 'react';
+ 
+ interface Props {
+   onImport: (filePath: string) => void;
+@@ -25,7 +24,8 @@ export function ImportPanel({ onImport }: Props) {
+         accept=".txt,.md"
+         onChange={e => {
+           const file = e.target.files?.[0];
+-          if (file) onImport(file.path);
++          const filePath = (file as File & { path?: string } | undefined)?.path;
++          if (filePath) onImport(filePath);
+         }}
+         style={{ marginTop: '10px' }}
+       />
+diff --git a/src/renderer/components/QuestionPanel.tsx b/src/renderer/components/QuestionPanel.tsx
+index 1b80cc5..85d1871 100644
+--- a/src/renderer/components/QuestionPanel.tsx
++++ b/src/renderer/components/QuestionPanel.tsx
+@@ -1,61 +1,114 @@
+-import React, { useState } from 'react';
++import { useState } from 'react';
++import { FeedbackRating, QAHistory } from '../../shared/types';
++import { ConversationHistory } from './ConversationHistory';
+ 
+ interface Props {
++  history: QAHistory[];
++  feedback: Record<string, FeedbackRating>;
++  pendingQuestion: string | null;
++  error: string | null;
+   onAsk: (question: string) => void;
++  onRate: (answerId: string, rating: FeedbackRating) => void;
++  onClearHistory: () => void;
+ }
+ 
+-export function QuestionPanel({ onAsk }: Props) {
++export function QuestionPanel({ history, feedback, pendingQuestion, error, onAsk, onRate, onClearHistory }: Props) {
+   const [question, setQuestion] = useState('');
++  const busy = pendingQuestion !== null;
+ 
+   const handleSubmit = (e: React.FormEvent) => {
+     e.preventDefault();
+-    if (!question.trim()) return;
++    if (!question.trim() || busy) return;
+     onAsk(question.trim());
+     setQuestion('');
+   };
+ 
+   return (
+-    <form
+-      onSubmit={handleSubmit}
+-      style={{
++    <section aria-label="Questions" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
++      <div style={{
++        padding: '8px 20px',
++        borderBottom: '1px solid #0f3460',
+         display: 'flex',
+-        padding: '12px 20px',
+-        borderTop: '1px solid #0f3460',
+-        background: '#16213e',
+-      }}
+-    >
+-      <input
+-        type="text"
+-        value={question}
+-        onChange={e => setQuestion(e.target.value)}
+-        placeholder="Ask a question about your documents..."
+-        style={{
+-          flex: 1,
+-          padding: '10px 14px',
+-          background: '#1a1a2e',
+-          color: '#e0e0e0',
+-          border: '1px solid #0f3460',
+-          borderRadius: '6px',
+-          fontSize: '14px',
+-          outline: 'none',
+-        }}
+-      />
+-      <button
+-        type="submit"
++        justifyContent: 'space-between',
++        alignItems: 'center',
++      }}>
++        <h3 style={{ fontSize: '13px', fontWeight: 500, color: '#a0a0c0' }}>
++          Conversation ({history.length})
++        </h3>
++        {history.length > 0 && (
++          <button
++            type="button"
++            onClick={onClearHistory}
++            disabled={busy}
++            style={{
++              padding: '3px 10px',
++              background: 'transparent',
++              color: '#a0a0c0',
++              border: '1px solid #0f3460',
++              borderRadius: '3px',
++              cursor: 'pointer',
++              fontSize: '11px',
++            }}
++          >
++            Clear history
++          </button>
++        )}
++      </div>
++
++      <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
++        <ConversationHistory
++          history={history}
++          feedback={feedback}
++          pendingQuestion={pendingQuestion}
++          error={error}
++          onRate={onRate}
++        />
++      </div>
++
++      <form
++        onSubmit={handleSubmit}
+         style={{
+-          marginLeft: '10px',
+-          padding: '10px 20px',
+-          background: '#533483',
+-          color: '#fff',
+-          border: 'none',
+-          borderRadius: '6px',
+-          cursor: 'pointer',
+-          fontSize: '14px',
+-          fontWeight: 500,
++          display: 'flex',
++          padding: '12px 20px',
++          borderTop: '1px solid #0f3460',
++          background: '#16213e',
+         }}
+       >
+-        Ask
+-      </button>
+-    </form>
++        <input
++          type="text"
++          aria-label="Question"
++          value={question}
++          onChange={e => setQuestion(e.target.value)}
++          placeholder="Ask a question about your documents..."
++          style={{
++            flex: 1,
++            padding: '10px 14px',
++            background: '#1a1a2e',
++            color: '#e0e0e0',
++            border: '1px solid #0f3460',
++            borderRadius: '6px',
++            fontSize: '14px',
++            outline: 'none',
++          }}
++        />
++        <button
++          type="submit"
++          disabled={busy}
++          style={{
++            marginLeft: '10px',
++            padding: '10px 20px',
++            background: busy ? '#3a2a5e' : '#533483',
++            color: '#fff',
++            border: 'none',
++            borderRadius: '6px',
++            cursor: busy ? 'default' : 'pointer',
++            fontSize: '14px',
++            fontWeight: 500,
++          }}
++        >
++          {busy ? 'Asking…' : 'Ask'}
++        </button>
++      </form>
++    </section>
+   );
+ }
+diff --git a/src/renderer/components/ResetDialog.tsx b/src/renderer/components/ResetDialog.tsx
+new file mode 100644
+index 0000000..183e708
+--- /dev/null
++++ b/src/renderer/components/ResetDialog.tsx
+@@ -0,0 +1,93 @@
++import { useEffect, useRef } from 'react';
++
++interface Props {
++  busy: boolean;
++  onCancel: () => void;
++  onConfirm: () => void;
++}
++
++/** In-app confirmation dialog shown before wiping all data. */
++export function ResetDialog({ busy, onCancel, onConfirm }: Props) {
++  const cancelRef = useRef<HTMLButtonElement>(null);
++
++  useEffect(() => {
++    cancelRef.current?.focus();
++    const onKey = (e: KeyboardEvent) => {
++      if (e.key === 'Escape' && !busy) onCancel();
++    };
++    window.addEventListener('keydown', onKey);
++    return () => window.removeEventListener('keydown', onKey);
++  }, [busy, onCancel]);
++
++  return (
++    <div
++      style={{
++        position: 'fixed',
++        inset: 0,
++        background: 'rgba(0, 0, 0, 0.6)',
++        display: 'flex',
++        alignItems: 'center',
++        justifyContent: 'center',
++        zIndex: 100,
++      }}
++    >
++      <div
++        role="alertdialog"
++        aria-modal="true"
++        aria-labelledby="reset-dialog-title"
++        aria-describedby="reset-dialog-desc"
++        style={{
++          width: '420px',
++          maxWidth: '90vw',
++          padding: '20px',
++          background: '#16213e',
++          border: '1px solid #d9534f',
++          borderRadius: '8px',
++        }}
++      >
++        <h2 id="reset-dialog-title" style={{ fontSize: '16px', marginBottom: '10px' }}>
++          Delete all data?
++        </h2>
++        <p id="reset-dialog-desc" style={{ fontSize: '13px', color: '#c0c0d8', lineHeight: 1.5 }}>
++          This permanently deletes all documents, chunks, Q&amp;A history and feedback.
++          It cannot be undone.
++        </p>
++        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '18px' }}>
++          <button
++            ref={cancelRef}
++            type="button"
++            onClick={onCancel}
++            disabled={busy}
++            style={{
++              padding: '6px 14px',
++              background: '#0f3460',
++              color: '#e0e0e0',
++              border: '1px solid #1a1a4e',
++              borderRadius: '4px',
++              cursor: 'pointer',
++              fontSize: '13px',
++            }}
++          >
++            Cancel
++          </button>
++          <button
++            type="button"
++            onClick={onConfirm}
++            disabled={busy}
++            style={{
++              padding: '6px 14px',
++              background: '#d9534f',
++              color: '#fff',
++              border: 'none',
++              borderRadius: '4px',
++              cursor: 'pointer',
++              fontSize: '13px',
++            }}
++          >
++            {busy ? 'Deleting…' : 'Delete everything'}
++          </button>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/renderer/components/StatusBar.tsx b/src/renderer/components/StatusBar.tsx
+index 1bf587c..29756e1 100644
+--- a/src/renderer/components/StatusBar.tsx
++++ b/src/renderer/components/StatusBar.tsx
+@@ -1,5 +1,4 @@
+-import React from 'react';
+-import { AppStatus } from '../../../shared/types';
++import { AppStatus } from '../../shared/types';
+ 
+ interface Props {
+   status: AppStatus;
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index 96ded88..c50c502 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -1,6 +1,7 @@
+ /// <reference types="react" />
+ /// <reference types="react-dom" />
+ 
++
+ declare global {
+   interface Window {
+     knowledgeBase: {
+@@ -11,8 +12,8 @@ declare global {
+         delete: (id: string) => Promise<boolean>;
+       };
+       indexing: {
+-        start: (documentId?: string) => Promise<import('../shared/types').AppStatus>;
+-        status: () => Promise<import('../shared/types').AppStatus>;
++        start: (documentId?: string) => Promise<import('../shared/types').IndexStatus>;
++        status: () => Promise<import('../shared/types').IndexStatus>;
+         chunks: (documentId: string) => Promise<import('../shared/types').Chunk[]>;
+       };
+       qa: {
+@@ -20,6 +21,17 @@ declare global {
+         history: () => Promise<import('../shared/types').QAHistory[]>;
+         clearHistory: () => Promise<void>;
+       };
++      feedback: {
++        submit: (
++          answerId: string,
++          rating: import('../shared/types').FeedbackRating,
++        ) => Promise<import('../shared/types').FeedbackEntry>;
++        list: () => Promise<import('../shared/types').FeedbackEntry[]>;
++      };
++      app: {
++        status: () => Promise<import('../shared/types').IndexStatus>;
++        reset: () => Promise<boolean>;
++      };
+     };
+   }
+ }
+diff --git a/src/services/feedback-service.ts b/src/services/feedback-service.ts
+new file mode 100644
+index 0000000..4daf6d4
+--- /dev/null
++++ b/src/services/feedback-service.ts
+@@ -0,0 +1,48 @@
++import { FeedbackEntry, FeedbackRating } from '../shared/types';
++import { PersistenceService } from './persistence-service';
++import { logger } from './logger';
++
++const SERVICE = 'feedback-service';
++const FEEDBACK_FILE = 'feedback.json';
++const VALID_RATINGS: readonly FeedbackRating[] = ['up', 'down'];
++
++export class FeedbackService {
++  private persistence: PersistenceService;
++
++  constructor(persistence: PersistenceService) {
++    this.persistence = persistence;
++  }
++
++  /**
++   * Record a rating for an answer. Each answer holds at most one rating:
++   * re-rating replaces the previous entry.
++   */
++  submit(answerId: unknown, rating: unknown): FeedbackEntry {
++    if (typeof answerId !== 'string' || answerId.trim() === '') {
++      logger.warn(SERVICE, 'Rejected feedback: invalid answerId', { answerId: String(answerId) });
++      throw new Error('answerId must be a non-empty string');
++    }
++    if (typeof rating !== 'string' || !VALID_RATINGS.includes(rating as FeedbackRating)) {
++      logger.warn(SERVICE, 'Rejected feedback: invalid rating', { answerId, rating: String(rating) });
++      throw new Error("rating must be 'up' or 'down'");
++    }
++
++    const entry: FeedbackEntry = {
++      answerId,
++      rating: rating as FeedbackRating,
++      timestamp: new Date().toISOString(),
++    };
++
++    const entries = this.list().filter(e => e.answerId !== answerId);
++    entries.push(entry);
++    this.persistence.writeJson(FEEDBACK_FILE, entries);
++
++    logger.info(SERVICE, 'Feedback recorded', { answerId, rating: entry.rating });
++    return entry;
++  }
++
++  /** All recorded feedback, oldest first. */
++  list(): FeedbackEntry[] {
++    return this.persistence.readJson<FeedbackEntry[]>(FEEDBACK_FILE) ?? [];
++  }
++}
+diff --git a/src/services/indexing-service.ts b/src/services/indexing-service.ts
+index a86f032..cc1f295 100644
+--- a/src/services/indexing-service.ts
++++ b/src/services/indexing-service.ts
+@@ -1,5 +1,5 @@
+ import { v4 as uuidv4 } from 'uuid';
+-import { Chunk, Document } from '../shared/types';
++import { Chunk, Document, IndexStatus } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ import { logger } from './logger';
+ 
+@@ -7,13 +7,6 @@ const SERVICE = 'indexing-service';
+ const INDEX_META = 'index-meta.json';
+ const CHUNKS_DIR = 'chunks';
+ 
+-interface IndexStatus {
+-  status: 'idle' | 'indexing' | 'ready' | 'error';
+-  currentIndexed: number;
+-  totalDocuments: number;
+-  lastIndexed: string | null;
+-}
+-
+ export class IndexingService {
+   private persistence: PersistenceService;
+ 
+diff --git a/src/services/qa-service.ts b/src/services/qa-service.ts
+index 765b4b4..00b6ddf 100644
+--- a/src/services/qa-service.ts
++++ b/src/services/qa-service.ts
+@@ -1,4 +1,5 @@
+-import { QAResponse, QAHistory, Citation, Chunk } from '../shared/types';
++import { QAResponse, QAHistory, Citation } from '../shared/types';
++import { v4 as uuidv4 } from 'uuid';
+ import { PersistenceService } from './persistence-service';
+ import { IndexingService } from './indexing-service';
+ import { logger } from './logger';
+@@ -103,6 +104,7 @@ export class QaService {
+     const answer = this.generateAnswer(question, citations);
+ 
+     const response: QAResponse = {
++      id: uuidv4(),
+       answer,
+       citations,
+       confidence: citations.length > 0 ? 0.85 : 0.3,
+@@ -113,6 +115,7 @@ export class QaService {
+     this.saveToHistory(question, response);
+ 
+     logger.info(SERVICE, 'Answer generated', {
++      answerId: response.id,
+       confidence: response.confidence,
+       citationCount: citations.length,
+     });
+@@ -121,7 +124,22 @@ export class QaService {
+ 
+   /** Get the Q&A history. */
+   getHistory(): QAHistory[] {
+-    return this.persistence.readJson<QAHistory[]>(QA_HISTORY_FILE) ?? [];
++    const history = this.persistence.readJson<QAHistory[]>(QA_HISTORY_FILE) ?? [];
++
++    // Entries saved before answers had ids get one assigned (and persisted)
++    // so that every answer can receive feedback.
++    let backfilled = 0;
++    for (const item of history) {
++      if (!item.response.id) {
++        item.response.id = uuidv4();
++        backfilled++;
++      }
++    }
++    if (backfilled > 0) {
++      this.persistence.writeJson(QA_HISTORY_FILE, history);
++      logger.info(SERVICE, 'Backfilled answer ids in history', { count: backfilled });
++    }
++    return history;
+   }
+ 
+   /** Clear the Q&A history. */
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index bb67414..c645d15 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -26,6 +26,8 @@ export interface Citation {
+ }
+ 
+ export interface QAResponse {
++  /** Unique answer id, used to attach feedback. */
++  id: string;
+   answer: string;
+   citations: Citation[];
+   confidence: number;
+@@ -37,6 +39,21 @@ export interface QAHistory {
+   response: QAResponse;
+ }
+ 
++export type FeedbackRating = 'up' | 'down';
++
++export interface FeedbackEntry {
++  answerId: string;
++  rating: FeedbackRating;
++  timestamp: string;
++}
++
++export interface IndexStatus {
++  status: 'idle' | 'indexing' | 'ready' | 'error';
++  currentIndexed: number;
++  totalDocuments: number;
++  lastIndexed: string | null;
++}
++
+ export interface ConversationMessage {
+   id: string;
+   role: 'user' | 'assistant';
+@@ -74,6 +91,11 @@ export const IPC_CHANNELS = {
+   // Conversation
+   GET_CONVERSATION: 'conversation:get',
+ 
++  // Feedback
++  SUBMIT_FEEDBACK: 'feedback:submit',
++  LIST_FEEDBACK: 'feedback:list',
++
+   // App status
+   GET_STATUS: 'app:status',
++  RESET_APP: 'app:reset',
+ } as const;

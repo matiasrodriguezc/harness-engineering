@@ -1,0 +1,14 @@
+
+> knowledge-base@0.1.0 build
+> tsc -p tsconfig.node.json && node scripts/build-preload.js && vite build
+
+[build-preload] dist/preload/preload.js bundled
+vite v6.4.6 building for production...
+transforming...
+✓ 37 modules transformed.
+rendering chunks...
+computing gzip size...
+../../dist/renderer/index.html                  0.67 kB │ gzip:  0.45 kB
+../../dist/renderer/assets/index-BDn6wPiH.js  159.15 kB │ gzip: 50.65 kB
+✓ built in 417ms
+build-exit=0

@@ -1,0 +1,148 @@
+commit 0f5ba6429924b9c50ad1f6dd7d012a2501b251a3
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 23:33:28 2026 -0300
+
+    docs: session handoff, progress log, architecture updated for feedback/reset/preload bundling
+
+diff --git a/claude-progress.md b/claude-progress.md
+index 2efb8ba..bd3dc11 100644
+--- a/claude-progress.md
++++ b/claude-progress.md
+@@ -1,3 +1,11 @@
+ # claude-progress.md
+ 
+ Log de sesiones: qué se hizo, qué se verificó y con qué comando.
++
++## 2026-11-15
++
++- Baseline was broken: type errors, and the sandboxed preload could not load `../shared/types`, so `window.knowledgeBase` was undefined (smoke-bridge FAIL). Fixed by bundling the preload with esbuild; committed separately (94d60d9).
++- answer-feedback -> passing (89b9ce6). Verified: npm test, smoke-bridge, scripts/e2e/answer-feedback.mjs 7/7 including restart.
++- reset-all-data -> passing (a157385). Verified: npm test, smoke-bridge, scripts/e2e/reset-all-data.mjs 6/6 including restart.
++- conversation-history -> passing (743f509). Verified: npm test (22/22), smoke-bridge, scripts/e2e/conversation-history.mjs 13/13 including reload and restart; earlier e2e suites re-run as regression.
++- Left for next session: StatusBar status shape mismatch, UI import picker (see session-handoff.md).
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index eb35700..2585830 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -54,7 +54,7 @@ window.knowledgeBase = {
+   indexing:   { start, status, chunks },
+   qa:         { ask, history, clearHistory },
+   feedback:   { submit, list },
+-  app:        { resetData },
++  app:        { reset },
+ }
+ ```
+ 
+@@ -62,7 +62,7 @@ window.knowledgeBase = {
+ 
+ React 18 application bundled by Vite:
+ 
+-- `App.tsx` -- Root layout with view mode switching (documents/history), reset button.
++- `App.tsx` -- Root layout; owns Q&A history + ratings; switches between the conversation and a selected document; Reset all data button (`ResetDataButton`, in-page confirmation).
+ - `DocumentList` -- Sidebar listing of imported documents with status and chunk counts.
+ - `DocumentDetail` -- Shows metadata, chunks, indexing controls, and delete button.
+ - `ImportPanel` -- File input for importing .txt and .md documents.
+@@ -122,21 +122,22 @@ React 18 application bundled by Vite:
+ ### Feedback Flow
+ 
+ ```
+-1. User clicks thumbs up/down on a response
+-2. App.tsx calls window.knowledgeBase.feedback.submit(timestamp, question, rating)
+-3. QaService.submitFeedback():
+-   a. Creates FeedbackEntry with UUID, timestamp, rating
+-   b. Appends to feedback.json
++1. User clicks 'Mark answer helpful' / 'Mark answer not helpful' on an answer (AnswerFeedback)
++2. Renderer calls window.knowledgeBase.feedback.submit(answerId, 'up' | 'down')  (answerId = QAResponse.id)
++3. FeedbackService.submit():
++   a. Rejects a rating other than 'up'/'down' and answer ids not in qa-history.json
++   b. Stores {answerId, rating, timestamp} in feedback.json, replacing an earlier rating of the same answer
+    c. Logs structured event
++4. window.knowledgeBase.feedback.list() returns [{answerId, rating, timestamp}]
+ 4. Feedback persists across sessions
+ ```
+ 
+ ### Clean State Reset Flow
+ 
+ ```
+-1. User clicks Reset button in header
+-2. Confirmation dialog appears
+-3. App.tsx calls window.knowledgeBase.app.resetData()
++1. User clicks the header button with aria-label 'Reset all data'
++2. In-page confirmation dialog (role=alertdialog) appears; Cancel deletes nothing
++3. ResetDataButton calls window.knowledgeBase.app.reset()  (IPC app:reset)
+ 4. PersistenceService.resetAll():
+    a. Removes entire data directory (rmSync recursive)
+    b. Recreates directory structure
+@@ -159,8 +160,8 @@ React 18 application bundled by Vite:
+ | `qa:ask` | R -> M | QaService.ask | Ask a question |
+ | `qa:history` | R -> M | QaService.getHistory | Get Q&A history |
+ | `qa:clear-history` | R -> M | QaService.clearHistory | Clear history |
+-| `feedback:submit` | R -> M | QaService.submitFeedback | Submit feedback |
+-| `feedback:list` | R -> M | QaService.getFeedback | Get all feedback |
++| `feedback:submit` | R -> M | FeedbackService.submit | Submit feedback |
++| `feedback:list` | R -> M | FeedbackService.list | Get all feedback |
+ | `app:reset` | R -> M | PersistenceService.resetAll | Reset all data |
+ | `app:status` | R -> M | IndexingService.getStatus | Get app status |
+ 
+@@ -206,3 +207,9 @@ Log levels:
+ - **INFO**: Significant events (import, indexing, Q&A, feedback, reset)
+ - **WARN**: Missing but non-critical data (skipped documents, content not found)
+ - **ERROR**: Failures (file not found, parse errors)
++
++## Preload build
++
++Electron runs the preload sandboxed, so it may only `require('electron')`. `npm run build` bundles
++`src/preload/preload.ts` (including `src/shared/types`) into one file with `scripts/build-preload.js`
++(esbuild). Do not disable the sandbox; `scripts/check-architecture.sh` fails if the bundle has local requires.
+diff --git a/session-handoff.md b/session-handoff.md
+index c37cf46..19390c3 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -2,29 +2,33 @@
+ 
+ ## Verified Now
+ 
+-- What is currently working:
+-- What verification actually ran:
++- What is currently working: all three features in feature_list.json are `passing`: answer-feedback, reset-all-data, conversation-history. The UI reaches `window.knowledgeBase` (documents, indexing, qa, feedback, app).
++- What verification actually ran (2026-11-15): `bash init.sh` (OK), `npm test` (22/22), `bash scripts/smoke-bridge.sh` (PASS), and the three real-app e2e scripts: `scripts/e2e/answer-feedback.mjs` 7/7, `scripts/e2e/reset-all-data.mjs` 6/6, `scripts/e2e/conversation-history.mjs` 13/13 (each includes a real app restart on the same data dir).
+ 
+ ## Changed This Session
+ 
+-- Code or behavior added:
+-- Infrastructure or harness changes:
++- Baseline fix (own commit): the preload required `../shared/types`, which a sandboxed preload cannot load, so `window.knowledgeBase` was undefined in the running app. It is now bundled with esbuild (`scripts/build-preload.js`, wired into `npm run build` and `scripts/dev.js`). Fixed renderer type errors (wrong shared-types path, unused React imports).
++- answer-feedback: `QAResponse.id` (uuid; old history entries get a stable id on first read), `FeedbackService` (feedback.json, one rating per answer, rejects bad ratings and unknown answer ids), `feedback:submit`/`feedback:list` IPC, `AnswerFeedback` buttons.
++- reset-all-data: `app:reset` -> `PersistenceService.resetAll()`, `window.knowledgeBase.app.reset()`, `ResetDataButton` with in-page confirmation dialog.
++- conversation-history: App owns history + ratings; `ConversationHistory` chat with `ConfidenceIndicator` and `CitationList` (expand to excerpt); document view switches via sidebar, header "Conversation" button returns. The old "Show History" toggle and single last-answer block are gone.
++- Harness: `vitest.config.ts` (tests in `tests/`), `scripts/e2e/app-session.mjs` (launch app, CDP evaluate, restart).
+ 
+ ## Broken Or Unverified
+ 
+-- Known defect:
+-- Unverified path:
+-- Risk for the next session:
++- Known defect (pre-existing, not fixed): StatusBar shows "Index:" and "Documents:" with no values. `indexing.status()` returns `{status, currentIndexed, totalDocuments}` but the renderer types it as `AppStatus {indexStatus, documentsLoaded, lastActivity}`.
++- Known gap (pre-existing): the "+ Import" button only logs; there is no file picker in the UI. Import works through `window.knowledgeBase.documents.import(path)`. `ImportPanel` exists but is unused.
++- Unverified path: the DocumentDetail "Index Document" button does not refresh the document list afterwards.
++- Design choices to know: feedback for an unknown answer id is rejected; rating an answer again replaces the earlier rating, so `feedback.list()` has at most one entry per answer.
+ 
+ ## Next Best Step
+ 
+-- Highest-priority unfinished feature:
+-- Why it is next:
+-- What counts as passing:
+-- What must not change during that step:
++- Highest-priority unfinished feature: none in feature_list.json. Suggested: fix the StatusBar/indexing status shape mismatch, then a real import file picker.
++- Why it is next: both are visible to the user in the running app.
++- What counts as passing: same three layers as AGENTS.md; add an e2e script under `scripts/e2e/`.
++- What must not change: the preload bundling and the sandbox; the bridge names `feedback.submit/list`, `app.reset`, `qa.ask` returning `id`; the aria-labels 'Mark answer helpful', 'Mark answer not helpful', 'Reset all data'.
+ 
+ ## Commands
+ 
+-- Startup:
+-- Verification:
+-- Focused debug command:
++- Startup: `bash init.sh`
++- Verification: `npm test` and, after `env -u NODE_OPTIONS npm run build`, `node --experimental-websocket scripts/e2e/<feature>.mjs`
++- Focused debug command: `env -u NODE_OPTIONS npm run dev` (launch by hand)
