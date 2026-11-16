@@ -1,0 +1,151 @@
+commit bfca634c5873d2850294dbe279f0e07b49ff789b
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 02:23:00 2026 -0300
+
+    Cleanup pass: remove stale script docs, mark ImportPanel as unrendered, update handoff and progress
+
+diff --git a/claude-progress.md b/claude-progress.md
+index 93b4ecd..3b2db53 100644
+--- a/claude-progress.md
++++ b/claude-progress.md
+@@ -10,3 +10,13 @@ Log de sesiones: qué se hizo, qué se verificó y con qué comando.
+ - conversation-history (`dc000aa`): passing. Verified with `npm test` (14 tests in total), `bash init.sh`, and `e2e-app.mjs conversation-ask` then `conversation-check`.
+ - Fixed a pre-existing bug along the way: single-document indexing did not record chunks in `index-meta.json`, so citations were missing for documents indexed with "Index Document".
+ - All six e2e scenarios were also run in sequence on one user-data directory: all E2E PASS.
++
++## Session: cleanup pass
++
++- Ran `bash init.sh` at the start: `init.sh OK` (types, build, architecture, smoke-bridge). Only a NODE_OPTIONS warning was printed.
++- Re-verified all three passing features: `npm test` 14 passed (3 files); `bash scripts/smoke-bridge.sh` PASS; `e2e-app.mjs` feedback-ask, feedback-check, reset-populate, reset-verify, conversation-ask, conversation-check on one fresh user-data directory: all E2E PASS (exit 0). `npm run check` exit 0; `scripts/check-architecture.sh` exit 0.
++- Went through `clean-state-checklist.md`. No temporary files in the repo. Test and e2e data sit in the scratchpad, outside the repo.
++- Docs fixes: removed the benchmark and cleanup-scanner sections from `docs/RELIABILITY.md` (scripts never existed). `docs/ARCHITECTURE.md` now marks `ImportPanel` as not rendered.
++- Left alone on purpose: `quality-document.md` (early grading snapshot), `data/sample-documents/` (no code reads it; kept as sample input), and the known pre-existing defects in `session-handoff.md`.
++- Attempted an `rm -rf` on a scratch e2e directory; the safety check blocked it, so it was not run. The directory was left in the scratchpad and a new one was used.
++- Feature states were not changed; all three stay `passing`.
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index a6d6981..fc446d4 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -65,7 +65,7 @@ React 18 application bundled by Vite:
+ - `App.tsx` -- Root layout: document list, document detail above the conversation, header with reset button.
+ - `DocumentList` -- Sidebar listing of imported documents with status and chunk counts.
+ - `DocumentDetail` -- Shows metadata, chunks, indexing controls, and delete button.
+-- `ImportPanel` -- File input for importing .txt and .md documents.
++- `ImportPanel` -- File input for importing .txt and .md documents. Not rendered in `App.tsx` yet; import currently runs only through `window.knowledgeBase.documents.import(path)`.
+ - `QuestionPanel` -- Text input for asking questions.
+ - `ConversationHistory` -- The Q&A history as a chat: questions right, answers left, expandable sources, confidence indicator, feedback buttons, clear history.
+ - `AnswerFeedback` -- "Mark answer helpful" / "Mark answer not helpful" buttons for one answer.
+@@ -84,7 +84,7 @@ React 18 application bundled by Vite:
+ ### Document Import Flow
+ 
+ ```
+-1. User selects file via ImportPanel
++1. User selects file (ImportPanel is not rendered yet; the same call can be made from the bridge)
+ 2. App.tsx calls window.knowledgeBase.documents.import(filePath)
+ 3. Preload bridge invokes ipcRenderer.invoke('documents:import', filePath)
+ 4. ipc-handlers.ts delegates to DocumentService.importDocument(filePath)
+diff --git a/docs/RELIABILITY.md b/docs/RELIABILITY.md
+index 6ee8854..7f2e227 100644
+--- a/docs/RELIABILITY.md
++++ b/docs/RELIABILITY.md
+@@ -104,75 +104,3 @@ Use the `clean-state-checklist.md` to verify:
+ - Runtime behavior is correct
+ - Logging output is as expected
+ - Data integrity is maintained
+-
+-## Benchmarking
+-
+-### Overview
+-
+-The `scripts/benchmark.sh` script measures application performance across key operations. It uses file-based simulation to test the services layer without launching the Electron window.
+-
+-### Benchmark Tasks
+-
+-| Task | What It Measures | Target |
+-|------|------------------|--------|
+-| `import` | Document import throughput | 3 files in <1s |
+-| `index` | Batch indexing speed | 14 chunks in <1s |
+-| `query` | Q&A response latency | <500ms per question |
+-| `verify` | Data integrity checks | 0 errors |
+-
+-### Running Benchmarks
+-
+-```bash
+-bash scripts/benchmark.sh
+-```
+-
+-Output example:
+-```
+-=== Benchmark Results ===
+-[import] 3 files: 120ms (25.0 files/sec)
+-[index]  3 documents: 80ms (175.0 chunks/sec)
+-[query]  5 questions: 1250ms (250.0ms avg)
+-[verify] Data integrity: PASS
+-=== Summary: 4/4 tasks passed ===
+-```
+-
+-### Interpreting Results
+-
+-- If import is slow: check file size and disk I/O.
+-- If indexing is slow: check chunk size and paragraph boundaries.
+-- If query is slow: check number of chunks and keyword matching.
+-- If verify fails: run `scripts/cleanup-scanner.sh` to identify issues.
+-
+-## Cleanup Scanner
+-
+-### Overview
+-
+-The `scripts/cleanup-scanner.sh` script checks the data directory for stale or inconsistent artifacts.
+-
+-### Checks Performed
+-
+-| Check | Description |
+-|-------|-------------|
+-| Orphaned content files | Content files without a matching document in metadata |
+-| Dangling chunk files | Chunk files without a matching index entry |
+-| Missing content files | Documents in metadata without a content file |
+-| Inconsistent metadata | Documents marked as indexed without chunk files |
+-| Empty data files | JSON files with empty arrays that should have data |
+-| Stale Q&A history | History entries referencing deleted documents |
+-
+-### Running the Scanner
+-
+-```bash
+-bash scripts/cleanup-scanner.sh
+-```
+-
+-Output example:
+-```
+-=== Cleanup Scanner ===
+-[OK] No orphaned content files
+-[OK] No dangling chunk files
+-[OK] No missing content files
+-[OK] All indexed documents have chunk files
+-[OK] No stale Q&A references
+-=== Result: CLEAN (0 issues) ===
+-```
+diff --git a/session-handoff.md b/session-handoff.md
+index 762b8ba..04233d5 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -13,6 +13,8 @@
+ 
+ ## Changed This Session
+ 
++- Cleanup pass (no features added): removed the stale benchmark and cleanup-scanner sections from `docs/RELIABILITY.md`; clarified `ImportPanel` status in `docs/ARCHITECTURE.md`. No code changed. Everything else was re-verified, not modified.
++
+ - Code or behavior added:
+   - Feedback: `QAResponse.id`, `FeedbackEntry`, `QaService.submitFeedback/getFeedback`, IPC `feedback:submit` and `feedback:list`, `AnswerFeedback` component.
+   - Reset: IPC `app:reset`, `window.knowledgeBase.app.reset()`, header button with inline confirmation.
+@@ -34,7 +36,10 @@
+ - Known defect (pre-existing, not fixed): documents never move to status `indexed` after indexing, so "Index Document" stays visible in DocumentDetail.
+ - Known gap (pre-existing): `ImportPanel` is not rendered in `App.tsx`; import works only through `window.knowledgeBase.documents.import(path)`.
+ - Not built: PRODUCT.md describes features that are not in the code: confirmation on Clear History, feedback on the latest answer in document view, feedback comments.
+-- Docs reference `scripts/benchmark.sh` and `scripts/cleanup-scanner.sh`, which do not exist.
++- Resolved in the cleanup pass: `docs/RELIABILITY.md` no longer describes `scripts/benchmark.sh` or `scripts/cleanup-scanner.sh` (neither exists). `docs/ARCHITECTURE.md` now marks `ImportPanel` as not rendered.
++- `quality-document.md` is an early grading snapshot from before the harness existed. Its action items are partly done. It was kept as-is; decide whether to delete it or keep it as history.
++- `docs/PRODUCT.md` still says import happens "through a file picker in the ImportPanel", which the code does not render yet.
++- Launch note: `init.sh` warns that `NODE_OPTIONS` contains `--openssl-legacy-provider`, which Electron rejects. The scripts strip it; by hand use `env -u NODE_OPTIONS npm run dev`.
+ - Unverified path: the e2e scripts ran only on darwin with the Electron binary from `node_modules`. Windows and Linux are untested.
+ - Risk for the next session: answers are produced by mock patterns, so confidence and citations reflect keyword overlap, not retrieval quality.
+ 

@@ -1,0 +1,2 @@
+haiku-weak 12 / 12
+haiku-mine 12 / 12

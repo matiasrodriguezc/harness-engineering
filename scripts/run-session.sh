@@ -3,6 +3,7 @@
 # Usage: run-session.sh <run-folder> <evidence-folder> "<prompt>" [extra claude flags...]
 # Each call is a new session: it inherits nothing from the previous one except what is in the files.
 # Example extra flag: --max-budget-usd 1.20 (cuts the session off at the cap, like a restart).
+# Optional: CLAUDE_MODEL=<model id> runs the session on that model (default: Claude Code's default model).
 set -u
 RUN_DIR="$1"; EVID="$2"; PROMPT="$3"; shift 3
 mkdir -p "$EVID"
@@ -13,6 +14,7 @@ claude -p "$PROMPT" \
   --disable-slash-commands --strict-mcp-config \
   --permission-mode auto \
   --output-format stream-json --verbose \
+  ${CLAUDE_MODEL:+--model "$CLAUDE_MODEL"} \
   "$@" \
   > "$EVID/transcript.jsonl" 2> "$EVID/stderr.txt"
 echo "exit=$?" >> "$EVID/stderr.txt"

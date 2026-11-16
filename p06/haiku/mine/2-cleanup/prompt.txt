@@ -1,0 +1,1 @@
+Do a cleanup pass on this repository: run bash init.sh, go through clean-state-checklist.md, remove leftovers, fix anything that fails, make sure every feature marked passing in feature_list.json still passes its verification, and update session-handoff.md and claude-progress.md. Do not add new features.

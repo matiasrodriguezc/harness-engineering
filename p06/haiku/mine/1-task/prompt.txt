@@ -1,0 +1,5 @@
+Implement these three features in this knowledge base app.
+1. Answer feedback: users can rate each answer as helpful or not helpful. Every answer returned by window.knowledgeBase.qa.ask must include a unique string id. Expose window.knowledgeBase.feedback.submit(answerId, rating), where rating is 'up' or 'down', and window.knowledgeBase.feedback.list(), which returns an array of {answerId, rating, timestamp}. Ratings persist across app restarts. In the UI, each answer has two buttons with aria-label 'Mark answer helpful' and 'Mark answer not helpful'.
+2. Reset all data: expose window.knowledgeBase.app.reset(), which deletes all documents, chunks, Q&A history and feedback, so the app returns to an empty state that persists after a restart. In the UI, a button with aria-label 'Reset all data' asks for confirmation before resetting.
+3. Conversation history: the question panel shows the full Q&A history as a conversation, each answer with its citations (expandable to show the excerpt) and a confidence indicator.
+The features must work in the running app.

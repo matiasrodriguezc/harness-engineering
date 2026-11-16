@@ -4,7 +4,7 @@ Eight measured experiments with Claude Code on the [Learn Harness Engineering](h
 
 **Live demo:** https://harness-engineering-matias.vercel.app (the page's code is [`index.html`](index.html); Vercel publishes only that file, see `.vercelignore`).
 
-- **48 agent sessions** (Claude Opus 5.5, non-interactive mode), all with saved transcripts · **US$53.86** in total
+- **48 agent sessions** (Claude Opus 5.5, non-interactive mode), all with saved transcripts · **US$53.86** in total, plus 3 Claude Haiku 5.5 sessions (US$0.55) that repeat P06
 - In each project, the same task with the same model, changing only the harness
 - Every result verified outside the agent: typecheck, tests, build, the real app and my own checks that the agents could not see
 
@@ -16,6 +16,7 @@ Eight measured experiments with Claude Code on the [Learn Harness Engineering](h
 4. **A well-specified task does much of the work.** In P06, with fixed API names and "it has to work in the real app", all five variants passed the hidden suite, including the weak harness.
 5. **An independent evaluator adds value; a planner, not always** (P05: judge 3.9 → 4.5 with an evaluator; 4.0 with a planner).
 6. **In the ablation, instructions matter most** (P06: without `AGENTS.md`, zero commits and a third of the tests).
+7. **The pattern holds with a smaller model.** P06 repeated with Claude Haiku 5.5: 12/12 with both harnesses, and the harness changed the same things as with Opus (sandbox kept, tests, commits, state) at about an eighth of the cost.
 
 ## Results by project
 
@@ -36,7 +37,7 @@ Eight measured experiments with Claude Code on the [Learn Harness Engineering](h
 |---|---|
 | `p01/` … `p04/` | Weak-harness run (`baseline/`) and strong-harness run (`improved/`): transcript, diff, agent summary, harness used, `metrics.md` |
 | `p05/` | The three role configurations, their evaluations and the independent judge's report |
-| `p06/` | My harness (`my-harness/`), the ablation variants and the runs with their hidden acceptance suite results |
+| `p06/` | My harness (`my-harness/`), the ablation variants and the runs with their hidden acceptance suite results; `haiku/` repeats the benchmark with Claude Haiku 5.5 |
 | `p07/` | The three loops with their prompts, the timer log and `loop-state.md` |
 | `p08/` | `graph.md` (the P07 loop as a graph) and the run log of the executable graph, with its approval request |
 | `scripts/` | Everything needed to repeat the experiments |
@@ -54,6 +55,7 @@ Transcripts (`transcript.jsonl`) and diffs (`changes.patch`) are kept exactly as
 | `check-bridge.mjs` | Connects to the open app via Chrome DevTools and checks that the UI has access to the API |
 | `run-p05.sh` | The three role configurations and the independent judge |
 | `run-p06.sh`, `run-p06-all.sh` | The P06 variants with the acceptance suite at the end |
+| `run-p06-haiku.sh` | The P06 benchmark (weak and mine) on another model, Claude Haiku 5.5 by default |
 | `p06-acceptance.mjs` | Hidden end-to-end suite: 12 checks with two app restarts |
 | `p07-goal.sh`, `p07-timer.sh`, `p07-maker-checker.sh` | The three P07 loops |
 | `p07-search-accept.mjs`, `p08-export-accept.mjs` | Independent checks of the P07 and P08 features |
@@ -66,6 +68,6 @@ The P08 graph is stopped at its approval node, waiting for a person's decision (
 ## Limitations
 
 - One run per condition: differences in time and cost are indicative, not statistical.
-- A single model (Claude Opus 5.5); with another, several conclusions may change.
+- Mostly a single model (Claude Opus 5.5). Only P06 was repeated with a smaller one (Claude Haiku 5.5); with other models or harder tasks, several conclusions may change.
 - The sessions ran in non-interactive mode, not by hand as the course suggests, so they could be measured the same way; human interventions are zero by design.
 - I designed several protocols myself because the course does not define them (P02, P03, P05–P08). Every adjustment and every stumble is documented in the project's `metrics.md`.

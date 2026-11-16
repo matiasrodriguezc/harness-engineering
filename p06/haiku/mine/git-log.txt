@@ -1,0 +1,7 @@
+bfca634 Cleanup pass: remove stale script docs, mark ImportPanel as unrendered, update handoff and progress
+4caddf0 Session close: update architecture doc, handoff and progress log
+dc000aa conversation-history: show Q&A as a conversation with citations and confidence
+d56c366 reset-all-data: clear documents, chunks, Q&A history and feedback
+35b1364 answer-feedback: rate answers helpful or not helpful
+2d83a3b Fix starting state: type errors, preload bundling, gitignore
+f871adc starter P06 (haiku-mine)

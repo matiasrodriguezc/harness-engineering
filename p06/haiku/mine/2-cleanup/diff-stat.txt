@@ -1,0 +1,7 @@
+bfca634 Cleanup pass: remove stale script docs, mark ImportPanel as unrendered, update handoff and progress
+
+ claude-progress.md   | 10 ++++++++
+ docs/ARCHITECTURE.md |  4 +--
+ docs/RELIABILITY.md  | 72 ----------------------------------------------------
+ session-handoff.md   |  7 ++++-
+ 4 files changed, 18 insertions(+), 75 deletions(-)

@@ -1,0 +1,18 @@
+473b586 end of session: 1-task
+
+ package-lock.json                               | 4092 +++++++++++++++++++++++
+ src/main/ipc-handlers.ts                        |   20 +-
+ src/main/main.ts                                |    6 +
+ src/preload/preload.ts                          |    8 +
+ src/renderer/App.tsx                            |  191 +-
+ src/renderer/components/ConversationHistory.tsx |  278 +-
+ src/renderer/components/DocumentDetail.tsx      |    4 +-
+ src/renderer/components/DocumentList.tsx        |    3 +-
+ src/renderer/components/ImportPanel.tsx         |    3 +-
+ src/renderer/components/QuestionPanel.tsx       |  139 +-
+ src/renderer/components/StatusBar.tsx           |    8 +-
+ src/renderer/types.d.ts                         |   12 +-
+ src/services/feedback-service.ts                |   57 +
+ src/services/qa-service.ts                      |   21 +-
+ src/shared/types.ts                             |   26 +
+ 15 files changed, 4706 insertions(+), 162 deletions(-)

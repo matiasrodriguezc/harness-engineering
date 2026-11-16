@@ -1,0 +1,175 @@
+commit 4caddf034d2c6a97b777a322e1b99844eaca0ff0
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 02:21:05 2026 -0300
+
+    Session close: update architecture doc, handoff and progress log
+    
+    Records the three feature commits (answer-feedback, reset-all-data,
+    conversation-history), the verification that ran, and the pre-existing gaps
+    left for the next session.
+
+diff --git a/claude-progress.md b/claude-progress.md
+index 2efb8ba..93b4ecd 100644
+--- a/claude-progress.md
++++ b/claude-progress.md
+@@ -1,3 +1,12 @@
+ # claude-progress.md
+ 
+ Log de sesiones: qué se hizo, qué se verificó y con qué comando.
++
++## Session: answer-feedback, reset-all-data, conversation-history
++
++- Starting state was broken (`init.sh` failed at the type check; preload needed a local require under the sandbox). Fixed first in `2d83a3b`. `init.sh` passed after the fix.
++- answer-feedback (`35b1364`): passing. Verified with `npm test` (8 tests), `bash init.sh`, and `e2e-app.mjs feedback-ask` then `feedback-check` on the same user-data directory (ratings survive relaunch).
++- reset-all-data (`d56c366`): passing. Verified with `npm test` (11 tests in total), `bash init.sh`, and `e2e-app.mjs reset-populate` then `reset-verify`.
++- conversation-history (`dc000aa`): passing. Verified with `npm test` (14 tests in total), `bash init.sh`, and `e2e-app.mjs conversation-ask` then `conversation-check`.
++- Fixed a pre-existing bug along the way: single-document indexing did not record chunks in `index-meta.json`, so citations were missing for documents indexed with "Index Document".
++- All six e2e scenarios were also run in sequence on one user-data directory: all E2E PASS.
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index eb35700..a6d6981 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -54,7 +54,7 @@ window.knowledgeBase = {
+   indexing:   { start, status, chunks },
+   qa:         { ask, history, clearHistory },
+   feedback:   { submit, list },
+-  app:        { resetData },
++  app:        { reset },
+ }
+ ```
+ 
+@@ -62,12 +62,13 @@ window.knowledgeBase = {
+ 
+ React 18 application bundled by Vite:
+ 
+-- `App.tsx` -- Root layout with view mode switching (documents/history), reset button.
++- `App.tsx` -- Root layout: document list, document detail above the conversation, header with reset button.
+ - `DocumentList` -- Sidebar listing of imported documents with status and chunk counts.
+ - `DocumentDetail` -- Shows metadata, chunks, indexing controls, and delete button.
+ - `ImportPanel` -- File input for importing .txt and .md documents.
+ - `QuestionPanel` -- Text input for asking questions.
+-- `ConversationHistory` -- Chat-style Q&A history with expandable citations, confidence indicators, feedback buttons, and clear history.
++- `ConversationHistory` -- The Q&A history as a chat: questions right, answers left, expandable sources, confidence indicator, feedback buttons, clear history.
++- `AnswerFeedback` -- "Mark answer helpful" / "Mark answer not helpful" buttons for one answer.
+ - `StatusBar` -- Shows index status, document count, indexed count, and last activity.
+ 
+ ### Services (`src/services/`)
+@@ -122,27 +123,27 @@ React 18 application bundled by Vite:
+ ### Feedback Flow
+ 
+ ```
+-1. User clicks thumbs up/down on a response
+-2. App.tsx calls window.knowledgeBase.feedback.submit(timestamp, question, rating)
+-3. QaService.submitFeedback():
+-   a. Creates FeedbackEntry with UUID, timestamp, rating
+-   b. Appends to feedback.json
++1. Every QAResponse has a unique id (uuid) assigned in QaService.ask()
++2. User clicks "Mark answer helpful" or "Mark answer not helpful" under an answer
++3. App.tsx calls window.knowledgeBase.feedback.submit(answerId, 'up' | 'down')
++4. QaService.submitFeedback():
++   a. Rejects an invalid rating or an answerId that is not in the history
++   b. Stores {answerId, rating, timestamp} in feedback.json, replacing any earlier rating for that answer
+    c. Logs structured event
+-4. Feedback persists across sessions
++5. Ratings persist across restarts; feedback.list() returns them
+ ```
+ 
+ ### Clean State Reset Flow
+ 
+ ```
+-1. User clicks Reset button in header
+-2. Confirmation dialog appears
+-3. App.tsx calls window.knowledgeBase.app.resetData()
+-4. PersistenceService.resetAll():
+-   a. Removes entire data directory (rmSync recursive)
+-   b. Recreates directory structure
+-   c. Logs reset event
+-5. App.tsx clears all React state
+-6. refreshDocuments() reloads empty state
++1. User clicks "Reset all data" in the header
++2. An in-page confirmation appears; Cancel keeps the data
++3. Confirm calls window.knowledgeBase.app.reset()
++4. Main process calls PersistenceService.resetAll():
++   a. Removes the data directory (rmSync recursive)
++   b. Recreates the directory structure
++   c. Logs reset event (WARN)
++5. App.tsx clears documents, selection, conversation and feedback state, then reloads the document list
+ ```
+ 
+ ## IPC Channels (14 total)
+@@ -159,7 +160,7 @@ React 18 application bundled by Vite:
+ | `qa:ask` | R -> M | QaService.ask | Ask a question |
+ | `qa:history` | R -> M | QaService.getHistory | Get Q&A history |
+ | `qa:clear-history` | R -> M | QaService.clearHistory | Clear history |
+-| `feedback:submit` | R -> M | QaService.submitFeedback | Submit feedback |
++| `feedback:submit` | R -> M | QaService.submitFeedback | Rate an answer up or down |
+ | `feedback:list` | R -> M | QaService.getFeedback | Get all feedback |
+ | `app:reset` | R -> M | PersistenceService.resetAll | Reset all data |
+ | `app:status` | R -> M | IndexingService.getStatus | Get app status |
+diff --git a/session-handoff.md b/session-handoff.md
+index c37cf46..762b8ba 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -2,29 +2,51 @@
+ 
+ ## Verified Now
+ 
+-- What is currently working:
++- What is currently working: all three features in `feature_list.json` are `passing`.
++  - answer-feedback: every answer has a uuid `id`; `feedback.submit` / `feedback.list` work; ratings persist across restarts; both "Mark answer" buttons render per answer.
++  - reset-all-data: `app.reset()` clears documents, chunks, Q&A history and feedback; the "Reset all data" button asks for confirmation (Cancel keeps data); the empty state survives a restart.
++  - conversation-history: the right-hand panel shows the Q&A as a chat; each answer lists its sources (expand to the excerpt) and a color-coded confidence indicator; it survives reload and restart.
+ - What verification actually ran:
++  - `bash init.sh` -> `init.sh OK` (type check, build, architecture, smoke-bridge).
++  - `npm test` -> 14 passed (`tests/feedback.test.ts`, `tests/reset.test.ts`, `tests/conversation.test.ts`).
++  - `node --experimental-websocket scripts/e2e-app.mjs <scenario> <dir>` for `feedback-ask`, `feedback-check`, `reset-populate`, `reset-verify`, `conversation-ask`, `conversation-check`: all E2E PASS against the real Electron app on macOS, sharing one user-data directory across launches.
+ 
+ ## Changed This Session
+ 
+ - Code or behavior added:
++  - Feedback: `QAResponse.id`, `FeedbackEntry`, `QaService.submitFeedback/getFeedback`, IPC `feedback:submit` and `feedback:list`, `AnswerFeedback` component.
++  - Reset: IPC `app:reset`, `window.knowledgeBase.app.reset()`, header button with inline confirmation.
++  - Conversation: `ConversationHistory` rewritten as a chat; `src/shared/confidence.ts`; history state moved into `App.tsx`. The "Show History" toggle was removed because the conversation is now the panel's content.
++  - Bug fix: `IndexingService.startIndexing(documentId)` now records chunks in `index-meta.json`. Before, documents indexed through the single-document path were never cited.
++  - Starting-state fix (its own commit `2d83a3b`): renderer import paths, unused imports, `File.path` typing, preload bundled with esbuild (`build:preload`), `.gitignore`.
++- Design choices to review:
++  - One rating per answer: resubmitting replaces the earlier rating and timestamp.
++  - `feedback.submit` rejects an `answerId` that is not in the history, and rejects ratings other than `up`/`down`.
++  - Legacy history entries without an id get one on read, and are written back.
++  - Reset uses an in-page confirmation (not `window.confirm`).
+ - Infrastructure or harness changes:
++  - `vitest.config.ts` (scopes tests to `tests/`; `vite.config.ts` otherwise made vitest use the renderer root).
++  - `scripts/e2e-app.mjs`: CDP scenarios for the running app.
++  - `docs/ARCHITECTURE.md`: feedback, reset and IPC table updated.
+ 
+ ## Broken Or Unverified
+ 
+-- Known defect:
+-- Unverified path:
+-- Risk for the next session:
++- Known defect (pre-existing, not fixed): documents never move to status `indexed` after indexing, so "Index Document" stays visible in DocumentDetail.
++- Known gap (pre-existing): `ImportPanel` is not rendered in `App.tsx`; import works only through `window.knowledgeBase.documents.import(path)`.
++- Not built: PRODUCT.md describes features that are not in the code: confirmation on Clear History, feedback on the latest answer in document view, feedback comments.
++- Docs reference `scripts/benchmark.sh` and `scripts/cleanup-scanner.sh`, which do not exist.
++- Unverified path: the e2e scripts ran only on darwin with the Electron binary from `node_modules`. Windows and Linux are untested.
++- Risk for the next session: answers are produced by mock patterns, so confidence and citations reflect keyword overlap, not retrieval quality.
+ 
+ ## Next Best Step
+ 
+-- Highest-priority unfinished feature:
+-- Why it is next:
+-- What counts as passing:
+-- What must not change during that step:
++- Highest-priority unfinished feature: none. All three features in `feature_list.json` are `passing`.
++- Why it is next: nothing is queued. The gaps above are candidates for a new feature entry, starting with the document `indexed` status, which affects the UI's Index button.
++- What counts as passing: a new feature entry with `verification`, run through the three layers in AGENTS.md (`init.sh`, `npm test`, `scripts/e2e-app.mjs` or a new scenario).
++- What must not change during that step: the preload stays bundled (`build:preload`), and the `window.knowledgeBase` surface from the three passing features.
+ 
+ ## Commands
+ 
+-- Startup:
+-- Verification:
+-- Focused debug command:
++- Startup: `env -u NODE_OPTIONS npm run dev`
++- Verification: `bash init.sh`; `npm test`; `node --experimental-websocket scripts/e2e-app.mjs <scenario> <userDataDir> [port]`
++- Focused debug command: `env -u NODE_OPTIONS npx electron . --remote-debugging-port=9350 --user-data-dir=<dir>` then `node --experimental-websocket scripts/check-bridge.mjs 9350`

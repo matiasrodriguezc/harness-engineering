@@ -1,0 +1,6 @@
+4caddf0 Session close: update architecture doc, handoff and progress log
+
+ claude-progress.md   |  9 +++++++++
+ docs/ARCHITECTURE.md | 39 ++++++++++++++++++++-------------------
+ session-handoff.md   | 44 +++++++++++++++++++++++++++++++++-----------
+ 3 files changed, 62 insertions(+), 30 deletions(-)

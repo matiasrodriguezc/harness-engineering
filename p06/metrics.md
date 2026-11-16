@@ -71,3 +71,7 @@ Before using it, its tools were tested against the starter: the preload rule and
 **With a well-specified task, the model delivered working software with any harness**: the acceptance suite scored 12/12 in all five variants, and the weak harness was the cheapest (US$1.19 versus US$2.74 for mine). The task specification (API names, `aria-label`s and "it has to work in the real app") did much of the work that nobody did in P03. That is layer 1 from lecture 01.
 
 The harness did not change **whether it works**, but **what state the repo is left in**: with my harness there were 22 tests, one commit per feature, the feature list with evidence, the handoff for the next session and the sandbox intact; with the weak one, zero tests, zero commits, no state and the sandbox disabled. The ablation says that **what matters most today is the instructions** (without them: 0 commits and a third of the tests), while end-to-end verification contributed nothing measurable **on this task**, because the prompt itself already required it. And it leaves one concrete improvement: turn "don't disable the sandbox" into an executable rule. A single run per variant: the numbers are indicative.
+
+## Repeated with a smaller model
+
+The same benchmark (weak and mine) was repeated with **Claude Haiku 5.5**; see [`haiku/metrics.md`](haiku/metrics.md). Both passed 12/12 again, and the harness changed the same things as with Opus (sandbox kept, tests, commits, state), at about an eighth of the cost: US$0.37 against US$3.21 for my harness with its cleanup pass.
