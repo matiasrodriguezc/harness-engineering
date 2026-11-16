@@ -1,0 +1,986 @@
+commit 4d93713a568ec94addacb903e654aa6745f77d0c
+Author: run <run@local>
+Date:   Sun Nov 15 21:26:37 2026 -0300
+
+    fin de sesión: sesion-1
+
+diff --git a/feature_list.json b/feature_list.json
+index 505cb79..8dd4526 100644
+--- a/feature_list.json
++++ b/feature_list.json
+@@ -62,33 +62,33 @@
+       "id": "document-chunking",
+       "name": "Document Chunking",
+       "description": "IndexingService splits documents into ~500 char chunks at paragraph boundaries",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "IndexingService.chunkDocument packs paragraphs into <=500-char chunks and splits oversized paragraphs at sentence/word boundaries. Single-doc indexing now updates index-meta and the document's status/chunk count. Sample docs: design-notes 6 chunks (211-464 chars), meeting-summary 3, retrieval-plan 5. Delete removes chunks from index. npm run check passes.",
++      "testedAt": "2026-11-15T21:30:00Z"
+     },
+     {
+       "id": "metadata-extraction",
+       "name": "Metadata Extraction",
+       "description": "On import, extract word count, line count, and file type metadata from documents",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "DocumentService.importDocument calls extractMetadata (wordCount, lineCount, fileType) and rejects non-.txt/.md files and files >10MB. Samples: design-notes.md md/282 words/43 lines; meeting-summary.txt txt/163/20; retrieval-plan.md md/252/46; package.json rejected. Shown in DocumentDetail.",
++      "testedAt": "2026-11-15T21:30:00Z"
+     },
+     {
+       "id": "indexing-status-ui",
+       "name": "Indexing Status in StatusBar",
+       "description": "StatusBar shows indexing progress with document counts and status indicator",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "getStatus now returns AppStatus (previously returned a mismatched shape) with indexedDocuments/documentsLoaded/totalChunks; StatusBar shows 'Indexed: X/N documents' with progress bar, chunk count, and colored status (idle -> ready after indexing all 3 samples, 14 chunks). Index All / Index Document buttons refresh status. App launches via electron without errors; UI not clicked through by automation.",
++      "testedAt": "2026-11-15T21:30:00Z"
+     },
+     {
+       "id": "grounded-qa",
+       "name": "Grounded Q&A with Citations",
+       "description": "QaService returns answers with document citations and confidence scores",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "QaService ranks chunks by question-term overlap (stop words removed), returns up to 3 citations with sentence-level excerpts and an extractive answer built only from cited text; confidence 0.85 with citations, 0.30 without. 'How does retrieval rank chunks?' -> 3 citations from retrieval-plan/meeting-summary; nonsense question -> no citations, 0.30. Answer panel shows numbered citations and confidence.",
++      "testedAt": "2026-11-15T21:30:00Z"
+     }
+   ]
+ }
+diff --git a/session-handoff.md b/session-handoff.md
+new file mode 100644
+index 0000000..4ff0497
+--- /dev/null
++++ b/session-handoff.md
+@@ -0,0 +1,17 @@
++# Session Handoff
++
++## State (2026-11-15)
++All features in `feature_list.json` are `pass`. `npm run check` and `npm run build` succeed; the app launches.
++
++## What changed this session
++- **Baseline compile fixes:** renderer imports pointed at `../../shared` (wrong depth); duplicate `Window` declaration in `App.tsx` removed (canonical one is `src/renderer/types.d.ts`); `File.path` (removed in Electron 32+) replaced by `window.knowledgeBase.getPathForFile` (preload `webUtils`); `sandbox: false` so the preload can require `../shared/types`.
++- **Chunking:** `IndexingService` rewritten — oversize paragraphs split, single-doc indexing updates `index-meta.json` and document `status`/`chunks`, `removeDocument` called on delete.
++- **Metadata:** `extractMetadata` in `document-service.ts`; `Document` gained `wordCount`, `lineCount`, `fileType`. Type and 10 MB validation on import.
++- **Status:** `getStatus()` returns `AppStatus` (+ `indexedDocuments`, `totalChunks`). StatusBar shows progress; header has "Index All".
++- **QA:** extractive, grounded answers with up to 3 citations; mock keyword patterns removed (answers only quote cited chunks). Confidence 0.85 / 0.30 per PRODUCT.md.
++
++## Notes / open items
++- `npm run dev` fails if `NODE_OPTIONS` contains `--openssl-legacy-provider` (an environment issue, not the project's); run with `env -u NODE_OPTIONS`.
++- UI was verified by type-check, build, launch, and a service-level script, not by clicking through the window.
++- Documents imported before this session have no word/line/type metadata (fields are optional).
++- No vitest tests exist yet.
+diff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts
+index abca6f6..060d3f6 100644
+--- a/src/main/ipc-handlers.ts
++++ b/src/main/ipc-handlers.ts
+@@ -27,7 +27,9 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+   });
+ 
+   ipcMain.handle(IPC_CHANNELS.DELETE_DOCUMENT, async (_event, id: string) => {
+-    return documentService.deleteDocument(id);
++    const deleted = documentService.deleteDocument(id);
++    if (deleted) indexingService.removeDocument(id);
++    return deleted;
+   });
+ 
+   // Document content retrieval
+diff --git a/src/main/main.ts b/src/main/main.ts
+index 5a1ee08..a673cb7 100644
+--- a/src/main/main.ts
++++ b/src/main/main.ts
+@@ -18,6 +18,8 @@ function createWindow() {
+       preload: path.join(__dirname, '..', 'preload', 'preload.js'),
+       contextIsolation: true,
+       nodeIntegration: false,
++      // Preload requires ../shared/types, which a sandboxed preload cannot load.
++      sandbox: false,
+     },
+     title: 'Knowledge Base',
+   });
+@@ -40,7 +42,7 @@ function initializeServices() {
+   const persistence = new PersistenceService(dataDir);
+   const documentService = new DocumentService(persistence);
+   const indexingService = new IndexingService(persistence);
+-  const qaService = new QaService(persistence);
++  const qaService = new QaService(persistence, indexingService);
+ 
+   registerIpcHandlers(ipcMain, {
+     documentService,
+diff --git a/src/preload/preload.ts b/src/preload/preload.ts
+index b1562fc..2a517b2 100644
+--- a/src/preload/preload.ts
++++ b/src/preload/preload.ts
+@@ -1,7 +1,9 @@
+-import { contextBridge, ipcRenderer } from 'electron';
++import { contextBridge, ipcRenderer, webUtils } from 'electron';
+ import { IPC_CHANNELS } from '../shared/types';
+ 
+ const api = {
++  /** Electron 32+ removed File.path; resolve a picked File's absolute path here. */
++  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+   documents: {
+     list: () => ipcRenderer.invoke(IPC_CHANNELS.LIST_DOCUMENTS),
+     import: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_DOCUMENT, filePath),
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index f44c234..5419397 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -1,32 +1,10 @@
+-import React, { useState, useCallback, useEffect } from 'react';
++import { useState, useCallback, useEffect } from 'react';
+ import { DocumentList } from './components/DocumentList';
+ import { QuestionPanel } from './components/QuestionPanel';
+ import { DocumentDetail } from './components/DocumentDetail';
+ import { ImportPanel } from './components/ImportPanel';
+ import { StatusBar } from './components/StatusBar';
+-import { Document, AppStatus, QAResponse } from '../../shared/types';
+-
+-declare global {
+-  interface Window {
+-    knowledgeBase: {
+-      documents: {
+-        list: () => Promise<Document[]>;
+-        import: (filePath: string) => Promise<Document>;
+-        get: (id: string) => Promise<Document | null>;
+-        delete: (id: string) => Promise<boolean>;
+-      };
+-      indexing: {
+-        start: (documentId?: string) => Promise<{ status: string }>;
+-        status: () => Promise<AppStatus>;
+-        chunks: (documentId: string) => Promise<Array<{ id: string; content: string; index: number }>>;
+-      };
+-      qa: {
+-        ask: (question: string) => Promise<QAResponse>;
+-        history: () => Promise<Array<{ question: string; response: QAResponse }>>;
+-      };
+-    };
+-  }
+-}
++import { Document, AppStatus, QAResponse } from '../shared/types';
+ 
+ export function App() {
+   const [documents, setDocuments] = useState<Document[]>([]);
+@@ -35,7 +13,10 @@ export function App() {
+     documentsLoaded: 0,
+     indexStatus: 'idle',
+     lastActivity: '',
++    indexedDocuments: 0,
++    totalChunks: 0,
+   });
++  const [error, setError] = useState<string | null>(null);
+   const [lastResponse, setLastResponse] = useState<QAResponse | null>(null);
+   const [showImport, setShowImport] = useState(false);
+ 
+@@ -48,6 +29,8 @@ export function App() {
+     try {
+       const docs = await window.knowledgeBase.documents.list();
+       setDocuments(docs);
++      // Keep the selected document in sync with fresh metadata (status, chunks).
++      setSelectedDoc(prev => (prev ? docs.find(d => d.id === prev.id) ?? null : null));
+       const status = await window.knowledgeBase.indexing.status();
+       setAppStatus(status);
+     } catch (err) {
+@@ -57,14 +40,28 @@ export function App() {
+ 
+   const handleImport = useCallback(async (filePath: string) => {
+     try {
+-      await window.knowledgeBase.documents.import(filePath);
+-      await refreshDocuments();
++      setError(null);
++      const doc = await window.knowledgeBase.documents.import(filePath);
+       setShowImport(false);
++      setSelectedDoc(doc);
++      await refreshDocuments();
+     } catch (err) {
+       console.error('Import failed:', err);
++      setError(err instanceof Error ? err.message : String(err));
+     }
+   }, [refreshDocuments]);
+ 
++  const handleIndex = useCallback(async (documentId?: string) => {
++    setAppStatus(prev => ({ ...prev, indexStatus: 'indexing' }));
++    try {
++      setAppStatus(await window.knowledgeBase.indexing.start(documentId));
++    } catch (err) {
++      console.error('Indexing failed:', err);
++      setAppStatus(prev => ({ ...prev, indexStatus: 'error' }));
++    }
++    await refreshDocuments();
++  }, [refreshDocuments]);
++
+   const handleSelectDocument = useCallback((doc: Document) => {
+     setSelectedDoc(doc);
+   }, []);
+@@ -101,6 +98,22 @@ export function App() {
+         justifyContent: 'space-between',
+       }}>
+         <h1 style={{ fontSize: '18px', fontWeight: 600 }}>Knowledge Base</h1>
++        <div style={{ display: 'flex', gap: '8px' }}>
++        <button
++          onClick={() => handleIndex()}
++          disabled={appStatus.indexStatus === 'indexing' || appStatus.indexedDocuments >= appStatus.documentsLoaded}
++          style={{
++            padding: '6px 14px',
++            background: '#533483',
++            color: '#fff',
++            border: 'none',
++            borderRadius: '4px',
++            cursor: 'pointer',
++            fontSize: '13px',
++          }}
++        >
++          Index All
++        </button>
+         <button
+           onClick={refreshDocuments}
+           style={{
+@@ -115,6 +128,7 @@ export function App() {
+         >
+           Refresh
+         </button>
++        </div>
+       </header>
+ 
+       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+@@ -161,12 +175,18 @@ export function App() {
+         {/* Right panel: Import, Document detail + Q&A */}
+         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+           <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
++            {error && (
++              <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#3e1a2a', border: '1px solid #8b2252', borderRadius: '4px', fontSize: '13px' }}>
++                {error}
++              </div>
++            )}
+             {showImport ? (
+               <ImportPanel onImport={handleImport} />
+             ) : selectedDoc ? (
+               <DocumentDetail
+                 document={selectedDoc}
+                 onDelete={handleDeleteDocument}
++                onIndex={handleIndex}
+               />
+             ) : (
+               <div style={{ color: '#666', textAlign: 'center', paddingTop: '40px' }}>
+@@ -181,13 +201,16 @@ export function App() {
+                 borderRadius: '6px',
+                 border: '1px solid #0f3460',
+               }}>
+-                <div style={{ fontSize: '14px', lineHeight: 1.6 }}>{lastResponse.answer}</div>
++                <div style={{ fontSize: '14px', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{lastResponse.answer}</div>
++                <div style={{ marginTop: '8px', fontSize: '12px', color: lastResponse.confidence >= 0.5 ? '#5cb85c' : '#f0ad4e' }}>
++                  Confidence: {Math.round(lastResponse.confidence * 100)}%
++                </div>
+                 {lastResponse.citations.length > 0 && (
+                   <div style={{ marginTop: '10px', fontSize: '12px', color: '#8888bb' }}>
+                     <strong>Citations:</strong>
+                     {lastResponse.citations.map((c, i) => (
+                       <div key={i} style={{ marginTop: '4px', paddingLeft: '8px', borderLeft: '2px solid #533483' }}>
+-                        {c.documentTitle} (chunk {c.chunkIndex}): {c.excerpt.substring(0, 100)}...
++                        [{i + 1}] {c.documentTitle} (chunk {c.chunkIndex}): {c.excerpt}
+                       </div>
+                     ))}
+                   </div>
+diff --git a/src/renderer/components/DocumentDetail.tsx b/src/renderer/components/DocumentDetail.tsx
+index 0cb8380..a19da71 100644
+--- a/src/renderer/components/DocumentDetail.tsx
++++ b/src/renderer/components/DocumentDetail.tsx
+@@ -1,12 +1,13 @@
+-import React, { useEffect, useState } from 'react';
+-import { Document, Chunk } from '../../../shared/types';
++import { useEffect, useState } from 'react';
++import { Document, Chunk } from '../../shared/types';
+ 
+ interface Props {
+   document: Document;
+   onDelete?: (id: string) => void;
++  onIndex?: (id: string) => Promise<void>;
+ }
+ 
+-export function DocumentDetail({ document, onDelete }: Props) {
++export function DocumentDetail({ document, onDelete, onIndex }: Props) {
+   const [chunks, setChunks] = useState<Chunk[]>([]);
+   const [showChunks, setShowChunks] = useState(false);
+   const [content, setContent] = useState<string | null>(null);
+@@ -15,7 +16,7 @@ export function DocumentDetail({ document, onDelete }: Props) {
+ 
+   useEffect(() => {
+     window.knowledgeBase.indexing.chunks(document.id).then(setChunks);
+-  }, [document.id]);
++  }, [document.id, document.status, document.chunks]);
+ 
+   // Load document content when requested
+   const loadContent = async () => {
+@@ -46,6 +47,9 @@ export function DocumentDetail({ document, onDelete }: Props) {
+         <div>Size: {(document.size / 1024).toFixed(1)} KB</div>
+         <div>Status: {document.status}</div>
+         {document.chunks !== undefined && <div>Chunks: {document.chunks}</div>}
++        {document.fileType && <div>Type: .{document.fileType}</div>}
++        {document.wordCount !== undefined && <div>Words: {document.wordCount.toLocaleString()}</div>}
++        {document.lineCount !== undefined && <div>Lines: {document.lineCount.toLocaleString()}</div>}
+       </div>
+ 
+       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+@@ -80,7 +84,7 @@ export function DocumentDetail({ document, onDelete }: Props) {
+         </button>
+         {document.status !== 'indexed' && (
+           <button
+-            onClick={() => window.knowledgeBase.indexing.start(document.id)}
++            onClick={() => (onIndex ? onIndex(document.id) : window.knowledgeBase.indexing.start(document.id))}
+             style={{
+               padding: '6px 12px',
+               background: '#533483',
+diff --git a/src/renderer/components/DocumentList.tsx b/src/renderer/components/DocumentList.tsx
+index f3166ed..be4a73b 100644
+--- a/src/renderer/components/DocumentList.tsx
++++ b/src/renderer/components/DocumentList.tsx
+@@ -1,5 +1,4 @@
+-import React from 'react';
+-import { Document } from '../../../shared/types';
++import { Document } from '../../shared/types';
+ 
+ interface Props {
+   documents: Document[];
+diff --git a/src/renderer/components/ImportPanel.tsx b/src/renderer/components/ImportPanel.tsx
+index 29ca5cd..fe1f6e5 100644
+--- a/src/renderer/components/ImportPanel.tsx
++++ b/src/renderer/components/ImportPanel.tsx
+@@ -1,4 +1,3 @@
+-import React from 'react';
+ 
+ interface Props {
+   onImport: (filePath: string) => void;
+@@ -25,7 +24,8 @@ export function ImportPanel({ onImport }: Props) {
+         accept=".txt,.md"
+         onChange={e => {
+           const file = e.target.files?.[0];
+-          if (file) onImport(file.path);
++          if (file) onImport(window.knowledgeBase.getPathForFile(file));
++          e.target.value = '';
+         }}
+         style={{ marginTop: '10px' }}
+       />
+diff --git a/src/renderer/components/QuestionPanel.tsx b/src/renderer/components/QuestionPanel.tsx
+index 1b80cc5..ac605d1 100644
+--- a/src/renderer/components/QuestionPanel.tsx
++++ b/src/renderer/components/QuestionPanel.tsx
+@@ -1,4 +1,4 @@
+-import React, { useState } from 'react';
++import { useState } from 'react';
+ 
+ interface Props {
+   onAsk: (question: string) => void;
+diff --git a/src/renderer/components/StatusBar.tsx b/src/renderer/components/StatusBar.tsx
+index 1bf587c..005f92c 100644
+--- a/src/renderer/components/StatusBar.tsx
++++ b/src/renderer/components/StatusBar.tsx
+@@ -1,5 +1,4 @@
+-import React from 'react';
+-import { AppStatus } from '../../../shared/types';
++import { AppStatus } from '../../shared/types';
+ 
+ interface Props {
+   status: AppStatus;
+@@ -35,7 +34,27 @@ export function StatusBar({ status }: Props) {
+         }} />
+         Index: {status.indexStatus}
+       </span>
+-      <span>Documents: {status.documentsLoaded}</span>
++      <span>
++        Indexed: {status.indexedDocuments}/{status.documentsLoaded} documents
++        <span style={{
++          display: 'inline-block',
++          width: '80px',
++          height: '6px',
++          marginLeft: '8px',
++          background: '#1a1a3e',
++          borderRadius: '3px',
++          overflow: 'hidden',
++          verticalAlign: 'middle',
++        }}>
++          <span style={{
++            display: 'block',
++            height: '100%',
++            width: `${status.documentsLoaded ? Math.round((status.indexedDocuments / status.documentsLoaded) * 100) : 0}%`,
++            background: statusColor,
++          }} />
++        </span>
++      </span>
++      <span>Chunks: {status.totalChunks}</span>
+       {status.lastActivity && (
+         <span>Last activity: {new Date(status.lastActivity).toLocaleTimeString()}</span>
+       )}
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index f47ce13..1905e87 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -4,6 +4,7 @@
+ declare global {
+   interface Window {
+     knowledgeBase: {
++      getPathForFile: (file: File) => string;
+       documents: {
+         list: () => Promise<import('../shared/types').Document[]>;
+         import: (filePath: string) => Promise<import('../shared/types').Document>;
+diff --git a/src/services/document-service.ts b/src/services/document-service.ts
+index b9dc526..ade6397 100644
+--- a/src/services/document-service.ts
++++ b/src/services/document-service.ts
+@@ -5,6 +5,29 @@ import { Document } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ 
+ const DOCUMENTS_META = 'documents-meta.json';
++const MAX_FILE_SIZE = 10 * 1024 * 1024;
++const SUPPORTED_TYPES = ['txt', 'md'] as const;
++type SupportedType = typeof SUPPORTED_TYPES[number];
++
++export interface DocumentMetadata {
++  wordCount: number;
++  lineCount: number;
++  fileType: SupportedType;
++}
++
++/** Extract word count, line count, and file type from a document's text and filename. */
++export function extractMetadata(filename: string, content: string): DocumentMetadata {
++  const ext = path.extname(filename).slice(1).toLowerCase();
++  if (!(SUPPORTED_TYPES as readonly string[]).includes(ext)) {
++    throw new Error(`Unsupported file type: .${ext} (supported: .txt, .md)`);
++  }
++  const trimmed = content.trim();
++  return {
++    wordCount: trimmed ? trimmed.split(/\s+/).length : 0,
++    lineCount: content.length === 0 ? 0 : content.replace(/\r?\n$/, '').split(/\r?\n/).length,
++    fileType: ext as SupportedType,
++  };
++}
+ 
+ export class DocumentService {
+   private persistence: PersistenceService;
+@@ -26,8 +49,12 @@ export class DocumentService {
+     }
+ 
+     const filename = path.basename(filePath);
+-    const content = fs.readFileSync(filePath, 'utf-8');
+     const stats = fs.statSync(filePath);
++    if (stats.size > MAX_FILE_SIZE) {
++      throw new Error(`File too large: ${filename} exceeds 10 MB`);
++    }
++    const content = fs.readFileSync(filePath, 'utf-8');
++    const metadata = extractMetadata(filename, content);
+ 
+     const doc: Document = {
+       id: uuidv4(),
+@@ -36,6 +63,7 @@ export class DocumentService {
+       importedAt: new Date().toISOString(),
+       size: stats.size,
+       status: 'imported',
++      ...metadata,
+     };
+ 
+     // Copy file to data directory
+diff --git a/src/services/indexing-service.ts b/src/services/indexing-service.ts
+index f63f3be..bc6ea2e 100644
+--- a/src/services/indexing-service.ts
++++ b/src/services/indexing-service.ts
+@@ -1,72 +1,100 @@
+ import { v4 as uuidv4 } from 'uuid';
+-import { Chunk, Document } from '../shared/types';
++import { AppStatus, Chunk, Document } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ 
+ const INDEX_META = 'index-meta.json';
++const DOCUMENTS_META = 'documents-meta.json';
+ const CHUNKS_DIR = 'chunks';
++export const CHUNK_SIZE = 500;
+ 
+-interface IndexStatus {
+-  status: 'idle' | 'indexing' | 'ready' | 'error';
+-  currentIndexed: number;
+-  totalDocuments: number;
+-  lastIndexed: string | null;
+-}
++/** Map of documentId -> chunk ids for every indexed document. */
++type IndexMeta = Record<string, string[]>;
+ 
+ export class IndexingService {
+   private persistence: PersistenceService;
++  private inProgress = false;
++  private lastError = false;
++  private lastActivity = '';
+ 
+   constructor(persistence: PersistenceService) {
+     this.persistence = persistence;
+   }
+ 
+-  /** Start indexing documents. If documentId is provided, index only that document. */
+-  async startIndexing(documentId?: string): Promise<IndexStatus> {
+-    const status = this.getStatus();
+-
+-    if (documentId) {
+-      // Index a single document
+-      const content = this.persistence.readText(`content/${documentId}.txt`);
+-      if (!content) {
+-        return { ...status, status: 'error' };
++  /** Index documents. If documentId is provided, index only that document; otherwise every un-indexed one. */
++  async startIndexing(documentId?: string): Promise<AppStatus> {
++    this.inProgress = true;
++    this.lastError = false;
++    try {
++      const docs = this.readDocs();
++      const meta = this.readMeta();
++      const targets = documentId
++        ? docs.filter(d => d.id === documentId)
++        : docs.filter(d => !meta[d.id]);
++
++      if (documentId && targets.length === 0) this.lastError = true;
++
++      for (const doc of targets) {
++        this.indexOne(doc, docs, meta);
+       }
+-      const chunks = this.chunkDocument(documentId, content);
+-      this.persistence.writeJson(`${CHUNKS_DIR}/${documentId}.json`, chunks);
+-      return this.getStatus();
+-    }
+-
+-    // Index all documents that haven't been indexed yet
+-    const docsMeta = this.persistence.readJson<Document[]>('documents-meta.json') ?? [];
+-    const chunksMeta = this.persistence.readJson<Record<string, string[]>>(INDEX_META) ?? {};
+ 
+-    for (const doc of docsMeta) {
+-      if (chunksMeta[doc.id]) continue;
+-
+-      const content = this.persistence.readText(`content/${doc.id}.txt`);
+-      if (!content) continue;
++      this.persistence.writeJson(INDEX_META, meta);
++      this.persistence.writeJson(DOCUMENTS_META, docs);
++    } catch (err) {
++      console.error('Indexing failed:', err);
++      this.lastError = true;
++    } finally {
++      this.inProgress = false;
++      this.lastActivity = new Date().toISOString();
++    }
++    return this.getStatus();
++  }
+ 
+-      const chunks = this.chunkDocument(doc.id, content);
+-      this.persistence.writeJson(`${CHUNKS_DIR}/${doc.id}.json`, chunks);
+-      chunksMeta[doc.id] = chunks.map(c => c.id);
++  private indexOne(doc: Document, docs: Document[], meta: IndexMeta): void {
++    const content = this.persistence.readText(`content/${doc.id}.txt`);
++    if (content === null) {
++      doc.status = 'error';
++      this.lastError = true;
++      return;
++    }
++    const chunks = this.chunkDocument(doc.id, content);
++    this.persistence.writeJson(`${CHUNKS_DIR}/${doc.id}.json`, chunks);
++    meta[doc.id] = chunks.map(c => c.id);
++    const target = docs.find(d => d.id === doc.id);
++    if (target) {
++      target.status = 'indexed';
++      target.chunks = chunks.length;
+     }
++  }
+ 
+-    this.persistence.writeJson(INDEX_META, chunksMeta);
+-    return this.getStatus();
++  /** Remove a document's chunks from the index (called on delete). */
++  removeDocument(documentId: string): void {
++    const meta = this.readMeta();
++    delete meta[documentId];
++    this.persistence.writeJson(INDEX_META, meta);
++    this.persistence.deleteFile(`${CHUNKS_DIR}/${documentId}.json`);
++    this.lastActivity = new Date().toISOString();
+   }
+ 
+-  /** Get current indexing status. */
+-  getStatus(): IndexStatus {
+-    const docs = this.persistence.readJson<Document[]>('documents-meta.json') ?? [];
+-    const chunksMeta = this.persistence.readJson<Record<string, string[]>>(INDEX_META) ?? {};
++  /** Get current indexing status, including progress counts. */
++  getStatus(): AppStatus {
++    const docs = this.readDocs();
++    const meta = this.readMeta();
++    const docIds = new Set(docs.map(d => d.id));
++    const indexedIds = Object.keys(meta).filter(id => docIds.has(id));
++    const totalChunks = indexedIds.reduce((n, id) => n + meta[id].length, 0);
+ 
+-    const currentIndexed = Object.keys(chunksMeta).length;
+-    const totalDocuments = docs.length;
+-    const isReady = currentIndexed === totalDocuments && totalDocuments > 0;
++    let indexStatus: AppStatus['indexStatus'];
++    if (this.inProgress) indexStatus = 'indexing';
++    else if (this.lastError || docs.some(d => d.status === 'error')) indexStatus = 'error';
++    else if (docs.length > 0 && indexedIds.length === docs.length) indexStatus = 'ready';
++    else indexStatus = 'idle';
+ 
+     return {
+-      status: isReady ? 'ready' : currentIndexed > 0 ? 'indexing' : 'idle',
+-      currentIndexed,
+-      totalDocuments,
+-      lastIndexed: new Date().toISOString(),
++      documentsLoaded: docs.length,
++      indexedDocuments: indexedIds.length,
++      totalChunks,
++      indexStatus,
++      lastActivity: this.lastActivity,
+     };
+   }
+ 
+@@ -75,43 +103,37 @@ export class IndexingService {
+     return this.persistence.readJson<Chunk[]>(`${CHUNKS_DIR}/${documentId}.json`) ?? [];
+   }
+ 
+-  /** Get all chunks across all documents. */
++  /** Get all chunks across all (still existing) indexed documents. */
+   getAllChunks(): Chunk[] {
+-    const chunksMeta = this.persistence.readJson<Record<string, string[]>>(INDEX_META) ?? {};
+-    const allChunks: Chunk[] = [];
+-
+-    for (const docId of Object.keys(chunksMeta)) {
+-      const chunks = this.getChunksForDocument(docId);
+-      allChunks.push(...chunks);
+-    }
+-
+-    return allChunks;
++    const docIds = new Set(this.readDocs().map(d => d.id));
++    return Object.keys(this.readMeta())
++      .filter(id => docIds.has(id))
++      .flatMap(id => this.getChunksForDocument(id));
+   }
+ 
+-  /** Split a document into chunks of ~500 characters at paragraph boundaries. */
+-  private chunkDocument(documentId: string, content: string): Chunk[] {
+-    const CHUNK_SIZE = 500;
+-    const chunks: Chunk[] = [];
+-
+-    // Split on double newlines (paragraphs)
+-    const paragraphs = content.split(/\n\s*\n/).filter(p => p.trim().length > 0);
++  /**
++   * Split a document into chunks of ~CHUNK_SIZE characters at paragraph boundaries.
++   * Paragraphs longer than CHUNK_SIZE are split at sentence, then word boundaries.
++   */
++  chunkDocument(documentId: string, content: string): Chunk[] {
++    const pieces = content
++      .replace(/\r\n/g, '\n')
++      .split(/\n\s*\n/)
++      .map(p => p.trim())
++      .filter(p => p.length > 0)
++      .flatMap(p => splitLong(p, CHUNK_SIZE));
+ 
++    const chunks: Chunk[] = [];
+     let buffer = '';
+-    let chunkIndex = 0;
+-
+-    for (const para of paragraphs) {
+-      if (buffer.length + para.length > CHUNK_SIZE && buffer.length > 0) {
+-        chunks.push(this.createChunk(documentId, chunkIndex++, buffer.trim()));
+-        buffer = para;
++    for (const piece of pieces) {
++      if (buffer && buffer.length + 2 + piece.length > CHUNK_SIZE) {
++        chunks.push(this.createChunk(documentId, chunks.length, buffer));
++        buffer = piece;
+       } else {
+-        buffer += (buffer ? '\n\n' : '') + para;
++        buffer += (buffer ? '\n\n' : '') + piece;
+       }
+     }
+-
+-    if (buffer.trim()) {
+-      chunks.push(this.createChunk(documentId, chunkIndex, buffer.trim()));
+-    }
+-
++    if (buffer) chunks.push(this.createChunk(documentId, chunks.length, buffer));
+     return chunks;
+   }
+ 
+@@ -123,8 +145,33 @@ export class IndexingService {
+       index,
+       metadata: {
+         charCount: String(content.length),
+-        wordCount: String(content.split(/\s+/).length),
++        wordCount: String(content.split(/\s+/).filter(Boolean).length),
+       },
+     };
+   }
++
++  private readDocs(): Document[] {
++    return this.persistence.readJson<Document[]>(DOCUMENTS_META) ?? [];
++  }
++
++  private readMeta(): IndexMeta {
++    return this.persistence.readJson<IndexMeta>(INDEX_META) ?? {};
++  }
++}
++
++/** Break text longer than max into pieces <= max, preferring sentence then word boundaries. */
++function splitLong(text: string, max: number): string[] {
++  if (text.length <= max) return [text];
++  const out: string[] = [];
++  let rest = text;
++  while (rest.length > max) {
++    const window = rest.slice(0, max);
++    let cut = Math.max(window.lastIndexOf('. '), window.lastIndexOf('\n'));
++    if (cut < max / 2) cut = window.lastIndexOf(' ');
++    if (cut <= 0) cut = max - 1;
++    out.push(rest.slice(0, cut + 1).trim());
++    rest = rest.slice(cut + 1).trim();
++  }
++  if (rest) out.push(rest);
++  return out;
+ }
+diff --git a/src/services/persistence-service.ts b/src/services/persistence-service.ts
+index 54ddfac..ee66768 100644
+--- a/src/services/persistence-service.ts
++++ b/src/services/persistence-service.ts
+@@ -72,6 +72,12 @@ export class PersistenceService {
+     return fs.readdirSync(fullPath);
+   }
+ 
++  /** Delete a file relative to the data directory, if present. */
++  deleteFile(relativePath: string): void {
++    const full = path.join(this.dataDir, relativePath);
++    if (fs.existsSync(full)) fs.unlinkSync(full);
++  }
++
+   /** Check if a file exists. */
+   exists(relativePath: string): boolean {
+     return fs.existsSync(path.join(this.dataDir, relativePath));
+diff --git a/src/services/qa-service.ts b/src/services/qa-service.ts
+index 719c6cc..f707e4e 100644
+--- a/src/services/qa-service.ts
++++ b/src/services/qa-service.ts
+@@ -1,41 +1,30 @@
+-import { QAResponse, QAHistory, Citation, Chunk } from '../shared/types';
++import { QAResponse, QAHistory, Citation } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ import { IndexingService } from './indexing-service';
+ 
+ const QA_HISTORY_FILE = 'qa-history.json';
+ 
+-/** Mock Q&A patterns keyed to document content keywords. */
+-const MOCK_PATTERNS: Array<{
+-  keywords: string[];
+-  answer: string;
+-  excerpt: string;
+-}> = [
+-  {
+-    keywords: ['design', 'architecture', 'pattern'],
+-    answer: 'The system uses a layered architecture with clear boundaries between the main process, preload scripts, and renderer. Each layer communicates through typed IPC channels, and the services layer handles business logic independently of the UI.',
+-    excerpt: 'The system uses a layered architecture with clear boundaries',
+-  },
+-  {
+-    keywords: ['import', 'document', 'file'],
+-    answer: 'Documents are imported by copying the source file to the local data directory. The system extracts text content and creates metadata including title, filename, size, and import timestamp. After import, documents can be indexed for search.',
+-    excerpt: 'Documents are imported by copying the source file',
+-  },
+-  {
+-    keywords: ['index', 'chunk', 'search'],
+-    answer: 'The indexing pipeline splits documents into chunks of approximately 500 characters at paragraph boundaries. Each chunk includes metadata like character count and word count. The index enables grounded Q&A with citations pointing to specific document sections.',
+-    excerpt: 'The indexing pipeline splits documents into chunks',
+-  },
+-  {
+-    keywords: ['retrieval', 'search', 'query'],
+-    answer: 'Retrieval works by matching query keywords against indexed chunks. The system ranks chunks by keyword overlap and returns the most relevant excerpts as citations alongside the generated answer.',
+-    excerpt: 'Retrieval works by matching query keywords against indexed chunks',
+-  },
+-  {
+-    keywords: ['meeting', 'notes', 'summary'],
+-    answer: 'The meeting summary indicates that the team discussed implementing a retrieval-augmented generation pipeline. Key decisions included using local chunk storage and citation-based verification to ensure answer accuracy.',
+-    excerpt: 'The team discussed implementing a retrieval-augmented generation pipeline',
+-  },
+-];
++const STOP_WORDS = new Set([
++  'the', 'and', 'for', 'are', 'was', 'were', 'what', 'which', 'who', 'whom', 'how', 'why', 'when',
++  'where', 'does', 'did', 'this', 'that', 'these', 'those', 'with', 'from', 'about', 'into', 'have',
++  'has', 'had', 'can', 'could', 'should', 'would', 'will', 'there', 'their', 'they', 'you', 'your',
++  'our', 'its', 'any', 'all', 'some', 'not', 'but', 'tell', 'explain', 'describe',
++]);
++
++const MAX_CITATIONS = 3;
++const CONFIDENCE_WITH_CITATIONS = 0.85;
++const CONFIDENCE_WITHOUT_CITATIONS = 0.3;
++
++/** Lowercased content terms of a question (stop words and short tokens removed). */
++export function extractTerms(text: string): string[] {
++  const words = text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
++  return [...new Set(words.filter(w => w.length > 2 && !STOP_WORDS.has(w)))];
++}
++
++function countMatches(text: string, terms: string[]): number {
++  const lower = text.toLowerCase();
++  return terms.reduce((acc, t) => acc + (lower.includes(t) ? 1 : 0), 0);
++}
+ 
+ export class QaService {
+   private persistence: PersistenceService;
+@@ -46,59 +35,33 @@ export class QaService {
+     this.indexingService = indexingService ?? new IndexingService(persistence);
+   }
+ 
+-  /** Ask a question and get a grounded answer with citations. */
++  /** Ask a question and get an answer grounded in indexed chunks, with citations. */
+   async ask(question: string): Promise<QAResponse> {
+-    // Simulate processing delay
+-    await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 400));
+-
++    const terms = extractTerms(question);
+     const chunks = this.indexingService.getAllChunks();
+-    const citations: Citation[] = [];
+-
+-    if (chunks.length > 0) {
+-      // Find relevant chunks using keyword matching
+-      const questionWords = question.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+-      const scored = chunks.map(chunk => {
+-        const contentLower = chunk.content.toLowerCase();
+-        const score = questionWords.reduce(
+-          (acc, word) => acc + (contentLower.includes(word) ? 1 : 0),
+-          0
+-        );
+-        return { chunk, score };
+-      });
+-
+-      // Take top 2 relevant chunks as citations
+-      const relevant = scored
+-        .filter(s => s.score > 0)
+-        .sort((a, b) => b.score - a.score)
+-        .slice(0, 2);
+-
+-      // Get document metadata for citations
+-      const docs = this.persistence.readJson<Array<{ id: string; title: string }>>('documents-meta.json') ?? [];
+-
+-      for (const { chunk } of relevant) {
+-        const doc = docs.find(d => d.id === chunk.documentId);
+-        citations.push({
+-          documentId: chunk.documentId,
+-          documentTitle: doc?.title ?? 'Unknown Document',
+-          chunkIndex: chunk.index,
+-          excerpt: chunk.content.substring(0, 200),
+-        });
+-      }
+-    }
++    const docs = this.persistence.readJson<Array<{ id: string; title: string }>>('documents-meta.json') ?? [];
++
++    const relevant = chunks
++      .map(chunk => ({ chunk, score: countMatches(chunk.content, terms) }))
++      .filter(s => s.score > 0)
++      .sort((a, b) => b.score - a.score || a.chunk.index - b.chunk.index)
++      .slice(0, MAX_CITATIONS);
+ 
+-    // Generate answer from mock patterns or use fallback
+-    const answer = this.generateAnswer(question, citations);
++    const citations: Citation[] = relevant.map(({ chunk }) => ({
++      documentId: chunk.documentId,
++      documentTitle: docs.find(d => d.id === chunk.documentId)?.title ?? 'Unknown Document',
++      chunkIndex: chunk.index,
++      excerpt: bestSentences(chunk.content, terms, 300),
++    }));
+ 
+     const response: QAResponse = {
+-      answer,
++      answer: this.generateAnswer(chunks.length, citations),
+       citations,
+-      confidence: citations.length > 0 ? 0.85 : 0.3,
++      confidence: citations.length > 0 ? CONFIDENCE_WITH_CITATIONS : CONFIDENCE_WITHOUT_CITATIONS,
+       timestamp: new Date().toISOString(),
+     };
+ 
+-    // Save to history
+     this.saveToHistory(question, response);
+-
+     return response;
+   }
+ 
+@@ -107,24 +70,16 @@ export class QaService {
+     return this.persistence.readJson<QAHistory[]>(QA_HISTORY_FILE) ?? [];
+   }
+ 
+-  private generateAnswer(question: string, citations: Citation[]): string {
+-    // Match against mock patterns
+-    const questionLower = question.toLowerCase();
+-    for (const pattern of MOCK_PATTERNS) {
+-      if (pattern.keywords.some(kw => questionLower.includes(kw))) {
+-        if (citations.length > 0) {
+-          return `${pattern.answer} Based on the document "${citations[0].documentTitle}", ${citations[0].excerpt.substring(0, 100)}.`;
+-        }
+-        return pattern.answer;
+-      }
++  /** Build an extractive answer that only states what the cited chunks say. */
++  private generateAnswer(indexedChunkCount: number, citations: Citation[]): string {
++    if (indexedChunkCount === 0) {
++      return 'No documents have been indexed yet. Import and index documents before asking questions.';
+     }
+-
+-    // Fallback answer
+-    if (citations.length > 0) {
+-      return `Based on the available documents, the most relevant information comes from "${citations[0].documentTitle}": ${citations[0].excerpt.substring(0, 150)}. However, a more specific answer would require additional context.`;
++    if (citations.length === 0) {
++      return 'I could not find anything in the indexed documents that answers this question.';
+     }
+-
+-    return 'No relevant documents have been indexed yet. Please import and index documents before asking questions.';
++    const parts = citations.map((c, i) => `[${i + 1}] "${c.documentTitle}": ${c.excerpt}`);
++    return `Based on ${citations.length} matching excerpt${citations.length > 1 ? 's' : ''} from your documents:\n${parts.join('\n')}`;
+   }
+ 
+   private saveToHistory(question: string, response: QAResponse): void {
+@@ -133,3 +88,25 @@ export class QaService {
+     this.persistence.writeJson(QA_HISTORY_FILE, history);
+   }
+ }
++
++/** Pick the sentences of a chunk that match the most terms, in original order, up to maxLen chars. */
++function bestSentences(content: string, terms: string[], maxLen: number): string {
++  // Split on line breaks (keeps markdown list items whole) and on sentence ends before a capital.
++  const sentences = content
++    .split(/\n+|(?<=[.!?])\s+(?=[A-Z])/)
++    .map(t => t.replace(/^#+\s*/, '').replace(/\s+/g, ' '));
++  const ranked = sentences
++    .map((text, pos) => ({ text: text.trim(), pos, score: countMatches(text, terms) }))
++    .filter(s => s.text.length > 0)
++    .sort((a, b) => b.score - a.score || a.pos - b.pos);
++  const picked: typeof ranked = [];
++  let len = 0;
++  for (const s of ranked) {
++    if (s.score === 0 && picked.length > 0) break;
++    if (picked.length > 0 && len + s.text.length > maxLen) continue;
++    picked.push(s);
++    len += s.text.length + 1;
++  }
++  const text = picked.sort((a, b) => a.pos - b.pos).map(s => s.text).join(' ');
++  return text.length > maxLen ? `${text.slice(0, maxLen - 3)}...` : text;
++}
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index 22111a5..e7cb036 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -8,6 +8,10 @@ export interface Document {
+   size: number;
+   status: 'imported' | 'indexing' | 'indexed' | 'error';
+   chunks?: number;
++  /** Extracted on import. */
++  wordCount?: number;
++  lineCount?: number;
++  fileType?: 'txt' | 'md';
+ }
+ 
+ export interface Chunk {
+@@ -41,6 +45,10 @@ export interface AppStatus {
+   documentsLoaded: number;
+   indexStatus: 'idle' | 'indexing' | 'ready' | 'error';
+   lastActivity: string;
++  /** Number of documents that have been chunked into the index. */
++  indexedDocuments: number;
++  /** Total chunks across the index. */
++  totalChunks: number;
+ }
+ 
+ /** IPC channel names -- single source of truth. */

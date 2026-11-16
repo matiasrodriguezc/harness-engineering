@@ -1,0 +1,140 @@
+commit e978d2309688702a4bdaee2624714a72ee448d8e
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 21:34:01 2026 -0300
+
+    feat(document-chunking): keep index-meta and doc status in sync on single-doc indexing
+
+diff --git a/feature_list.json b/feature_list.json
+index 0ba90e8..5b661c0 100644
+--- a/feature_list.json
++++ b/feature_list.json
+@@ -62,17 +62,17 @@
+       "id": "document-chunking",
+       "name": "Document Chunking",
+       "description": "IndexingService splits documents into ~500 char chunks at paragraph boundaries with metadata",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "Single-doc indexing now updates index-meta.json and marks doc indexed with chunk count; removeDocument() added. Smoke test: design-notes.md -> 6 chunks (211-464 chars), status ready.",
++      "testedAt": "2026-11-15T00:00:00Z"
+     },
+     {
+       "id": "metadata-extraction",
+       "name": "Metadata Extraction",
+       "description": "On import, extract word count, line count, file type, and paragraph count metadata from documents",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "extractMetadata() in document-service; shown in DocumentDetail. Smoke test on design-notes.md: 282 words, 43 lines, 15 paragraphs, md. npm run check passes.",
++      "testedAt": "2026-11-15T00:00:00Z"
+     },
+     {
+       "id": "indexing-status-ui",
+@@ -91,4 +91,4 @@
+       "testedAt": null
+     }
+   ]
+-}
++}
+\ No newline at end of file
+diff --git a/session-handoff.md b/session-handoff.md
+index c37cf46..5749a85 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -1,30 +1,12 @@
+-# Session Handoff
++# Session Handoff (2026-11-15)
+ 
+-## Verified Now
++## Done
++- Fixed baseline `npm run check` (renderer import paths, duplicate Window global, Electron 33 `File.path` -> preload `files.getPath` via `webUtils`).
++- metadata-extraction: pass. document-chunking: pass (verified via node smoke test against compiled services).
+ 
+-- What is currently working:
+-- What verification actually ran:
++## Remaining
++- indexing-status-ui: StatusBar needs indexed count + total chunks; renderer types `indexing.start/status` claim `AppStatus` but service returns `IndexStatus` -- reconcile in shared/types.ts. Also wire `indexingService.removeDocument()` into DELETE handler (ipc-handlers.ts).
++- grounded-qa: QaService logic already returns citations + 0.85/0.30 confidence (smoke test passed); remaining is UI confidence indicator in App.tsx and marking pass.
+ 
+-## Changed This Session
+-
+-- Code or behavior added:
+-- Infrastructure or harness changes:
+-
+-## Broken Or Unverified
+-
+-- Known defect:
+-- Unverified path:
+-- Risk for the next session:
+-
+-## Next Best Step
+-
+-- Highest-priority unfinished feature:
+-- Why it is next:
+-- What counts as passing:
+-- What must not change during that step:
+-
+-## Commands
+-
+-- Startup:
+-- Verification:
+-- Focused debug command:
++## Verification
++- `npm run check`; services smoke test: compile with `tsc -p tsconfig.node.json --outDir <tmp>` and drive with NODE_PATH=node_modules.
+diff --git a/src/services/indexing-service.ts b/src/services/indexing-service.ts
+index f63f3be..42b4d50 100644
+--- a/src/services/indexing-service.ts
++++ b/src/services/indexing-service.ts
+@@ -31,6 +31,10 @@ export class IndexingService {
+       }
+       const chunks = this.chunkDocument(documentId, content);
+       this.persistence.writeJson(`${CHUNKS_DIR}/${documentId}.json`, chunks);
++      const meta = this.persistence.readJson<Record<string, string[]>>(INDEX_META) ?? {};
++      meta[documentId] = chunks.map(c => c.id);
++      this.persistence.writeJson(INDEX_META, meta);
++      this.markIndexed(documentId, chunks.length);
+       return this.getStatus();
+     }
+ 
+@@ -47,12 +51,30 @@ export class IndexingService {
+       const chunks = this.chunkDocument(doc.id, content);
+       this.persistence.writeJson(`${CHUNKS_DIR}/${doc.id}.json`, chunks);
+       chunksMeta[doc.id] = chunks.map(c => c.id);
++      this.markIndexed(doc.id, chunks.length);
+     }
+ 
+     this.persistence.writeJson(INDEX_META, chunksMeta);
+     return this.getStatus();
+   }
+ 
++  /** Remove a document's chunks and index entry. */
++  removeDocument(documentId: string): void {
++    const meta = this.persistence.readJson<Record<string, string[]>>(INDEX_META) ?? {};
++    delete meta[documentId];
++    this.persistence.writeJson(INDEX_META, meta);
++    this.persistence.writeJson(`${CHUNKS_DIR}/${documentId}.json`, []);
++  }
++
++  private markIndexed(documentId: string, chunkCount: number): void {
++    const docs = this.persistence.readJson<Document[]>('documents-meta.json') ?? [];
++    const doc = docs.find(d => d.id === documentId);
++    if (!doc) return;
++    doc.status = 'indexed';
++    doc.chunks = chunkCount;
++    this.persistence.writeJson('documents-meta.json', docs);
++  }
++
+   /** Get current indexing status. */
+   getStatus(): IndexStatus {
+     const docs = this.persistence.readJson<Document[]>('documents-meta.json') ?? [];
+@@ -123,7 +145,7 @@ export class IndexingService {
+       index,
+       metadata: {
+         charCount: String(content.length),
+-        wordCount: String(content.split(/\s+/).length),
++        wordCount: String(content.split(/\s+/).filter(Boolean).length),
+       },
+     };
+   }

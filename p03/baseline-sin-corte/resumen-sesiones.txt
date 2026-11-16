@@ -1,0 +1,1 @@
+sesion-1: funciones pendientes según feature_list.json = 0

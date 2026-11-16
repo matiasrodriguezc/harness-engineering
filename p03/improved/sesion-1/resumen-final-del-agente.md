@@ -1,0 +1,1 @@
+(sesión cortada por el tope de gasto: sin mensaje final)

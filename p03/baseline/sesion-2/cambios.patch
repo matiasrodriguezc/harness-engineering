@@ -1,0 +1,146 @@
+commit 5981c1f027fd27b6d2534a1ca55704d301c3d199
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 21:30:33 2026 -0300
+
+    sesion-2: verify P03 features with service tests, add handoff
+
+diff --git a/feature_list.json b/feature_list.json
+index 829b3b5..7d65bc5 100644
+--- a/feature_list.json
++++ b/feature_list.json
+@@ -62,33 +62,33 @@
+       "id": "document-chunking",
+       "name": "Document Chunking",
+       "description": "IndexingService splits documents into ~500 char chunks at paragraph boundaries",
+-      "status": "implemented",
+-      "evidence": "IndexingService.chunkDocument splits at paragraph boundaries, splits oversized paragraphs at sentence/word boundaries; single-doc indexing now registers in index-meta and sets doc status/chunk count. npm run check passes. App launch NOT yet manually verified.",
+-      "testedAt": "2026-11-15T00:00:00Z"
++      "status": "pass",
++      "evidence": "tests/services.test.ts: chunkDocument yields multiple chunks <=600 chars on 20-paragraph input; startIndexing indexes all 3 sample docs (status=indexed). npm run check + npm test pass. UI rendering not click-tested (headless session).",
++      "testedAt": "2026-11-15T21:30:00Z"
+     },
+     {
+       "id": "metadata-extraction",
+       "name": "Metadata Extraction",
+       "description": "On import, extract word count, line count, and file type metadata from documents",
+-      "status": "implemented",
+-      "evidence": "DocumentService.extractMetadata adds wordCount/lineCount/fileType on import; .txt/.md and 10MB limits enforced; shown in DocumentDetail. npm run check passes. App launch NOT yet manually verified.",
+-      "testedAt": "2026-11-15T00:00:00Z"
++      "status": "pass",
++      "evidence": "tests/services.test.ts: importDocument(design-notes.md) yields wordCount matching whitespace split, lineCount>1, fileType md. npm run check + npm test pass. UI rendering not click-tested (headless session).",
++      "testedAt": "2026-11-15T21:30:00Z"
+     },
+     {
+       "id": "indexing-status-ui",
+       "name": "Indexing Status in StatusBar",
+       "description": "StatusBar shows indexing progress with document counts and status indicator",
+-      "status": "implemented",
+-      "evidence": "getStatus returns AppStatus shape (indexStatus, documentsLoaded, indexedDocuments, lastActivity); StatusBar shows Indexed X/Y, polled every 2s. npm run check passes. App launch NOT yet manually verified.",
+-      "testedAt": "2026-11-15T00:00:00Z"
++      "status": "pass",
++      "evidence": "tests/services.test.ts: after indexing 3 samples getStatus returns documentsLoaded=3, indexedDocuments=3. npm run build ok; app launches via electron with no errors. npm run check + npm test pass. UI rendering not click-tested (headless session).",
++      "testedAt": "2026-11-15T21:30:00Z"
+     },
+     {
+       "id": "grounded-qa",
+       "name": "Grounded Q&A with Citations",
+       "description": "QaService returns answers with document citations and confidence scores",
+-      "status": "implemented",
+-      "evidence": "QaService returns keyword-ranked chunk citations, confidence 0.85/0.30, persisted history; UI shows citations + confidence. npm run check passes. App launch NOT yet manually verified.",
+-      "testedAt": "2026-11-15T00:00:00Z"
++      "status": "pass",
++      "evidence": "tests/services.test.ts: ask(\"What is the retrieval plan?\") returns citations and confidence>0.5; nonsense query returns confidence<0.5. npm run check + npm test pass. UI rendering not click-tested (headless session).",
++      "testedAt": "2026-11-15T21:30:00Z"
+     }
+   ]
+-}
+\ No newline at end of file
++}
+diff --git a/package.json b/package.json
+index c57e574..518f398 100644
+--- a/package.json
++++ b/package.json
+@@ -7,7 +7,7 @@
+     "dev": "node scripts/dev.js",
+     "build": "tsc -p tsconfig.node.json && vite build",
+     "check": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.json",
+-    "test": "vitest run",
++    "test": "vitest run --root . tests",
+     "test:watch": "vitest"
+   },
+   "dependencies": {
+diff --git a/session-handoff.md b/session-handoff.md
+new file mode 100644
+index 0000000..fce9e0a
+--- /dev/null
++++ b/session-handoff.md
+@@ -0,0 +1,12 @@
++# Session Handoff
++
++## State (end of session 2, 2026-11-15)
++- All 11 features in `feature_list.json` are `pass`.
++- Session 1 implemented chunking, metadata, status UI, grounded QA.
++- Session 2 verified them: added `tests/services.test.ts` (3 vitest tests, run with `npm test`),
++  ran `npm run check`, `npm run build`, and launched the app (no runtime errors).
++
++## Known gaps / next steps
++- UI (StatusBar counts, citations panel, DocumentDetail metadata) was not click-tested; do a manual pass with `npm run dev`.
++- `main.ts` creates `QaService(persistence)` without passing the shared `IndexingService`; works because chunks are read from disk, but consider passing it in.
++- Launching electron requires `NODE_OPTIONS` without `--openssl-legacy-provider` in this environment.
+diff --git a/tests/services.test.ts b/tests/services.test.ts
+new file mode 100644
+index 0000000..4fedbec
+--- /dev/null
++++ b/tests/services.test.ts
+@@ -0,0 +1,51 @@
++import { describe, it, expect } from 'vitest';
++import * as fs from 'fs';
++import * as os from 'os';
++import * as path from 'path';
++import { PersistenceService } from '../src/services/persistence-service';
++import { DocumentService } from '../src/services/document-service';
++import { IndexingService } from '../src/services/indexing-service';
++import { QaService } from '../src/services/qa-service';
++
++const SAMPLES = path.resolve(__dirname, '../data/sample-documents');
++
++function setup() {
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-test-'));
++  const p = new PersistenceService(dir);
++  return { p, docs: new DocumentService(p), idx: new IndexingService(p), qa: new QaService(p) };
++}
++
++describe('P03 features', () => {
++  it('extracts metadata on import', () => {
++    const { docs } = setup();
++    const d = docs.importDocument(path.join(SAMPLES, 'design-notes.md')) as unknown as Record<string, unknown>;
++    const raw = fs.readFileSync(path.join(SAMPLES, 'design-notes.md'), 'utf8');
++    const meta = (d.metadata ?? d) as Record<string, unknown>;
++    expect(meta.wordCount).toBe(raw.split(/\s+/).filter(Boolean).length);
++    expect(meta.lineCount).toBeGreaterThan(1);
++    expect(String(meta.fileType)).toMatch(/md/);
++  });
++
++  it('chunks documents into ~500 char chunks', () => {
++    const { idx } = setup();
++    const text = Array.from({ length: 20 }, (_, i) => `Paragraph ${i}. ` + 'word '.repeat(30)).join('\n\n');
++    const chunks = idx.chunkDocument('x', text);
++    expect(chunks.length).toBeGreaterThan(1);
++    for (const c of chunks) expect(c.content.length).toBeLessThanOrEqual(600);
++  });
++
++  it('indexes, reports status, and answers with citations', async () => {
++    const { docs, idx, qa } = setup();
++    for (const f of fs.readdirSync(SAMPLES)) docs.importDocument(path.join(SAMPLES, f));
++    await idx.startIndexing();
++    const s = idx.getStatus() as unknown as Record<string, unknown>;
++    expect(s.documentsLoaded).toBe(3);
++    expect(s.indexedDocuments).toBe(3);
++    expect(docs.listDocuments().every(d => d.status === 'indexed')).toBe(true);
++    const r = await qa.ask('What is the retrieval plan?');
++    expect(r.citations.length).toBeGreaterThan(0);
++    expect(r.confidence).toBeGreaterThan(0.5);
++    const none = await qa.ask('zzzqqq xylophone');
++    expect(none.confidence).toBeLessThan(0.5);
++  });
++});

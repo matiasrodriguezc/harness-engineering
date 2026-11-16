@@ -1,0 +1,94 @@
+{
+  "project": "project-03",
+  "description": "Multi-session continuity with scope control, indexing, metadata, and grounded QA",
+  "features": [
+    {
+      "id": "window-launch",
+      "name": "Window Launch",
+      "description": "Electron app opens a BrowserWindow with correct dimensions and preload script",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T10:00:00Z"
+    },
+    {
+      "id": "document-list",
+      "name": "Document List Panel",
+      "description": "Left sidebar shows imported documents with empty state message",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T10:05:00Z"
+    },
+    {
+      "id": "question-panel",
+      "name": "Question Panel",
+      "description": "Bottom input bar accepts questions and submits via IPC",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T10:08:00Z"
+    },
+    {
+      "id": "data-directory",
+      "name": "Data Directory",
+      "description": "PersistenceService creates and manages userData/knowledge-base-data directory",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T10:10:00Z"
+    },
+    {
+      "id": "document-import",
+      "name": "Document Import",
+      "description": "Users can import .txt and .md files via ImportPanel with file picker",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T11:00:00Z"
+    },
+    {
+      "id": "document-detail",
+      "name": "Document Detail with Content",
+      "description": "DocumentDetail shows full document content, metadata, and delete button",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T11:15:00Z"
+    },
+    {
+      "id": "basic-persistence",
+      "name": "Basic Persistence",
+      "description": "Imported documents persist across app restarts via filesystem storage",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T11:30:00Z"
+    },
+    {
+      "id": "document-chunking",
+      "name": "Document Chunking",
+      "description": "IndexingService splits documents into ~500 char chunks at paragraph boundaries with metadata",
+      "status": "pass",
+      "evidence": "Single-doc indexing now updates index-meta.json and marks doc indexed with chunk count; removeDocument() added. Smoke test: design-notes.md -> 6 chunks (211-464 chars), status ready.",
+      "testedAt": "2026-11-15T00:00:00Z"
+    },
+    {
+      "id": "metadata-extraction",
+      "name": "Metadata Extraction",
+      "description": "On import, extract word count, line count, file type, and paragraph count metadata from documents",
+      "status": "pass",
+      "evidence": "extractMetadata() in document-service; shown in DocumentDetail. Smoke test on design-notes.md: 282 words, 43 lines, 15 paragraphs, md. npm run check passes.",
+      "testedAt": "2026-11-15T00:00:00Z"
+    },
+    {
+      "id": "indexing-status-ui",
+      "name": "Indexing Status in StatusBar",
+      "description": "StatusBar shows indexing progress with indexed count, total chunks, and color-coded status indicator",
+      "status": "pass",
+      "evidence": "StatusBar shows color-coded status, Docs, Indexed n/N, Chunks, last activity, plus 'Index all' button. IndexStatus (with totalChunks) moved to shared/types.ts, replacing mismatched AppStatus. DELETE handler now calls indexingService.removeDocument(). Smoke test (2 docs): idle 0/2 0 chunks -> indexing 1/2 15 -> ready 2/2 23 -> after delete ready 1/1 8. npm run check passes.",
+      "testedAt": "2026-11-15T00:00:00Z"
+    },
+    {
+      "id": "grounded-qa",
+      "name": "Grounded Q&A with Citations",
+      "description": "QaService returns answers with document citations, excerpts, and confidence scores",
+      "status": "pass",
+      "evidence": "QaService returns top-2 keyword-matched chunk citations (title, chunkIndex, 200-char excerpt), confidence 0.85 with citations / 0.30 without, history persisted to qa-history.json. App.tsx answer panel now shows a confidence badge: green 'Well-grounded' vs amber italic 'Speculative'. Smoke test: 'How does the chunking pipeline work?' on ARCHITECTURE.md -> 0.85, 2 citations; nonsense query -> 0.30, 0 citations; history length 2 from a fresh QaService. npm run check passes.",
+      "testedAt": "2026-11-15T00:00:00Z"
+    }
+  ]
+}

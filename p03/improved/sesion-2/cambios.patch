@@ -1,0 +1,285 @@
+commit 6e6ab0cc4e5d747287f654c15512b395602be593
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 21:35:09 2026 -0300
+
+    feat(indexing-status-ui): show indexed count, total chunks and color-coded status in StatusBar
+    
+    Move IndexStatus to shared types (adds totalChunks), replacing the
+    mismatched AppStatus. Add Index all action, and drop a document's
+    chunks from the index on delete.
+
+diff --git a/feature_list.json b/feature_list.json
+index 5b661c0..80b4c59 100644
+--- a/feature_list.json
++++ b/feature_list.json
+@@ -78,9 +78,9 @@
+       "id": "indexing-status-ui",
+       "name": "Indexing Status in StatusBar",
+       "description": "StatusBar shows indexing progress with indexed count, total chunks, and color-coded status indicator",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "StatusBar shows color-coded status, Docs, Indexed n/N, Chunks, last activity, plus 'Index all' button. IndexStatus (with totalChunks) moved to shared/types.ts, replacing mismatched AppStatus. DELETE handler now calls indexingService.removeDocument(). Smoke test (2 docs): idle 0/2 0 chunks -> indexing 1/2 15 -> ready 2/2 23 -> after delete ready 1/1 8. npm run check passes.",
++      "testedAt": "2026-11-15T00:00:00Z"
+     },
+     {
+       "id": "grounded-qa",
+@@ -91,4 +91,4 @@
+       "testedAt": null
+     }
+   ]
+-}
+\ No newline at end of file
++}
+diff --git a/session-handoff.md b/session-handoff.md
+index 5749a85..0fb0a35 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -2,11 +2,18 @@
+ 
+ ## Done
+ - Fixed baseline `npm run check` (renderer import paths, duplicate Window global, Electron 33 `File.path` -> preload `files.getPath` via `webUtils`).
+-- metadata-extraction: pass. document-chunking: pass (verified via node smoke test against compiled services).
++- metadata-extraction: pass. document-chunking: pass.
++- indexing-status-ui: pass. `IndexStatus` (incl. `totalChunks`) now lives in shared/types.ts (old `AppStatus` removed); StatusBar shows status dot, Docs, Indexed n/N, Chunks, last activity, and an "Index all" button (calls `indexing.start()`). DELETE handler calls `indexingService.removeDocument()`.
+ 
+ ## Remaining
+-- indexing-status-ui: StatusBar needs indexed count + total chunks; renderer types `indexing.start/status` claim `AppStatus` but service returns `IndexStatus` -- reconcile in shared/types.ts. Also wire `indexingService.removeDocument()` into DELETE handler (ipc-handlers.ts).
+-- grounded-qa: QaService logic already returns citations + 0.85/0.30 confidence (smoke test passed); remaining is UI confidence indicator in App.tsx and marking pass.
++- grounded-qa: QaService logic already returns citations + 0.85/0.30 confidence (smoke test passed earlier); remaining is UI confidence indicator in App.tsx (well-grounded vs speculative) and marking pass.
++
++## Notes / decisions
++- `IndexStatus.lastIndexed` is still `new Date()` at query time (not persisted); shown as "Last activity". Leave unless a feature requires it.
++- Status `indexing` is reported whenever 0 < indexed < total (partial index), per existing service logic.
++
++## Files modified this session (indexing-status-ui)
++- src/shared/types.ts, src/services/indexing-service.ts, src/main/ipc-handlers.ts, src/renderer/types.d.ts, src/renderer/App.tsx, src/renderer/components/StatusBar.tsx
+ 
+ ## Verification
+ - `npm run check`; services smoke test: compile with `tsc -p tsconfig.node.json --outDir <tmp>` and drive with NODE_PATH=node_modules.
+diff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts
+index abca6f6..58dc0c3 100644
+--- a/src/main/ipc-handlers.ts
++++ b/src/main/ipc-handlers.ts
+@@ -27,7 +27,9 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+   });
+ 
+   ipcMain.handle(IPC_CHANNELS.DELETE_DOCUMENT, async (_event, id: string) => {
+-    return documentService.deleteDocument(id);
++    const deleted = documentService.deleteDocument(id);
++    indexingService.removeDocument(id);
++    return deleted;
+   });
+ 
+   // Document content retrieval
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index be6b046..ddd6cf4 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -4,16 +4,18 @@ import { QuestionPanel } from './components/QuestionPanel';
+ import { DocumentDetail } from './components/DocumentDetail';
+ import { ImportPanel } from './components/ImportPanel';
+ import { StatusBar } from './components/StatusBar';
+-import { Document, AppStatus, QAResponse } from '../shared/types';
++import { Document, IndexStatus, QAResponse } from '../shared/types';
+ 
+ 
+ export function App() {
+   const [documents, setDocuments] = useState<Document[]>([]);
+   const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+-  const [appStatus, setAppStatus] = useState<AppStatus>({
+-    documentsLoaded: 0,
+-    indexStatus: 'idle',
+-    lastActivity: '',
++  const [appStatus, setAppStatus] = useState<IndexStatus>({
++    status: 'idle',
++    currentIndexed: 0,
++    totalDocuments: 0,
++    totalChunks: 0,
++    lastIndexed: null,
+   });
+   const [lastResponse, setLastResponse] = useState<QAResponse | null>(null);
+   const [showImport, setShowImport] = useState(false);
+@@ -57,6 +59,18 @@ export function App() {
+     }
+   }, []);
+ 
++  const handleIndexAll = useCallback(async () => {
++    setAppStatus(prev => ({ ...prev, status: 'indexing' }));
++    try {
++      await window.knowledgeBase.indexing.start();
++    } catch (err) {
++      console.error('Indexing failed:', err);
++      setAppStatus(prev => ({ ...prev, status: 'error' }));
++      return;
++    }
++    await refreshDocuments();
++  }, [refreshDocuments]);
++
+   const handleDeleteDocument = useCallback(async (id: string) => {
+     try {
+       await window.knowledgeBase.documents.delete(id);
+@@ -179,7 +193,7 @@ export function App() {
+         </div>
+       </div>
+ 
+-      <StatusBar status={appStatus} />
++      <StatusBar status={appStatus} onIndexAll={handleIndexAll} />
+     </div>
+   );
+ }
+diff --git a/src/renderer/components/StatusBar.tsx b/src/renderer/components/StatusBar.tsx
+index 29756e1..20d43a7 100644
+--- a/src/renderer/components/StatusBar.tsx
++++ b/src/renderer/components/StatusBar.tsx
+@@ -1,16 +1,20 @@
+-import { AppStatus } from '../../shared/types';
++import { IndexStatus } from '../../shared/types';
+ 
+ interface Props {
+-  status: AppStatus;
++  status: IndexStatus;
++  onIndexAll: () => void;
+ }
+ 
+-export function StatusBar({ status }: Props) {
+-  const statusColor = {
+-    idle: '#888',
+-    indexing: '#f0ad4e',
+-    ready: '#5cb85c',
+-    error: '#d9534f',
+-  }[status.indexStatus] ?? '#888';
++const STATUS_COLORS: Record<IndexStatus['status'], string> = {
++  idle: '#888',
++  indexing: '#f0ad4e',
++  ready: '#5cb85c',
++  error: '#d9534f',
++};
++
++export function StatusBar({ status, onIndexAll }: Props) {
++  const statusColor = STATUS_COLORS[status.status] ?? '#888';
++  const busy = status.status === 'indexing' && status.currentIndexed === 0;
+ 
+   return (
+     <div style={{
+@@ -23,7 +27,7 @@ export function StatusBar({ status }: Props) {
+       fontSize: '11px',
+       color: '#888',
+     }}>
+-      <span>
++      <span data-testid="index-status">
+         <span style={{
+           display: 'inline-block',
+           width: '8px',
+@@ -32,12 +36,30 @@ export function StatusBar({ status }: Props) {
+           background: statusColor,
+           marginRight: '6px',
+         }} />
+-        Index: {status.indexStatus}
++        Status: {status.status}
+       </span>
+-      <span>Documents: {status.documentsLoaded}</span>
+-      {status.lastActivity && (
+-        <span>Last activity: {new Date(status.lastActivity).toLocaleTimeString()}</span>
++      <span>Docs: {status.totalDocuments}</span>
++      <span>Indexed: {status.currentIndexed}/{status.totalDocuments}</span>
++      <span>Chunks: {status.totalChunks}</span>
++      {status.lastIndexed && (
++        <span>Last activity: {new Date(status.lastIndexed).toLocaleTimeString()}</span>
+       )}
++      <button
++        onClick={onIndexAll}
++        disabled={busy || status.totalDocuments === 0}
++        style={{
++          marginLeft: 'auto',
++          fontSize: '11px',
++          padding: '2px 8px',
++          background: 'transparent',
++          color: '#aaa',
++          border: '1px solid #0f3460',
++          borderRadius: '3px',
++          cursor: 'pointer',
++        }}
++      >
++        Index all
++      </button>
+     </div>
+   );
+ }
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index 25ee438..46a0982 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -15,8 +15,8 @@ declare global {
+         delete: (id: string) => Promise<boolean>;
+       };
+       indexing: {
+-        start: (documentId?: string) => Promise<import('../shared/types').AppStatus>;
+-        status: () => Promise<import('../shared/types').AppStatus>;
++        start: (documentId?: string) => Promise<import('../shared/types').IndexStatus>;
++        status: () => Promise<import('../shared/types').IndexStatus>;
+         chunks: (documentId: string) => Promise<import('../shared/types').Chunk[]>;
+       };
+       qa: {
+diff --git a/src/services/indexing-service.ts b/src/services/indexing-service.ts
+index 42b4d50..aab0939 100644
+--- a/src/services/indexing-service.ts
++++ b/src/services/indexing-service.ts
+@@ -1,17 +1,10 @@
+ import { v4 as uuidv4 } from 'uuid';
+-import { Chunk, Document } from '../shared/types';
++import { Chunk, Document, IndexStatus } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ 
+ const INDEX_META = 'index-meta.json';
+ const CHUNKS_DIR = 'chunks';
+ 
+-interface IndexStatus {
+-  status: 'idle' | 'indexing' | 'ready' | 'error';
+-  currentIndexed: number;
+-  totalDocuments: number;
+-  lastIndexed: string | null;
+-}
+-
+ export class IndexingService {
+   private persistence: PersistenceService;
+ 
+@@ -81,6 +74,7 @@ export class IndexingService {
+     const chunksMeta = this.persistence.readJson<Record<string, string[]>>(INDEX_META) ?? {};
+ 
+     const currentIndexed = Object.keys(chunksMeta).length;
++    const totalChunks = Object.values(chunksMeta).reduce((sum, ids) => sum + ids.length, 0);
+     const totalDocuments = docs.length;
+     const isReady = currentIndexed === totalDocuments && totalDocuments > 0;
+ 
+@@ -88,6 +82,7 @@ export class IndexingService {
+       status: isReady ? 'ready' : currentIndexed > 0 ? 'indexing' : 'idle',
+       currentIndexed,
+       totalDocuments,
++      totalChunks,
+       lastIndexed: new Date().toISOString(),
+     };
+   }
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index f867161..36367b9 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -46,10 +46,13 @@ export interface QAHistory {
+   response: QAResponse;
+ }
+ 
+-export interface AppStatus {
+-  documentsLoaded: number;
+-  indexStatus: 'idle' | 'indexing' | 'ready' | 'error';
+-  lastActivity: string;
++/** Overall indexing status returned by indexing:start and indexing:status. */
++export interface IndexStatus {
++  status: 'idle' | 'indexing' | 'ready' | 'error';
++  currentIndexed: number;
++  totalDocuments: number;
++  totalChunks: number;
++  lastIndexed: string | null;
+ }
+ 
+ /** IPC channel names -- single source of truth. */

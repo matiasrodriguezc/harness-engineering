@@ -1,0 +1,94 @@
+{
+  "project": "project-03",
+  "description": "Multi-session continuity with scope control, indexing, metadata, and grounded QA",
+  "features": [
+    {
+      "id": "window-launch",
+      "name": "Window Launch",
+      "description": "Electron app opens a BrowserWindow with correct dimensions and preload script",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T10:00:00Z"
+    },
+    {
+      "id": "document-list",
+      "name": "Document List Panel",
+      "description": "Left sidebar shows imported documents with empty state message",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T10:05:00Z"
+    },
+    {
+      "id": "question-panel",
+      "name": "Question Panel",
+      "description": "Bottom input bar accepts questions and submits via IPC",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T10:08:00Z"
+    },
+    {
+      "id": "data-directory",
+      "name": "Data Directory",
+      "description": "PersistenceService creates and manages userData/knowledge-base-data directory",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T10:10:00Z"
+    },
+    {
+      "id": "document-import",
+      "name": "Document Import",
+      "description": "Users can import .txt and .md files via ImportPanel with file picker",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T11:00:00Z"
+    },
+    {
+      "id": "document-detail",
+      "name": "Document Detail with Content",
+      "description": "DocumentDetail shows full document content, metadata, and delete button",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T11:15:00Z"
+    },
+    {
+      "id": "basic-persistence",
+      "name": "Basic Persistence",
+      "description": "Imported documents persist across app restarts via filesystem storage",
+      "status": "pass",
+      "evidence": "Carried over from P2 -- verified working",
+      "testedAt": "2026-03-30T11:30:00Z"
+    },
+    {
+      "id": "document-chunking",
+      "name": "Document Chunking",
+      "description": "IndexingService splits documents into ~500 char chunks at paragraph boundaries",
+      "status": "pass",
+      "evidence": "IndexingService.chunkDocument packs paragraphs into <=500-char chunks and splits oversized paragraphs at sentence/word boundaries. Single-doc indexing now updates index-meta and the document's status/chunk count. Sample docs: design-notes 6 chunks (211-464 chars), meeting-summary 3, retrieval-plan 5. Delete removes chunks from index. npm run check passes.",
+      "testedAt": "2026-11-15T21:30:00Z"
+    },
+    {
+      "id": "metadata-extraction",
+      "name": "Metadata Extraction",
+      "description": "On import, extract word count, line count, and file type metadata from documents",
+      "status": "pass",
+      "evidence": "DocumentService.importDocument calls extractMetadata (wordCount, lineCount, fileType) and rejects non-.txt/.md files and files >10MB. Samples: design-notes.md md/282 words/43 lines; meeting-summary.txt txt/163/20; retrieval-plan.md md/252/46; package.json rejected. Shown in DocumentDetail.",
+      "testedAt": "2026-11-15T21:30:00Z"
+    },
+    {
+      "id": "indexing-status-ui",
+      "name": "Indexing Status in StatusBar",
+      "description": "StatusBar shows indexing progress with document counts and status indicator",
+      "status": "pass",
+      "evidence": "getStatus now returns AppStatus (previously returned a mismatched shape) with indexedDocuments/documentsLoaded/totalChunks; StatusBar shows 'Indexed: X/N documents' with progress bar, chunk count, and colored status (idle -> ready after indexing all 3 samples, 14 chunks). Index All / Index Document buttons refresh status. App launches via electron without errors; UI not clicked through by automation.",
+      "testedAt": "2026-11-15T21:30:00Z"
+    },
+    {
+      "id": "grounded-qa",
+      "name": "Grounded Q&A with Citations",
+      "description": "QaService returns answers with document citations and confidence scores",
+      "status": "pass",
+      "evidence": "QaService ranks chunks by question-term overlap (stop words removed), returns up to 3 citations with sentence-level excerpts and an extractive answer built only from cited text; confidence 0.85 with citations, 0.30 without. 'How does retrieval rank chunks?' -> 3 citations from retrieval-plan/meeting-summary; nonsense question -> no citations, 0.30. Answer panel shows numbered citations and confidence.",
+      "testedAt": "2026-11-15T21:30:00Z"
+    }
+  ]
+}

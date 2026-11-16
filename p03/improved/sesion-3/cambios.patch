@@ -1,0 +1,19 @@
+commit 68cc821b418815aa43a817b48a97cbd6d671f3d3
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 21:36:16 2026 -0300
+
+    docs: record clean-state checklist findings in session handoff
+
+diff --git a/session-handoff.md b/session-handoff.md
+index f849723..4338c61 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -7,6 +7,8 @@
+ 
+ ## Remaining
+ - All features in feature_list.json are `pass`. Next: walk through `clean-state-checklist.md` before declaring the project complete.
++- Clean-state checklist gap: DocumentDetail has "View Content" and "Index Document" but NO "Show Chunks" button (checklist item). Not a tracked feature in feature_list.json; add it as a new feature entry before implementing (needs a chunks IPC channel if not already exposed).
++- Already verified: `npm run check` and `npm run build` pass (dist/ produced); no `any`, no default exports, no Node imports in renderer.
+ - Optional (not a tracked feature): renderer does not display Q&A history (`qa.history()` exists via IPC, persisted in qa-history.json).
+ 
+ ## Notes / decisions

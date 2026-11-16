@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Corre una sesión no interactiva de Claude Code en una carpeta de corrida y guarda la evidencia.
-# Uso: run-session.sh <carpeta-de-corrida> <carpeta-de-evidencia> "<prompt>"
+# Uso: run-session.sh <carpeta-de-corrida> <carpeta-de-evidencia> "<prompt>" [flags extra de claude...]
 # Cada llamada es una sesión nueva: no hereda nada de la anterior salvo lo que esté en los archivos.
+# Ejemplo de flag extra: --max-budget-usd 1.20 (corta la sesión al llegar al tope, como un reinicio).
 set -u
-RUN_DIR="$1"; EVID="$2"; PROMPT="$3"
+RUN_DIR="$1"; EVID="$2"; PROMPT="$3"; shift 3
 mkdir -p "$EVID"
 cd "$RUN_DIR" || exit 1
 printf '%s\n' "$PROMPT" > "$EVID/prompt.txt"
@@ -12,6 +13,7 @@ claude -p "$PROMPT" \
   --disable-slash-commands --strict-mcp-config \
   --permission-mode auto \
   --output-format stream-json --verbose \
+  "$@" \
   > "$EVID/transcript.jsonl" 2> "$EVID/stderr.txt"
 echo "exit=$?" >> "$EVID/stderr.txt"
 date '+%Y-%m-%d %H:%M:%S' > "$EVID/fin.txt"

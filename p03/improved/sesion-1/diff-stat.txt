@@ -1,0 +1,7 @@
+e978d23 feat(document-chunking): keep index-meta and doc status in sync on single-doc indexing
+
+ feature_list.json                |   14 +-
+ package-lock.json                | 4092 ++++++++++++++++++++++++++++++++++++++
+ session-handoff.md               |   36 +-
+ src/services/indexing-service.ts |   24 +-
+ 4 files changed, 4131 insertions(+), 35 deletions(-)

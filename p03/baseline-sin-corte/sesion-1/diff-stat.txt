@@ -1,0 +1,21 @@
+4d93713 fin de sesión: sesion-1
+
+ feature_list.json                          |   24 +-
+ package-lock.json                          | 4092 ++++++++++++++++++++++++++++
+ session-handoff.md                         |   17 +
+ src/main/ipc-handlers.ts                   |    4 +-
+ src/main/main.ts                           |    4 +-
+ src/preload/preload.ts                     |    4 +-
+ src/renderer/App.tsx                       |   79 +-
+ src/renderer/components/DocumentDetail.tsx |   14 +-
+ src/renderer/components/DocumentList.tsx   |    3 +-
+ src/renderer/components/ImportPanel.tsx    |    4 +-
+ src/renderer/components/QuestionPanel.tsx  |    2 +-
+ src/renderer/components/StatusBar.tsx      |   25 +-
+ src/renderer/types.d.ts                    |    1 +
+ src/services/document-service.ts           |   30 +-
+ src/services/indexing-service.ts           |  197 +-
+ src/services/persistence-service.ts        |    6 +
+ src/services/qa-service.ts                 |  161 +-
+ src/shared/types.ts                        |    8 +
+ 18 files changed, 4451 insertions(+), 224 deletions(-)
