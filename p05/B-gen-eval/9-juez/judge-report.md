@@ -1,0 +1,182 @@
+# Judge report: multi-turn Q&A conversation history
+
+Reviewer: independent judge. Scored against `rubric-template.md`. I did not read `evaluator-rubric.md` or `sprint-contract.md`. The only file I changed is this report.
+
+## What I ran
+
+| Step | Result |
+|---|---|
+| `npm run check` | exit 0, no type errors |
+| `bash scripts/check-architecture.sh` | exit 0, "PASS: All architecture boundary checks passed" |
+| `npm test` | 20/20 passed (`tests/qa-conversation.test.ts`) |
+| `npm run build` | succeeded (tsc, esbuild preload, vite) |
+| My own end-to-end probe of the running Electron app | ran twice, results below |
+
+I did **not** run the repo's `scripts/verify-conversation.mjs`. It overwrites `docs/verification/`, and I was only allowed to change this report. Instead I wrote my own probe, kept outside the repo in the session scratchpad.
+
+How the probe works:
+- It launches the built app with a throwaway `--user-data-dir`.
+- It drives the app over the Chrome DevTools Protocol (CDP).
+- Typing and keys are real CDP input events (`Input.insertText`, `Input.dispatchKeyEvent` for Enter, Tab, Shift+Tab and Esc), not synthetic DOM clicks.
+- It writes screenshots to the scratchpad.
+- The "+ Import" button already did nothing in the starter, so I seeded the sample documents through `window.knowledgeBase.documents.import` and `indexing.start`.
+
+## Scores
+
+| # | Criterion | Score |
+|---|---|---|
+| 1 | Functional completeness | 5 |
+| 2 | Visual design | 4 |
+| 3 | Timestamps | 5 |
+| 4 | Citation display | 4 |
+| 5 | Interactivity | 5 |
+| 6 | Edge cases | 4 |
+| 7 | Accessibility | 4 |
+| 8 | Code quality | 5 |
+
+**Overall: 4.5** (36 / 8)
+
+## Evidence per criterion
+
+### 1. Functional completeness: 5
+
+**Many questions in a row**
+- I typed 12 questions in a row and submitted each with a real Enter key.
+- All 12 appeared, in order: `12 in order: true`. The header read "Conversation (12 exchanges)" and the sidebar read "History (12)".
+- Every answer shown on screen matches the stored answer in `qa-history.json` character for character: `answers match disk: true`.
+- After each answer, the input clears and keeps focus. The thread scrolls to the newest exchange.
+
+**Duplicates and empty input**
+- Pressing Enter three times quickly produced exactly one new exchange (count 12 → 13).
+- A whitespace-only question was ignored.
+- While an answer is pending, the submit button is disabled and reads "Asking…". Text typed during that time is kept in the input.
+
+**Persistence**
+- I killed and relaunched the app. The count went from 19 to 19: the conversation persisted across the restart.
+
+**Long input**
+- A 3,000-character question with no spaces and a 300-word question were both stored and shown in full.
+- No horizontal scroll: the page measured 1200 = 1200 and the thread 920 = 920.
+
+### 2. Visual design: 4
+
+**What works** (screenshot `p03-top.png`)
+- The two roles are clearly different:
+  - Your questions are right-aligned purple bubbles labelled "You" (white on `#533483`).
+  - Answers are left-aligned dark bubbles with a border, labelled "Assistant" (`#e0e0e0` on `#1a1a3e`), plus a colour-coded confidence ("Confidence 85%" in green, "Low confidence 30%" in amber).
+- Colours, borders and button styles reuse the app's existing navy and purple palette, so it looks like the rest of the app.
+
+**Why not 5**
+- Long questions are never collapsed, unlike long answers. A 300-word question fills the whole visible thread (`p04-long-question.png`).
+- Opening a citation adds the document panel above the conversation and shrinks the thread to 278 px (`thread height with detail: 278`, `p05-citation.png`). The conversation becomes cramped.
+
+### 3. Timestamps: 5
+
+**Format**
+- Both the question and the answer show a `<time>` element.
+- Example: `["Today, 10:38 PM", title "Sunday, November 15, 2026 at 10:38:45 PM", datetime "2026-11-16T01:38:45.124Z"]`.
+- So there is a short readable label, the full date as a tooltip, and a machine-readable ISO value.
+
+**Older and broken dates**
+- An entry I seeded with yesterday's date rendered as "Yesterday, 10:38 PM".
+- Dates in an earlier year include the year (`formatTimestamp` in `src/renderer/format.ts:13-23`).
+- An entry with the invalid timestamp `"nope"` rendered as "Unknown time" without crashing.
+- The sidebar shows the same short label.
+- The "Today"/"Yesterday" labels are refreshed at midnight (`App.tsx:40-46`).
+
+### 4. Citation display: 4
+
+**What works**
+- Each source shows its number, document title, 1-based chunk number and a plain-text excerpt clamped to 3 lines.
+  - Example: `[1] design-notes · chunk 1` / "Software Design Notes Architecture Overview The knowledge base application follows…".
+- The "Sources (N)" heading collapses and expands, with a correct `aria-expanded`.
+- Clicking a citation opens the document. It reveals, highlights ("cited in the answer"), scrolls to and focuses the cited chunk (focus landed on `DIV chunk-…-0`).
+- After I deleted `design-notes`, its citation changed to plain text: "design-notes · chunk 1 (document no longer available)". The excerpt stayed visible.
+- Raw markdown in older stored excerpts (`## Heading **bold** text`) is shown cleanly as "Heading bold text".
+
+**Why not 5**
+- Excerpts are cut to 200 characters when they are saved. The only way to read the whole passage is to open the document.
+- Opening a citation does not keep the exchange you came from in view. In `p05-citation.png` the thread is scrolled to a different exchange, so you lose your place.
+
+### 5. Interactivity: 5
+
+Everything below was checked in the running app:
+- **Copy answer**: shows "Copied", and the clipboard text equals the answer exactly (`clipboard eq: true`).
+- **Follow up, using the keyboard**: focusing "Follow up" and pressing Enter moves focus to the input and shows a "Following up on …" chip. The new exchange shows "↪ Follow-up to "What does the meeting summary say?"", and its answer used the parent question as context (it cited `meeting-summary`).
+- **Jump to the earlier question**: the "Follow-up to" link moved focus to the parent `ARTICLE`.
+- **Esc** cancels a pending follow-up.
+- **Show full answer / Show less** expands long answers.
+- **Sidebar History**: pressing Enter on an entry moves focus to that exchange and highlights it.
+- **Clear conversation**: has an inline Clear/Cancel confirmation.
+- **Retry / Dismiss** appear on a failed question.
+
+### 6. Edge cases: 4
+
+**Handled**
+- **Empty history**: main panel says "No questions yet…", sidebar says "No conversation history yet…".
+- **Answer without citations**: the italic note "No sources cited — no indexed document matched…" and "Low confidence 30%".
+- **Long answers**: collapse at 1,200 characters (`ExchangeItem.tsx:8`).
+- **Write failure**: I made the history file read-only, then asked a question. The error was shown inline: "The question could not be answered: Could not save to the conversation history file (…/qa-history.json): the file is not writable (permission denied)." It came with Retry and Dismiss, focus stayed in the input, and an ERROR line appeared in the structured log.
+- **Corrupt history file** (`[{"question": `): a clear message near the input gives the file path, says the file was left unchanged, and the stale conversation is cleared.
+- Missing or invalid timestamps, deleted documents, and spam submits are also handled.
+
+**Why not 5**
+- When the history file is corrupt, the sidebar History tab still says "No conversation history yet. Ask a question to get started." That is misleading.
+- Long questions are not collapsed.
+- A question with no matching document is answered "No relevant documents have been indexed yet…" even though 3 documents are indexed. The UI note right below it says the opposite. The wording comes from the old mock answers in `qa-service.ts`, but this feature displays it.
+
+### 7. Accessibility: 4
+
+**Good**
+- The thread is a `role="log"` wrapper around an `<ol>`/`<li>` list, so list semantics are kept.
+- Each exchange is an `<article>` labelled by its question.
+- The question input has a visually hidden `<label>`. The follow-up chip is linked to the input with `aria-describedby`.
+- Copy and Follow-up buttons have labels that include the question, e.g. "Copy answer to "What is indexing?"".
+- Expand/collapse buttons use `aria-expanded` and `aria-controls`.
+- Errors use `role="alert"`; the copy feedback uses `role="status"`; the pending exchange is marked `aria-busy`.
+- There is a `:focus-visible` outline.
+- The Clear confirmation can be cancelled with Esc and returns focus to the button.
+- Shift+Tab from the input walks through every exchange's Follow-up, Copy, citation and Sources buttons in a sensible order.
+
+**Why not 5**
+- The sidebar "Documents / History" switcher uses two `aria-pressed` toggle buttons, not a `tablist`.
+- Each full question is an `<h3>`. A 3,000-character question becomes a 3,000-character heading for screen-reader heading navigation.
+- I did not test with a real screen reader. These two points come from reading the code (`App.tsx:153-170`, `ExchangeItem.tsx:96`).
+
+### 8. Code quality: 5
+
+**Checks and boundaries**
+- `npm run check` exits 0, `check-architecture.sh` exits 0, and the 20/20 tests pass.
+- Layers match `docs/ARCHITECTURE.md`:
+  - The renderer only calls `window.knowledgeBase.*` and only formats data for display.
+  - Normalizing history, chaining follow-ups and handling clear-while-pending all live in `QaService`.
+  - The preload file only exposes the `invoke` wrappers.
+  - IPC handlers only route requests and log them.
+- Shared pure text helpers live in `src/shared/text.ts`, with no Node or DOM APIs.
+
+**Dead code**
+- I found none in the feature. `noUnusedLocals` is on.
+- The exported `retrievalTerms` and `toExcerpt` are used by the tests.
+- The `app:status` channel with no handler, and the no-op Import button, were already in the starter and are documented.
+
+**Small nits (not scored down)**
+- The "Close" button style in `App.tsx:219-230` copies `smallButton` instead of reusing it.
+- `qa-service.ts` mixes the mock answer generator with history persistence (363 lines).
+
+## Remaining defects (most important first)
+
+1. **Misleading "no matches" answer.** A question with no matching document gets "No relevant documents have been indexed yet. Please import and index documents…" while documents are indexed. The UI note directly below says "no indexed document matched", which contradicts it. (`qa-service.ts`, `generateAnswer` fallback.)
+2. **Sidebar wrong when the history file is corrupt.** It shows "No conversation history yet. Ask a question to get started." instead of pointing to the load error. (`ConversationHistory.tsx:13-18`. It never receives `historyError`.)
+3. **Answer text is cut mid-word.** `generateAnswer` appends `excerpt.substring(0, 100) + "."`, giving answers that end like "…follows a layered archite." This is old mock code, but it is now the most visible "truncation" in the conversation.
+4. **Long questions are never collapsed.** A very long question fills the whole thread, while long answers do collapse.
+5. **Opening a citation loses your place.** The document panel takes up to 45% of the height (the thread shrank to 278 px), and the exchange you clicked from is not kept in view.
+6. **Citation excerpts are stored cut to 200 characters.** You can only read the full passage by opening the document.
+7. **Sidebar tabs are not a real tablist.** They are `aria-pressed` toggles with no `role="tablist"`/`tab`/`tabpanel` or arrow-key navigation.
+8. **Each full question is an `<h3>`.** Long questions become very long headings for screen readers.
+9. **No way to recover a corrupt history file from inside the app.** "Clear conversation" is hidden when the history failed to load, so the user has to fix or move the file by hand.
+
+## Notes outside this feature
+
+- The status bar shows empty "Index:" and "Documents:" values.
+- The document detail panel showed "Status: imported" after indexing.
+- Both come from the starter app, not this feature, and were not scored.

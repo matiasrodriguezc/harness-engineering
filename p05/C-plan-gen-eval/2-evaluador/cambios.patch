@@ -1,0 +1,1000 @@
+commit 759b00785e94cb025d61d44661c1fe21a727f872
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 23:03:23 2026 -0300
+
+    Add evaluator rubric and independent evidence for conversation history (overall 4.3)
+
+diff --git a/docs/evidence/conversation-history/evaluator/01-empty.png b/docs/evidence/conversation-history/evaluator/01-empty.png
+new file mode 100644
+index 0000000..9356224
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/01-empty.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/02-fixture.png b/docs/evidence/conversation-history/evaluator/02-fixture.png
+new file mode 100644
+index 0000000..891730a
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/02-fixture.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/03-pending.png b/docs/evidence/conversation-history/evaluator/03-pending.png
+new file mode 100644
+index 0000000..64e13a6
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/03-pending.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/04-first-answer.png b/docs/evidence/conversation-history/evaluator/04-first-answer.png
+new file mode 100644
+index 0000000..164497d
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/04-first-answer.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/05-two-exchanges.png b/docs/evidence/conversation-history/evaluator/05-two-exchanges.png
+new file mode 100644
+index 0000000..9cf22c4
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/05-two-exchanges.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/06-no-citations.png b/docs/evidence/conversation-history/evaluator/06-no-citations.png
+new file mode 100644
+index 0000000..ae0b5ee
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/06-no-citations.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/07-autoscroll.png b/docs/evidence/conversation-history/evaluator/07-autoscroll.png
+new file mode 100644
+index 0000000..9812146
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/07-autoscroll.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/08-citation-click.png b/docs/evidence/conversation-history/evaluator/08-citation-click.png
+new file mode 100644
+index 0000000..ea147d2
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/08-citation-click.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/09-keyboard-focus-citation.png b/docs/evidence/conversation-history/evaluator/09-keyboard-focus-citation.png
+new file mode 100644
+index 0000000..4465a2f
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/09-keyboard-focus-citation.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/10-keyboard-opened.png b/docs/evidence/conversation-history/evaluator/10-keyboard-opened.png
+new file mode 100644
+index 0000000..e5f2be0
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/10-keyboard-opened.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/11-narrow-700px.png b/docs/evidence/conversation-history/evaluator/11-narrow-700px.png
+new file mode 100644
+index 0000000..4bd9bde
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/11-narrow-700px.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/12-long-unbroken-question.png b/docs/evidence/conversation-history/evaluator/12-long-unbroken-question.png
+new file mode 100644
+index 0000000..9e6b6b8
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/12-long-unbroken-question.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/13-error.png b/docs/evidence/conversation-history/evaluator/13-error.png
+new file mode 100644
+index 0000000..3b5937f
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/13-error.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/14-after-retry.png b/docs/evidence/conversation-history/evaluator/14-after-retry.png
+new file mode 100644
+index 0000000..8d9e3ef
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/14-after-retry.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/15-stale-citation-before-refresh.png b/docs/evidence/conversation-history/evaluator/15-stale-citation-before-refresh.png
+new file mode 100644
+index 0000000..6eaad32
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/15-stale-citation-before-refresh.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/16-stale-citation-after-refresh.png b/docs/evidence/conversation-history/evaluator/16-stale-citation-after-refresh.png
+new file mode 100644
+index 0000000..bfc5fb4
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/16-stale-citation-after-refresh.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/17-after-restart.png b/docs/evidence/conversation-history/evaluator/17-after-restart.png
+new file mode 100644
+index 0000000..6771f08
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/17-after-restart.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/18-clear-confirm.png b/docs/evidence/conversation-history/evaluator/18-clear-confirm.png
+new file mode 100644
+index 0000000..335ea86
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/18-clear-confirm.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/19-after-clear.png b/docs/evidence/conversation-history/evaluator/19-after-clear.png
+new file mode 100644
+index 0000000..6ab26ef
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/19-after-clear.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/20-restart-after-clear.png b/docs/evidence/conversation-history/evaluator/20-restart-after-clear.png
+new file mode 100644
+index 0000000..6ab26ef
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/20-restart-after-clear.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/21-startup-corrupt-history.png b/docs/evidence/conversation-history/evaluator/21-startup-corrupt-history.png
+new file mode 100644
+index 0000000..d59d881
+Binary files /dev/null and b/docs/evidence/conversation-history/evaluator/21-startup-corrupt-history.png differ
+diff --git a/docs/evidence/conversation-history/evaluator/file-before-restart.json b/docs/evidence/conversation-history/evaluator/file-before-restart.json
+new file mode 100644
+index 0000000..6212635
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/file-before-restart.json
+@@ -0,0 +1 @@
++[{"q":"FIXTURE: long answer","t":"2026-11-16T01:55:11.295Z","c":["design-notes"]},{"q":"How does the indexing pipeline chunk documents?","t":"2026-11-16T01:59:47.292Z","c":["meeting-summary","meeting-summary"]},{"q":"What did the meeting decide about retrieval?","t":"2026-11-16T01:59:48.398Z","c":["meeting-summary","retrieval-plan"]},{"q":"xyzzy plugh","t":"2026-11-16T01:59:49.865Z","c":[]},{"q":"What design pattern is used?","t":"2026-11-16T01:59:50.904Z","c":["design-notes","retrieval-plan"]},{"q":"How does retrieval work?","t":"2026-11-16T01:59:51.509Z","c":["retrieval-plan","design-notes"]},{"q":"Summarize the meeting notes","t":"2026-11-16T01:59:52.022Z","c":["retrieval-plan","design-notes"]},{"q":"What is the search query flow?","t":"2026-11-16T01:59:52.512Z","c":["retrieval-plan","design-notes"]},{"q":"What design pattern is used?","t":"2026-11-16T01:59:54.279Z","c":["design-notes","retrieval-plan"]},{"q":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","t":"2026-11-16T01:59:57.783Z","c":[]},{"q":"Second failing question","t":"2026-11-16T02:00:47.764Z","c":["design-notes","retrieval-plan"]}]
+\ No newline at end of file
+diff --git a/docs/evidence/conversation-history/evaluator/p1.json b/docs/evidence/conversation-history/evaluator/p1.json
+new file mode 100644
+index 0000000..218740d
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/p1.json
+@@ -0,0 +1,22 @@
++{
++  "R": {
++    "dataDirCheck": "see ls",
++    "emptyText": "Conversation (0 exchanges)\nClear\nNo questions yet\nAsk a question below. Each answer will appear here with the sources it cites,\nand the conversation is kept between sessions.\nTip: import and index documents first so answers can cite them.\nQuestion about your documents\nAsk",
++    "seed": {
++      "status": "ready",
++      "currentIndexed": 3,
++      "totalDocuments": 3,
++      "lastIndexed": "2026-11-16T01:55:02.325Z"
++    },
++    "docsHeader": [
++      "Documents (3)",
++      "Conversation (0 exchanges)"
++    ]
++  },
++  "events": [
++    {
++      "kind": "console.warning",
++      "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged."
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/docs/evidence/conversation-history/evaluator/p2.json b/docs/evidence/conversation-history/evaluator/p2.json
+new file mode 100644
+index 0000000..291305d
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/p2.json
+@@ -0,0 +1,160 @@
++{
++  "s1_fixture": {
++    "len": 1750,
++    "ellipsis": false,
++    "ansOverflow": false,
++    "scroller": [
++      920,
++      920
++    ],
++    "doc": [
++      1200,
++      1200
++    ],
++    "body": [
++      1200,
++      1200
++    ]
++  },
++  "s2_pending": {
++    "text": "YOU\nHow does the indexing pipeline chunk documents?\nASSISTANT\nAnswering…",
++    "btn": "Answering…",
++    "input": ""
++  },
++  "s2_answer": {
++    "count": 2,
++    "text": "YOU\nHow does the indexing pipeline chunk documents?\nASSISTANT\nNov 15, 2026, 10:59 PM\nConfidence: High (85%)\nDocuments are imported by copying the source file to the local data directory. The system extracts text content and creates metadata including title, filename, size, and import timestamp. After import, documents can be indexed for search. Based on the document \"meeting-summary\", 2. Chunking Strategy\nDocuments will be split into chunks of approximately 500 characters at paragrap.\nSOURCES (2)\nmeeting-summary · chunk 1\n“2. Chunking Strategy\nDocuments will be split into chunks of approximately 500 characters at paragraph boundaries. Each chunk will include metadata like character count and word count. The indexing pip”\nmeeting-summary · chunk 2\n“3. Grounded Q&A Requirements\nAll Q&A responses must include citations that reference specific document chunks. The system should rank chunks by keyword overlap and return the most relevant excerpts. A”",
++    "time": "Nov 15, 2026, 10:59 PM",
++    "dt": "2026-11-16T01:59:47.292Z",
++    "cites": [
++      "meeting-summary · chunk 1\n“2. Chunking Strategy\nDocuments will be split into chunks of approximately 500 characters at paragraph boundaries. Each chunk will include metadata like character count and word count. The indexing pip”",
++      "meeting-summary · chunk 2\n“3. Grounded Q&A Requirements\nAll Q&A responses must include citations that reference specific document chunks. The system should rank chunks by keyword overlap and return the most relevant excerpts. A”"
++    ]
++  },
++  "s2_askDelta": 1,
++  "s3_duringPending": {
++    "pending": true,
++    "userTurns": 3,
++    "input": "second draft"
++  },
++  "s3_askDelta": 1,
++  "s4_count": 3,
++  "s4_firstUnchanged": true,
++  "s4_dupQuestions": 1,
++  "s3_inputAfter": "second draft",
++  "s5": {
++    "text": "YOU\nxyzzy plugh\nASSISTANT\nNov 15, 2026, 10:59 PM\nConfidence: Low (30%)\nNo relevant documents have been indexed yet. Please import and index documents before asking questions.\nNo sources cited.",
++    "hasSourcesHeader": false
++  },
++  "s6": {
++    "scrollHeight": 4112,
++    "clientHeight": 592,
++    "scrollTop": 3520,
++    "atBottom": true,
++    "lastBottomVisible": true,
++    "lastTopVisible": true,
++    "lastHeight": 528.9921875,
++    "viewport": 591.5
++  },
++  "s7": {
++    "detail": "meeting-summary",
++    "cite": "meeting-summary · chunk 1 · open\n“2. Chunking Strategy\nDocuments will be split into chunks of approximately 500 characters at paragraph boundaries. Each chunk will include metadata like character count and word count. The indexing pip”"
++  },
++  "s8_tabsToInput": 15,
++  "s8_path": [
++    "Clear",
++    "design-notes · chunk 0“fixture",
++    "meeting-summary · chunk 1“2. C",
++    "meeting-summary · chunk 2“3. G",
++    "meeting-summary · chunk 0“Team",
++    "retrieval-plan · chunk 3“The m",
++    "design-notes · chunk 0“# Softw",
++    "retrieval-plan · chunk 3“The m",
++    "retrieval-plan · chunk 2“The r",
++    "design-notes · chunk 4“Busines",
++    "retrieval-plan · chunk 3“The m",
++    "design-notes · chunk 0“# Softw",
++    "retrieval-plan · chunk 3“The m",
++    "design-notes · chunk 0“# Softw",
++    "question-input"
++  ],
++  "s8_focusAfterSubmit": "question-input",
++  "s8_forwardTabsToNewestCitation": 18,
++  "s8_shiftTabsToNewestCitation": 1,
++  "s8_focusStyle": {
++    "outline": "solid 2px rgb(136, 136, 187)",
++    "fv": true
++  },
++  "s8_enterOpened": "retrieval-plan (expected retrieval-plan)",
++  "s8_spaceOpened": "retrieval-plan",
++  "s9": {
++    "log": "<div role=\"log\" aria-live=\"polite\" aria-label=\"Conversation messages\"><ol style=\"list-styl",
++    "list": "OL",
++    "li": "Exchange 1 of 9",
++    "label": "Question about your documents",
++    "clickableDivs": 4,
++    "citeTags": [
++      "BUTTON"
++    ]
++  },
++  "s10_times": [
++    [
++      "2026-11-16T01:55:11.295Z",
++      "Nov 15, 2026, 10:55 PM"
++    ],
++    [
++      "2026-11-16T01:59:47.292Z",
++      "Nov 15, 2026, 10:59 PM"
++    ],
++    [
++      "2026-11-16T01:59:48.398Z",
++      "Nov 15, 2026, 10:59 PM"
++    ],
++    [
++      "2026-11-16T01:59:49.865Z",
++      "Nov 15, 2026, 10:59 PM"
++    ],
++    [
++      "2026-11-16T01:59:50.904Z",
++      "Nov 15, 2026, 10:59 PM"
++    ],
++    [
++      "2026-11-16T01:59:51.509Z",
++      "Nov 15, 2026, 10:59 PM"
++    ],
++    [
++      "2026-11-16T01:59:52.022Z",
++      "Nov 15, 2026, 10:59 PM"
++    ],
++    [
++      "2026-11-16T01:59:52.512Z",
++      "Nov 15, 2026, 10:59 PM"
++    ],
++    [
++      "2026-11-16T01:59:54.279Z",
++      "Nov 15, 2026, 10:59 PM"
++    ]
++  ],
++  "narrow": {
++    "doc": [
++      700,
++      700
++    ],
++    "main": [
++      420,
++      420
++    ]
++  },
++  "longQuestion": {
++    "scroller": [
++      920,
++      920
++    ]
++  },
++  "events": [
++    {
++      "kind": "console.warning",
++      "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged."
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/docs/evidence/conversation-history/evaluator/p3.json b/docs/evidence/conversation-history/evaluator/p3.json
+new file mode 100644
+index 0000000..896fb9e
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/p3.json
+@@ -0,0 +1,113 @@
++{
++  "before": 10,
++  "err": {
++    "present": true,
++    "text": "YOU\nHow does retrieval work?\nNOT ANSWERED\nThe question could not be answered.\nDetails: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)\nRetry\nDismiss",
++    "exchanges": 10,
++    "input": "",
++    "header": "Conversation (10 exchanges)"
++  },
++  "err2": [
++    "Second failing question"
++  ],
++  "afterRetry": {
++    "exchanges": 11,
++    "err": false,
++    "last": "Second failing question"
++  },
++  "qaFailedInLog": 2,
++  "staleNoRefresh": {
++    "detail": "design-notes",
++    "citeText": "design-notes · chunk 0 · open\n“fixture excerpt”",
++    "docsHeader": "Documents (3)"
++  },
++  "staleAfterRefresh": {
++    "detail": null,
++    "citeText": "design-notes · chunk 0\n“fixture excerpt”\nThis document is no longer available.",
++    "docsHeader": "Documents (2)"
++  },
++  "events": [],
++  "onScreen": [
++    {
++      "q": "FIXTURE: long answer",
++      "t": "2026-11-16T01:55:11.295Z",
++      "c": [
++        "design-notes"
++      ]
++    },
++    {
++      "q": "How does the indexing pipeline chunk documents?",
++      "t": "2026-11-16T01:59:47.292Z",
++      "c": [
++        "meeting-summary",
++        "meeting-summary"
++      ]
++    },
++    {
++      "q": "What did the meeting decide about retrieval?",
++      "t": "2026-11-16T01:59:48.398Z",
++      "c": [
++        "meeting-summary",
++        "retrieval-plan"
++      ]
++    },
++    {
++      "q": "xyzzy plugh",
++      "t": "2026-11-16T01:59:49.865Z",
++      "c": []
++    },
++    {
++      "q": "What design pattern is used?",
++      "t": "2026-11-16T01:59:50.904Z",
++      "c": [
++        "design-notes",
++        "retrieval-plan"
++      ]
++    },
++    {
++      "q": "How does retrieval work?",
++      "t": "2026-11-16T01:59:51.509Z",
++      "c": [
++        "retrieval-plan",
++        "design-notes"
++      ]
++    },
++    {
++      "q": "Summarize the meeting notes",
++      "t": "2026-11-16T01:59:52.022Z",
++      "c": [
++        "retrieval-plan",
++        "design-notes"
++      ]
++    },
++    {
++      "q": "What is the search query flow?",
++      "t": "2026-11-16T01:59:52.512Z",
++      "c": [
++        "retrieval-plan",
++        "design-notes"
++      ]
++    },
++    {
++      "q": "What design pattern is used?",
++      "t": "2026-11-16T01:59:54.279Z",
++      "c": [
++        "design-notes",
++        "retrieval-plan"
++      ]
++    },
++    {
++      "q": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
++      "t": "2026-11-16T01:59:57.783Z",
++      "c": []
++    },
++    {
++      "q": "Second failing question",
++      "t": "2026-11-16T02:00:47.764Z",
++      "c": [
++        "design-notes",
++        "retrieval-plan"
++      ]
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/docs/evidence/conversation-history/evaluator/run1.log b/docs/evidence/conversation-history/evaluator/run1.log
+new file mode 100644
+index 0000000..b7e75a0
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/run1.log
+@@ -0,0 +1,40 @@
++
++DevTools listening on ws://127.0.0.1:9444/devtools/browser/d812c248-89ba-4351-9783-9f03ab4df5d0
++{"timestamp":"2026-11-16T01:55:01.160Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T01:55:01.163Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T01:55:01.163Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/9f0792af-4238-4452-be5f-41e167cadf08/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T01:55:01.164Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T01:55:01.164Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T01:55:01.164Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T01:55:01.164Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T01:55:01.164Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:55:01.164Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:55:01.164Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T01:55:01.354Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T01:55:01.688Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T01:55:01.693Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:55:02.321Z","level":"INFO","service":"IPC","message":"IMPORT_DOCUMENT","data":{"filePath":"/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/data/sample-documents/design-notes.md"}}
++{"timestamp":"2026-11-16T01:55:02.322Z","level":"INFO","service":"IPC","message":"Document imported","data":{"id":"e4142781-f821-478f-885b-7009710133a0","title":"design-notes","size":1940}}
++{"timestamp":"2026-11-16T01:55:02.323Z","level":"INFO","service":"IPC","message":"IMPORT_DOCUMENT","data":{"filePath":"/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/data/sample-documents/meeting-summary.txt"}}
++{"timestamp":"2026-11-16T01:55:02.323Z","level":"INFO","service":"IPC","message":"Document imported","data":{"id":"c32a59e5-bd36-4073-a3cd-0281eb03a95a","title":"meeting-summary","size":1160}}
++{"timestamp":"2026-11-16T01:55:02.323Z","level":"INFO","service":"IPC","message":"IMPORT_DOCUMENT","data":{"filePath":"/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/data/sample-documents/retrieval-plan.md"}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IPC","message":"Document imported","data":{"id":"3f76619e-8d53-4681-99ec-25ded2001548","title":"retrieval-plan","size":1639}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IPC","message":"START_INDEXING","data":{"documentId":"all"}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IndexingService","message":"startIndexing called","data":{"documentId":"all"}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IndexingService","message":"Batch indexing starting","data":{"totalDocs":3,"alreadyIndexed":0}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IndexingService","message":"Indexing document","data":{"docId":"e4142781-f821-478f-885b-7009710133a0","title":"design-notes","contentLength":1940}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IndexingService","message":"chunkDocument","data":{"documentId":"e4142781-f821-478f-885b-7009710133a0","contentLength":1940,"paragraphCount":15}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IndexingService","message":"chunkDocument complete","data":{"documentId":"e4142781-f821-478f-885b-7009710133a0","totalChunks":6,"totalChars":1929}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IndexingService","message":"Document indexed","data":{"docId":"e4142781-f821-478f-885b-7009710133a0","chunkCount":6}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IndexingService","message":"Indexing document","data":{"docId":"c32a59e5-bd36-4073-a3cd-0281eb03a95a","title":"meeting-summary","contentLength":1160}}
++{"timestamp":"2026-11-16T01:55:02.324Z","level":"INFO","service":"IndexingService","message":"chunkDocument","data":{"documentId":"c32a59e5-bd36-4073-a3cd-0281eb03a95a","contentLength":1160,"paragraphCount":7}}
++{"timestamp":"2026-11-16T01:55:02.325Z","level":"INFO","service":"IndexingService","message":"chunkDocument complete","data":{"documentId":"c32a59e5-bd36-4073-a3cd-0281eb03a95a","totalChunks":3,"totalChars":1155}}
++{"timestamp":"2026-11-16T01:55:02.325Z","level":"INFO","service":"IndexingService","message":"Document indexed","data":{"docId":"c32a59e5-bd36-4073-a3cd-0281eb03a95a","chunkCount":3}}
++{"timestamp":"2026-11-16T01:55:02.325Z","level":"INFO","service":"IndexingService","message":"Indexing document","data":{"docId":"3f76619e-8d53-4681-99ec-25ded2001548","title":"retrieval-plan","contentLength":1639}}
++{"timestamp":"2026-11-16T01:55:02.325Z","level":"INFO","service":"IndexingService","message":"chunkDocument","data":{"documentId":"3f76619e-8d53-4681-99ec-25ded2001548","contentLength":1639,"paragraphCount":15}}
++{"timestamp":"2026-11-16T01:55:02.325Z","level":"INFO","service":"IndexingService","message":"chunkDocument complete","data":{"documentId":"3f76619e-8d53-4681-99ec-25ded2001548","totalChunks":5,"totalChars":1630}}
++{"timestamp":"2026-11-16T01:55:02.325Z","level":"INFO","service":"IndexingService","message":"Document indexed","data":{"docId":"3f76619e-8d53-4681-99ec-25ded2001548","chunkCount":5}}
++{"timestamp":"2026-11-16T01:55:02.325Z","level":"INFO","service":"IndexingService","message":"Batch indexing complete"}
++{"timestamp":"2026-11-16T01:55:02.325Z","level":"INFO","service":"IPC","message":"Indexing complete","data":{"status":"ready","indexed":3,"total":3}}
++{"timestamp":"2026-11-16T01:55:02.330Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGTERM
+diff --git a/docs/evidence/conversation-history/evaluator/run2.log b/docs/evidence/conversation-history/evaluator/run2.log
+new file mode 100644
+index 0000000..5ab0e75
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/run2.log
+@@ -0,0 +1,132 @@
++
++DevTools listening on ws://127.0.0.1:9444/devtools/browser/1c4e708b-4695-44d4-a11b-033e640289bf
++{"timestamp":"2026-11-16T01:59:45.727Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T01:59:45.731Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T01:59:45.731Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/9f0792af-4238-4452-be5f-41e167cadf08/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T01:59:45.732Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T01:59:45.732Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T01:59:45.732Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T01:59:45.732Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T01:59:45.732Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:59:45.732Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:59:45.733Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T01:59:45.893Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T01:59:46.095Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T01:59:46.096Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:59:46.857Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does the indexing pipeline chunk documents?"}}
++{"timestamp":"2026-11-16T01:59:46.857Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does the indexing pipeline chunk documents?"}}
++{"timestamp":"2026-11-16T01:59:47.291Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:59:47.292Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":7,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:59:47.292Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":381}}
++{"timestamp":"2026-11-16T01:59:47.292Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":2}}
++{"timestamp":"2026-11-16T01:59:47.292Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:59:47.292Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:59:47.917Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What did the meeting decide about retrieval?"}}
++{"timestamp":"2026-11-16T01:59:47.917Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What did the meeting decide about retrieval?"}}
++{"timestamp":"2026-11-16T01:59:48.397Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:59:48.397Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":7,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:59:48.398Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":336}}
++{"timestamp":"2026-11-16T01:59:48.398Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":3}}
++{"timestamp":"2026-11-16T01:59:48.398Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:59:48.399Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:59:49.402Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"xyzzy plugh"}}
++{"timestamp":"2026-11-16T01:59:49.402Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"xyzzy plugh"}}
++{"timestamp":"2026-11-16T01:59:49.865Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:59:49.865Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":2,"relevantChunks":0}}
++{"timestamp":"2026-11-16T01:59:49.865Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.3,"citationCount":0,"answerLength":103}}
++{"timestamp":"2026-11-16T01:59:49.866Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":4}}
++{"timestamp":"2026-11-16T01:59:49.866Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.3,"citationCount":0}}
++{"timestamp":"2026-11-16T01:59:49.866Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:59:50.460Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What design pattern is used?"}}
++{"timestamp":"2026-11-16T01:59:50.460Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What design pattern is used?"}}
++{"timestamp":"2026-11-16T01:59:50.903Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:59:50.904Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:59:50.904Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":380}}
++{"timestamp":"2026-11-16T01:59:50.905Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":5}}
++{"timestamp":"2026-11-16T01:59:50.905Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:59:50.905Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:59:51.089Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T01:59:51.089Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T01:59:51.509Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:59:51.509Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:59:51.509Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":335}}
++{"timestamp":"2026-11-16T01:59:51.510Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":6}}
++{"timestamp":"2026-11-16T01:59:51.510Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:59:51.510Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:59:51.714Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"Summarize the meeting notes"}}
++{"timestamp":"2026-11-16T01:59:51.714Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"Summarize the meeting notes"}}
++{"timestamp":"2026-11-16T01:59:52.022Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:59:52.022Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:59:52.022Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":359}}
++{"timestamp":"2026-11-16T01:59:52.023Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":7}}
++{"timestamp":"2026-11-16T01:59:52.023Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:59:52.024Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:59:52.222Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What is the search query flow?"}}
++{"timestamp":"2026-11-16T01:59:52.222Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What is the search query flow?"}}
++{"timestamp":"2026-11-16T01:59:52.511Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:59:52.512Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":5,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:59:52.512Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":401}}
++{"timestamp":"2026-11-16T01:59:52.512Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":8}}
++{"timestamp":"2026-11-16T01:59:52.512Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:59:52.513Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:59:53.094Z","level":"INFO","service":"IPC","message":"GET_CHUNKS","data":{"documentId":"c32a59e5-bd36-4073-a3cd-0281eb03a95a"}}
++{"timestamp":"2026-11-16T01:59:54.113Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What design pattern is used?"}}
++{"timestamp":"2026-11-16T01:59:54.113Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What design pattern is used?"}}
++{"timestamp":"2026-11-16T01:59:54.278Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:59:54.279Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:59:54.279Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":380}}
++{"timestamp":"2026-11-16T01:59:54.279Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":9}}
++{"timestamp":"2026-11-16T01:59:54.279Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:59:54.280Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:59:54.923Z","level":"INFO","service":"IPC","message":"GET_CHUNKS","data":{"documentId":"3f76619e-8d53-4681-99ec-25ded2001548"}}
++{"timestamp":"2026-11-16T01:59:55.562Z","level":"INFO","service":"IPC","message":"GET_CHUNKS","data":{"documentId":"3f76619e-8d53-4681-99ec-25ded2001548"}}
++{"timestamp":"2026-11-16T01:59:57.401Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}
++{"timestamp":"2026-11-16T01:59:57.401Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}
++{"timestamp":"2026-11-16T01:59:57.782Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:59:57.783Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":1,"relevantChunks":0}}
++{"timestamp":"2026-11-16T01:59:57.783Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.3,"citationCount":0,"answerLength":103}}
++{"timestamp":"2026-11-16T01:59:57.783Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":10}}
++{"timestamp":"2026-11-16T01:59:57.783Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.3,"citationCount":0}}
++{"timestamp":"2026-11-16T01:59:57.784Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:00:45.667Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T02:00:45.667Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T02:00:46.160Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:00:46.161Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:00:46.161Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":335}}
++{"timestamp":"2026-11-16T02:00:46.162Z","level":"ERROR","service":"IPC","message":"Q&A failed","data":{"question":"How does retrieval work?","error":"SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)"}}
++Error occurred in handler for 'qa:ask': SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
++    at JSON.parse (<anonymous>)
++    at PersistenceService.readJson (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/persistence-service.js:56:21)
++    at QaService.getHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:98:33)
++    at QaService.saveToHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:123:30)
++    at QaService.ask (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:93:14)
++    at async /Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/main/ipc-handlers.js:58:30
++    at async WebContents.<anonymous> (node:electron/js2c/browser_init:2:87023)
++{"timestamp":"2026-11-16T02:00:46.885Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"Second failing question"}}
++{"timestamp":"2026-11-16T02:00:46.885Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"Second failing question"}}
++{"timestamp":"2026-11-16T02:00:47.308Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:00:47.308Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":3,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:00:47.309Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":308}}
++{"timestamp":"2026-11-16T02:00:47.309Z","level":"ERROR","service":"IPC","message":"Q&A failed","data":{"question":"Second failing question","error":"SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)"}}
++Error occurred in handler for 'qa:ask': SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
++    at JSON.parse (<anonymous>)
++    at PersistenceService.readJson (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/persistence-service.js:56:21)
++    at QaService.getHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:98:33)
++    at QaService.saveToHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:123:30)
++    at QaService.ask (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:93:14)
++    at async /Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/main/ipc-handlers.js:58:30
++    at async WebContents.<anonymous> (node:electron/js2c/browser_init:2:87023)
++{"timestamp":"2026-11-16T02:00:47.596Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"Second failing question"}}
++{"timestamp":"2026-11-16T02:00:47.596Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"Second failing question"}}
++{"timestamp":"2026-11-16T02:00:47.764Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:00:47.764Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":3,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:00:47.764Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":308}}
++{"timestamp":"2026-11-16T02:00:47.765Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":11}}
++{"timestamp":"2026-11-16T02:00:47.765Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T02:00:47.766Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:00:48.424Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:00:48.424Z","level":"INFO","service":"IPC","message":"DELETE_DOCUMENT","data":{"id":"e4142781-f821-478f-885b-7009710133a0"}}
++{"timestamp":"2026-11-16T02:00:48.444Z","level":"INFO","service":"IPC","message":"GET_CHUNKS","data":{"documentId":"e4142781-f821-478f-885b-7009710133a0"}}
++{"timestamp":"2026-11-16T02:00:49.327Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:00:49.959Z","level":"INFO","service":"IPC","message":"GET_DOCUMENT","data":{"id":"e4142781-f821-478f-885b-7009710133a0"}}
++/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGTERM
+diff --git a/docs/evidence/conversation-history/evaluator/run3.log b/docs/evidence/conversation-history/evaluator/run3.log
+new file mode 100644
+index 0000000..7aaefc5
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/run3.log
+@@ -0,0 +1,19 @@
++
++DevTools listening on ws://127.0.0.1:9444/devtools/browser/8645241d-43c5-410d-8fee-ffa317f59957
++{"timestamp":"2026-11-16T02:01:19.284Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T02:01:19.285Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T02:01:19.285Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/9f0792af-4238-4452-be5f-41e167cadf08/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T02:01:19.285Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T02:01:19.285Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T02:01:19.285Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T02:01:19.285Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T02:01:19.285Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:01:19.285Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:01:19.285Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T02:01:19.361Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T02:01:19.512Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:01:19.512Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:01:22.024Z","level":"INFO","service":"IPC","message":"CLEAR_HISTORY"}
++{"timestamp":"2026-11-16T02:01:22.025Z","level":"INFO","service":"QaService","message":"Q&A history cleared"}
++{"timestamp":"2026-11-16T02:01:22.025Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGTERM
+diff --git a/docs/evidence/conversation-history/evaluator/run4.log b/docs/evidence/conversation-history/evaluator/run4.log
+new file mode 100644
+index 0000000..0e1ce81
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/run4.log
+@@ -0,0 +1,16 @@
++
++DevTools listening on ws://127.0.0.1:9444/devtools/browser/ed8c8bf0-ff5c-4b50-b551-f797aaba5f0c
++{"timestamp":"2026-11-16T02:01:43.686Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T02:01:43.687Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T02:01:43.687Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/9f0792af-4238-4452-be5f-41e167cadf08/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T02:01:43.688Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T02:01:43.688Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T02:01:43.688Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T02:01:43.688Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T02:01:43.688Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:01:43.688Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:01:43.688Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T02:01:43.738Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T02:01:43.893Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:01:43.893Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGTERM
+diff --git a/docs/evidence/conversation-history/evaluator/run5.log b/docs/evidence/conversation-history/evaluator/run5.log
+new file mode 100644
+index 0000000..c6b0ddb
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/run5.log
+@@ -0,0 +1,23 @@
++
++DevTools listening on ws://127.0.0.1:9444/devtools/browser/8c2a436f-ffe2-4566-935a-30ec4381d7ed
++{"timestamp":"2026-11-16T02:01:55.868Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T02:01:55.870Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T02:01:55.870Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/9f0792af-4238-4452-be5f-41e167cadf08/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T02:01:55.870Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T02:01:55.870Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T02:01:55.870Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T02:01:55.870Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T02:01:55.870Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:01:55.870Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:01:55.870Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T02:01:55.945Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T02:01:56.083Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:01:56.083Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++Error occurred in handler for 'conversation:get': SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
++    at JSON.parse (<anonymous>)
++    at PersistenceService.readJson (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/persistence-service.js:56:21)
++    at QaService.getHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:98:33)
++    at /Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/main/ipc-handlers.js:81:26
++    at WebContents.<anonymous> (node:electron/js2c/browser_init:2:87039)
++    at WebContents.emit (node:events:518:28)
++/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGTERM
+diff --git a/docs/evidence/conversation-history/evaluator/scripts/cdp.mjs b/docs/evidence/conversation-history/evaluator/scripts/cdp.mjs
+new file mode 100644
+index 0000000..f6d5695
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/scripts/cdp.mjs
+@@ -0,0 +1,22 @@
++import fs from 'node:fs';
++export async function connect(port=9444){
++  let list; for(let i=0;i<100;i++){ try{ list=await (await fetch(`http://127.0.0.1:${port}/json/list`)).json(); if(list.find(t=>t.type==='page'))break;}catch{} await new Promise(r=>setTimeout(r,200)); }
++  const page=list.find(t=>t.type==='page'); const ws=new WebSocket(page.webSocketDebuggerUrl);
++  await new Promise((res,rej)=>{ws.onopen=res;ws.onerror=rej});
++  let id=0; const pend=new Map(); const events=[];
++  ws.onmessage=ev=>{const m=JSON.parse(ev.data); if(m.id&&pend.has(m.id)){const p=pend.get(m.id);pend.delete(m.id);m.error?p.rej(new Error(JSON.stringify(m.error))):p.res(m.result);}
++    else if(m.method==='Runtime.exceptionThrown') events.push({kind:'exception',text:m.params.exceptionDetails.exception?.description??m.params.exceptionDetails.text});
++    else if(m.method==='Runtime.consoleAPICalled') events.push({kind:'console.'+m.params.type,text:m.params.args.map(a=>a.value??a.description).join(' ')});};
++  const send=(method,params={})=>new Promise((res,rej)=>{const i=++id;pend.set(i,{res,rej});ws.send(JSON.stringify({id:i,method,params}))});
++  await send('Runtime.enable'); await send('Page.enable');
++  const ev=async e=>{const r=await send('Runtime.evaluate',{expression:e,awaitPromise:true,returnByValue:true}); if(r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails)); return r.result.value;};
++  const keys={Enter:{code:'Enter',windowsVirtualKeyCode:13,text:'\r'},Tab:{code:'Tab',windowsVirtualKeyCode:9},' ':{code:'Space',windowsVirtualKeyCode:32,text:' '},Escape:{code:'Escape',windowsVirtualKeyCode:27}};
++  const key=async(k,o={})=>{const d=keys[k];const mod=o.shift?8:0;await send('Input.dispatchKeyEvent',{type:d.text?'keyDown':'rawKeyDown',key:k,modifiers:mod,...d});await send('Input.dispatchKeyEvent',{type:'keyUp',key:k,modifiers:mod,code:d.code,windowsVirtualKeyCode:d.windowsVirtualKeyCode});};
++  const type=t=>send('Input.insertText',{text:t});
++  const clickAt=async(x,y)=>{for(const t of ['mouseMoved','mousePressed','mouseReleased'])await send('Input.dispatchMouseEvent',{type:t,x,y,button:'left',clickCount:1});};
++  const click=async expr=>{const r=await ev(`(()=>{const el=${expr};if(!el)return null;el.scrollIntoView({block:'center'});const b=el.getBoundingClientRect();return{x:b.x+b.width/2,y:b.y+Math.min(b.height/2,10)}})()`); if(!r) throw new Error('no target '+expr); await clickAt(r.x,r.y);};
++  const shot=async f=>{await send('Page.bringToFront');await new Promise(r=>setTimeout(r,250));const r=await Promise.race([send('Page.captureScreenshot',{format:'png'}),new Promise(r=>setTimeout(()=>r(null),8000))]);if(r)fs.writeFileSync(f,Buffer.from(r.data,'base64'));else console.error('SHOT TIMEOUT '+f);};
++  const waitFor=async(e,t=6000)=>{const t0=Date.now();while(Date.now()-t0<t){if(await ev(e))return true;await new Promise(r=>setTimeout(r,40));}throw new Error('timeout '+e);};
++  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
++  return {send,ev,key,type,click,clickAt,shot,waitFor,sleep,events,close:()=>ws.close()};
++}
+diff --git a/docs/evidence/conversation-history/evaluator/scripts/launch.sh b/docs/evidence/conversation-history/evaluator/scripts/launch.sh
+new file mode 100755
+index 0000000..93486b2
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/scripts/launch.sh
+@@ -0,0 +1,5 @@
++#!/bin/bash
++# usage: launch.sh <logfile>
++cd /Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval
++S=/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/9f0792af-4238-4452-be5f-41e167cadf08/scratchpad
++exec env -u NODE_OPTIONS npx electron . --user-data-dir=$S/ud --remote-debugging-port=9444 > "$1" 2>&1
+diff --git a/docs/evidence/conversation-history/evaluator/scripts/p1.mjs b/docs/evidence/conversation-history/evaluator/scripts/p1.mjs
+new file mode 100644
+index 0000000..e72f98f
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/scripts/p1.mjs
+@@ -0,0 +1,14 @@
++import {connect} from './cdp.mjs'; import fs from 'node:fs';
++const E=process.argv[2]; const R={}; const c=await connect();
++await c.waitFor(`document.querySelector('#conversation-heading')!==null`);
++await c.sleep(500);
++R.dataDirCheck='see ls';
++R.emptyText=await c.ev(`document.querySelector('main').innerText`);
++await c.shot(E+'/01-empty.png');
++// seed
++const repo='/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval';
++R.seed=await c.ev(`(async()=>{for(const f of ['design-notes.md','meeting-summary.txt','retrieval-plan.md']) await window.knowledgeBase.documents.import('${repo}/data/sample-documents/'+f); const s=await window.knowledgeBase.indexing.start(); return s;})()`);
++await c.click(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Refresh')`);
++await c.sleep(400);
++R.docsHeader=await c.ev(`[...document.querySelectorAll('h2')].map(h=>h.textContent)`);
++fs.writeFileSync(E+'/p1.json',JSON.stringify({R,events:c.events},null,2)); console.log(JSON.stringify({R,events:c.events},null,2)); c.close();
+diff --git a/docs/evidence/conversation-history/evaluator/scripts/p2.mjs b/docs/evidence/conversation-history/evaluator/scripts/p2.mjs
+new file mode 100644
+index 0000000..f436ff7
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/scripts/p2.mjs
+@@ -0,0 +1,99 @@
++import {connect} from './cdp.mjs'; import fs from 'node:fs';
++const E=process.argv[2], LOG=process.argv[3]; const R={}; const c=await connect();
++const askCount=()=>fs.readFileSync(LOG,'utf8').split('\n').filter(l=>l.includes('"ASK_QUESTION"')||l.includes('ASK_QUESTION')).length;
++const nEx=`document.querySelectorAll('[role=log] ol > li article[aria-label^="Exchange"]').length`;
++const step=async(name,fn)=>{try{R[name]=await fn();}catch(e){R[name]={ERROR:String(e)}}};
++await c.waitFor(`document.querySelector('[role=log] article')!==null`);
++await c.sleep(300);
++// Step 1: fixture
++await step('s1_fixture', async()=>c.ev(`(()=>{const a=document.querySelector('[role=log] article');const ans=[...a.querySelectorAll('div')].find(d=>d.textContent.startsWith('Long answer sentence')&&d.children.length===0);
++ const sc=document.querySelector('[role=log]').parentElement; return {len:ans.textContent.length, ellipsis:/…|\\.\\.\\.$/.test(ans.textContent), ansOverflow:ans.scrollWidth>ans.clientWidth, scroller:[sc.scrollWidth,sc.clientWidth], doc:[document.documentElement.scrollWidth,document.documentElement.clientWidth], body:[document.body.scrollWidth, document.body.clientWidth]}})()`));
++await c.shot(E+'/02-fixture.png');
++// Step 2: ask Q1, check pending immediately
++const ask=async q=>{await c.click(`document.querySelector('#question-input')`); await c.type(q); await c.key('Enter');};
++let before=askCount();
++await ask('How does the indexing pipeline chunk documents?');
++await step('s2_pending', async()=>c.ev(`(()=>{const p=document.querySelector('article[aria-busy=true]');return p?{text:p.innerText, btn:document.querySelector('form button').textContent, input:document.querySelector('#question-input').value}:null})()`));
++await c.shot(E+'/03-pending.png');
++await c.waitFor(`!document.querySelector('article[aria-busy=true]')`);
++await c.sleep(200);
++await step('s2_answer', async()=>c.ev(`(()=>{const arts=[...document.querySelectorAll('[role=log] article')];const a=arts.at(-1);return {count:arts.length, text:a.innerText, time:a.querySelector('time')?.textContent, dt:a.querySelector('time')?.getAttribute('datetime'), cites:[...a.querySelectorAll('li button')].map(b=>b.innerText)}})()`));
++R.s2_askDelta=askCount()-before;
++await c.shot(E+'/04-first-answer.png');
++// Step 3: double submit
++const snapshotFirst=await c.ev(`[...document.querySelectorAll('[role=log] article')].map(a=>a.innerText)`);
++before=askCount();
++await ask('What did the meeting decide about retrieval?');
++await c.sleep(30);
++await c.type('second draft'); await c.key('Enter');
++await c.click(`document.querySelector('form button[type=submit]')`);
++await c.key('Enter');
++R.s3_duringPending=await c.ev(`({pending:!!document.querySelector('article[aria-busy=true]'), userTurns:[...document.querySelectorAll('[role=log] article')].length, input:document.querySelector('#question-input').value})`);
++await c.waitFor(`!document.querySelector('article[aria-busy=true]')`);
++await c.sleep(600);
++R.s3_askDelta=askCount()-before;
++const after=await c.ev(`[...document.querySelectorAll('[role=log] article')].map(a=>a.innerText)`);
++R.s4_count=after.length; R.s4_firstUnchanged=JSON.stringify(after.slice(0,snapshotFirst.length))===JSON.stringify(snapshotFirst);
++R.s4_dupQuestions=after.filter(t=>t.includes('What did the meeting decide')).length;
++await c.ev(`document.querySelector('#question-input').value`).then(v=>R.s3_inputAfter=v);
++await c.ev(`(()=>{const i=document.querySelector('#question-input');const s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;s.call(i,'');i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
++await c.shot(E+'/05-two-exchanges.png');
++// Step 5: no citations
++await ask('xyzzy plugh'); await c.sleep(50);
++await c.waitFor(`!document.querySelector('article[aria-busy=true]')`); await c.sleep(200);
++R.s5=await c.ev(`(()=>{const a=[...document.querySelectorAll('[role=log] article')].at(-1);return {text:a.innerText, hasSourcesHeader:/Sources \\(/.test(a.innerText)}})()`);
++await c.shot(E+'/06-no-citations.png');
++// Step 6: autoscroll
++for(const q of ['What design pattern is used?','How does retrieval work?','Summarize the meeting notes','What is the search query flow?']){ await ask(q); await c.sleep(30); await c.waitFor(`!document.querySelector('article[aria-busy=true]')`); await c.sleep(150);}
++R.s6=await c.ev(`(()=>{const sc=document.querySelector('[role=log]').parentElement;const last=[...document.querySelectorAll('[role=log] article')].at(-1).getBoundingClientRect();const s=sc.getBoundingClientRect();return {scrollHeight:sc.scrollHeight,clientHeight:sc.clientHeight,scrollTop:sc.scrollTop,atBottom:Math.abs(sc.scrollHeight-sc.clientHeight-sc.scrollTop)<2,lastBottomVisible:last.bottom<=s.bottom+1,lastTopVisible:last.top>=s.top-1, lastHeight:last.height, viewport:s.height}})()`);
++await c.shot(E+'/07-autoscroll.png');
++// Step 6b: scroll up manually, ask again -> does it yank? (informational)
++// Step 7: click a citation from step 2 (exchange 2)
++await c.click(`document.querySelectorAll('[role=log] article')[1].querySelector('li button')`);
++await c.sleep(400);
++R.s7=await c.ev(`({detail:document.querySelector('section[aria-label="Selected document"] h2')?.textContent, cite:document.querySelectorAll('[role=log] article')[1].querySelector('li button').innerText})`);
++await c.shot(E+'/08-citation-click.png');
++// close doc
++await c.click(`document.querySelector('button[aria-label="Close document"]')`); await c.sleep(200);
++// Step 8: keyboard only. Start from body.
++await c.ev(`document.activeElement.blur()`);
++let tabs=0, path=[];
++for(;tabs<80;){ await c.key('Tab'); tabs++; const a=await c.ev(`(document.activeElement.id||document.activeElement.textContent.slice(0,30))`); path.push(a); if(a==='question-input')break;}
++R.s8_tabsToInput=tabs; R.s8_path=path.slice(0,15);
++await c.type('What design pattern is used?'); await c.key('Enter'); await c.sleep(30);
++await c.waitFor(`!document.querySelector('article[aria-busy=true]')`); await c.sleep(200);
++R.s8_focusAfterSubmit=await c.ev(`document.activeElement.id||document.activeElement.outerHTML.slice(0,80)`);
++// forward Tab count from input to a citation of the newest exchange
++let ft=0; for(;ft<120;){await c.key('Tab'); ft++; const inLast=await c.ev(`(()=>{const a=[...document.querySelectorAll('[role=log] article')].at(-1);return a.contains(document.activeElement)&&document.activeElement.tagName==='BUTTON'})()`); if(inLast)break;}
++R.s8_forwardTabsToNewestCitation=ft;
++// shift-tab path
++await c.click(`document.querySelector('#question-input')`);
++let bt=0; for(;bt<20;){await c.key('Tab',{shift:true}); bt++; const inLast=await c.ev(`(()=>{const a=[...document.querySelectorAll('[role=log] article')].at(-1);return a.contains(document.activeElement)&&document.activeElement.tagName==='BUTTON'})()`); if(inLast)break;}
++R.s8_shiftTabsToNewestCitation=bt;
++R.s8_focusStyle=await c.ev(`(()=>{const s=getComputedStyle(document.activeElement);return {outline:s.outlineStyle+' '+s.outlineWidth+' '+s.outlineColor, fv:document.activeElement.matches(':focus-visible')}})()`);
++await c.shot(E+'/09-keyboard-focus-citation.png');
++const citeTitle=await c.ev(`document.activeElement.querySelector('span').textContent`);
++await c.key('Enter'); await c.sleep(400);
++R.s8_enterOpened=await c.ev(`document.querySelector('section[aria-label="Selected document"] h2')?.textContent`)+' (expected '+citeTitle+')';
++await c.click(`document.querySelector('button[aria-label="Close document"]')`); await c.sleep(200);
++// Space activation
++await c.click(`document.querySelector('#question-input')`); await c.key('Tab',{shift:true});
++await c.key(' '); await c.sleep(400);
++R.s8_spaceOpened=await c.ev(`document.querySelector('section[aria-label="Selected document"] h2')?.textContent`);
++await c.shot(E+'/10-keyboard-opened.png');
++// Step 9: DOM semantics
++R.s9=await c.ev(`(()=>{const log=document.querySelector('[role=log]');const i=document.querySelector('#question-input');return {log:log.outerHTML.slice(0,90), list:log.firstElementChild.tagName, li:log.querySelector('ol>li>article')?.getAttribute('aria-label'), label:document.querySelector('label[for=question-input]')?.textContent.trim(), clickableDivs:[...document.querySelectorAll('div,span')].filter(d=>d.onclick||d.getAttribute('onclick')).length, citeTags:[...new Set([...log.querySelectorAll('li li > *')].map(e=>e.tagName))]}})()`);
++// Step 10: timestamps vs file
++R.s10_times=await c.ev(`[...document.querySelectorAll('[role=log] time')].map(t=>[t.getAttribute('datetime'),t.textContent])`);
++// Narrow window: horizontal overflow
++await c.send('Emulation.setDeviceMetricsOverride',{width:700,height:600,deviceScaleFactor:1,mobile:false});
++await c.sleep(300);
++R.narrow=await c.ev(`({doc:[document.documentElement.scrollWidth,document.documentElement.clientWidth], main:(()=>{const m=document.querySelector('main');return [m.scrollWidth,m.clientWidth]})()})`);
++await c.shot(E+'/11-narrow-700px.png');
++await c.send('Emulation.clearDeviceMetricsOverride');
++// long unbroken question
++await ask('a'.repeat(400)); await c.sleep(30); await c.waitFor(`!document.querySelector('article[aria-busy=true]')`); await c.sleep(200);
++R.longQuestion=await c.ev(`(()=>{const sc=document.querySelector('[role=log]').parentElement;return {scroller:[sc.scrollWidth,sc.clientWidth]}})()`);
++await c.shot(E+'/12-long-unbroken-question.png');
++R.events=c.events;
++fs.writeFileSync(E+'/p2.json',JSON.stringify(R,null,2)); console.log(JSON.stringify(R,null,2)); c.close();
+diff --git a/docs/evidence/conversation-history/evaluator/scripts/p3.mjs b/docs/evidence/conversation-history/evaluator/scripts/p3.mjs
+new file mode 100644
+index 0000000..b1c0c1e
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/scripts/p3.mjs
+@@ -0,0 +1,35 @@
++import {connect} from './cdp.mjs'; import fs from 'node:fs'; import {execSync} from 'node:child_process';
++const [E,LOG,KB]=process.argv.slice(2); const R={}; const c=await connect(); c.events.length=0;
++const ask=async q=>{await c.click(`document.querySelector('#question-input')`); await c.type(q); await c.key('Enter');};
++const nArt=`document.querySelectorAll('[role=log] article[aria-label^="Exchange"]').length`;
++const idle=async()=>{await c.sleep(30);await c.waitFor(`!document.querySelector('article[aria-busy=true]')`);await c.sleep(250);};
++R.before=await c.ev(nArt);
++fs.copyFileSync(KB+'/qa-history.json',KB+'/../qa-good.json'); fs.writeFileSync(KB+'/qa-history.json','{not json');
++await ask('How does retrieval work?'); await idle();
++R.err=await c.ev(`(()=>{const e=document.querySelector('article[aria-label="Question that could not be answered"]');return {present:!!e,text:e?.innerText,exchanges:${nArt},input:document.querySelector('#question-input').value,header:document.querySelector('#conversation-heading').textContent}})()`);
++await c.shot(E+'/13-error.png');
++// second failure while still corrupt, different question
++await ask('Second failing question'); await idle();
++R.err2=await c.ev(`[...document.querySelectorAll('article[aria-label="Question that could not be answered"]')].map(a=>a.innerText.split('\\n')[1])`);
++// Clear while file corrupt? skip. Restore and Retry
++fs.copyFileSync(KB+'/../qa-good.json',KB+'/qa-history.json');
++await c.click(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Retry')`); await idle();
++R.afterRetry=await c.ev(`({exchanges:${nArt},err:!!document.querySelector('article[aria-label="Question that could not be answered"]'),last:[...document.querySelectorAll('[role=log] article')].at(-1).innerText.split('\\n')[1]})`);
++await c.shot(E+'/14-after-retry.png');
++R.qaFailedInLog=fs.readFileSync(LOG,'utf8').split('\n').filter(l=>l.includes('Q&A failed')).length;
++// stale citation: delete design-notes via API without refreshing list
++const docs=await c.ev(`window.knowledgeBase.documents.list()`); const dn=docs.find(d=>d.title==='design-notes');
++await c.ev(`window.knowledgeBase.documents.delete('${dn.id}')`);
++c.events.length=0;
++const citeSel=`[...document.querySelectorAll('[role=log] li li button')].find(b=>b.textContent.startsWith('design-notes'))`;
++await c.click(citeSel); await c.sleep(500);
++R.staleNoRefresh=await c.ev(`({detail:document.querySelector('section[aria-label="Selected document"] h2')?.textContent, citeText:${citeSel}.innerText, docsHeader:document.querySelector('h2').textContent})`);
++await c.shot(E+'/15-stale-citation-before-refresh.png');
++await c.click(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Refresh')`); await c.sleep(400);
++const closeBtn=await c.ev(`!!document.querySelector('button[aria-label="Close document"]')`); if(closeBtn){await c.click(`document.querySelector('button[aria-label="Close document"]')`);await c.sleep(200);}
++await c.click(citeSel); await c.sleep(500);
++R.staleAfterRefresh=await c.ev(`({detail:document.querySelector('section[aria-label="Selected document"] h2')?.textContent??null, citeText:${citeSel}.innerText, docsHeader:document.querySelector('h2').textContent})`);
++await c.shot(E+'/16-stale-citation-after-refresh.png');
++R.events=c.events;
++R.onScreen=await c.ev(`[...document.querySelectorAll('[role=log] article[aria-label^="Exchange"]')].map(a=>({q:a.querySelector('div div:nth-child(2)').textContent, t:a.querySelector('time').getAttribute('datetime'), c:[...a.querySelectorAll('li button > span:first-child')].map(s=>s.textContent)}))`);
++fs.writeFileSync(E+'/p3.json',JSON.stringify(R,null,2)); console.log(JSON.stringify({...R,onScreen:R.onScreen.length},null,2)); c.close();
+diff --git a/docs/evidence/conversation-history/evaluator/scripts/p4.mjs b/docs/evidence/conversation-history/evaluator/scripts/p4.mjs
+new file mode 100644
+index 0000000..6795796
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/scripts/p4.mjs
+@@ -0,0 +1,23 @@
++import {connect} from './cdp.mjs'; import fs from 'node:fs';
++const [E]=process.argv.slice(2); const c=await connect();
++await c.waitFor(`document.querySelector('[role=log] article')!==null`,15000); await c.sleep(400);
++const scr=await c.ev(`[...document.querySelectorAll('[role=log] article[aria-label^="Exchange"]')].map(a=>({q:a.querySelector('div div:nth-child(2)').textContent, t:a.querySelector('time').getAttribute('datetime'), c:[...a.querySelectorAll('li button > span:first-child')].map(s=>s.textContent)}))`);
++const before=JSON.parse(fs.readFileSync(E+'/p3.json')).onScreen; const file=JSON.parse(fs.readFileSync(E+'/file-before-restart.json'));
++console.log(JSON.stringify({afterRestart:scr.length, before:before.length, file:file.length, sameAsBefore:JSON.stringify(scr)===JSON.stringify(before), sameAsFile:JSON.stringify(scr)===JSON.stringify(file), staleMark:await c.ev(`document.body.innerText.includes('no longer available')`)}));
++await c.shot(E+'/17-after-restart.png');
++// Clear: cancel
++await c.click(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Clear')`); await c.sleep(200);
++const conf=await c.ev(`({group:document.querySelector('[role=group]')?.innerText, focus:document.activeElement.textContent})`);
++await c.shot(E+'/18-clear-confirm.png');
++await c.click(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Cancel')`); await c.sleep(200);
++const afterCancel=await c.ev(`({n:document.querySelectorAll('[role=log] article').length, focus:document.activeElement.textContent})`);
++// Escape key test
++await c.click(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Clear')`); await c.sleep(200);
++await c.key('Escape'); await c.sleep(200);
++const escClosed=await c.ev(`!document.querySelector('[role=group]')`);
++if(!escClosed){await c.click(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Cancel')`);await c.sleep(100);}
++await c.click(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Clear')`); await c.sleep(200);
++await c.click(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Clear conversation')`); await c.sleep(500);
++const afterClear=await c.ev(`({text:document.querySelector('main').innerText.slice(0,200), focus:document.activeElement.tagName+':'+document.activeElement.textContent})`);
++await c.shot(E+'/19-after-clear.png');
++console.log(JSON.stringify({conf,afterCancel,escClosed,afterClear,events:c.events.filter(e=>e.kind!=='console.warning')},null,1)); c.close();
+diff --git a/docs/evidence/conversation-history/evaluator/scripts/p5.mjs b/docs/evidence/conversation-history/evaluator/scripts/p5.mjs
+new file mode 100644
+index 0000000..edf3f0f
+--- /dev/null
++++ b/docs/evidence/conversation-history/evaluator/scripts/p5.mjs
+@@ -0,0 +1,4 @@
++import {connect} from './cdp.mjs'; const [E,name]=process.argv.slice(2); const c=await connect();
++await c.waitFor(`document.querySelector('#conversation-heading')!==null`,15000); await c.sleep(800);
++console.log(JSON.stringify({text:await c.ev(`document.querySelector('main').innerText.slice(0,260)`),events:c.events.filter(e=>e.kind!=='console.warning')}));
++await c.shot(E+'/'+name); c.close();
+diff --git a/evaluator-rubric.md b/evaluator-rubric.md
+new file mode 100644
+index 0000000..6e344e7
+--- /dev/null
++++ b/evaluator-rubric.md
+@@ -0,0 +1,76 @@
++# Evaluator rubric: multi-turn Q&A conversation history
++
++- **Evaluator:** independent evaluator (did not write or modify application code or `sprint-contract.md`)
++- **Date:** 2026-11-15
++- **Commit evaluated:** `f53fa54` (feature), on top of `b17561e` (Step 0) and `96007e7` (preload fix, D-1)
++- **Inputs:** `rubric-template.md`, `sprint-contract.md`
++- **Evidence:** `docs/evidence/conversation-history/evaluator/` (screenshots `01`–`21`, raw results `p1.json`–`p3.json`, app logs `run1.log`–`run5.log`, driver scripts in `scripts/`)
++
++## How it was verified
++
++I did not reuse the Generator's scripts or results. I wrote my own Chrome DevTools Protocol driver (`evaluator/scripts/cdp.mjs`, `p1.mjs`–`p5.mjs`) and ran it against the built app (`tsc` + `vite build`, then `npx electron .`). The driver uses real `Input.dispatchKeyEvent`/`dispatchMouseEvent` events, takes screenshots, and records `Runtime.exceptionThrown` and every `console.*` call.
++
++**Deviations from §6 of the contract:**
++
++- **Data directory.** I used an isolated `--user-data-dir` in a scratch folder, so the user's real `~/Library/Application Support/knowledge-base` was never touched. The data landed in `<ud>/knowledge-base-data/`.
++- **Restarts.** I stopped the app with SIGTERM instead of Cmd+Q. The service writes `qa-history.json` synchronously on every ask, so nothing is lost that Cmd+Q would have saved.
++- **Screenshots.** I took them with `Page.captureScreenshot`, not `screencapture`.
++- **Screen reader.** I did not test with VoiceOver, so live-region announcements were checked only through the DOM.
++
++The §6.3 fixture script was run verbatim.
++
++## Acceptance criteria (sprint-contract.md §4)
++
++| AC | Result | Evidence |
++|---|---|---|
++| AC-0 | PASS | `npm run check` exit 0. `bash scripts/check-architecture.sh` printed `PASS: All architecture boundary checks passed`. `npm run build` OK. `npx vitest run`: 7/7 passed. |
++| AC-1 | PASS | Fixture + 9 asks gave 10 exchanges, oldest first. After ask #2, the earlier exchanges' `innerText` was byte-identical to before (`p2.json` `s4_firstUnchanged: true`). |
++| AC-2 | PASS | "YOU" bubble right-aligned in `#0f3460`; "ASSISTANT" card in `#1a1a3e`. The text labels mean colour isn't needed to tell them apart (`04-first-answer.png`). |
++| AC-3 | PASS | Fixture answer rendered at 1,750/1,750 chars with no ellipsis. Scroller 920/920 and document 1200/1200 (`scrollWidth`/`clientWidth`). A 400-char unbroken question also wraps with no overflow (`12-long-unbroken-question.png`). At a 700 px viewport the document is 700/700 (`11-narrow-700px.png`). |
++| AC-4 | PASS | Each citation shows title · chunk N · excerpt. `xyzzy plugh` shows "No sources cited." and no "Sources" header (`06-no-citations.png`). |
++| AC-5 | PASS with defect | Click, Enter and Space each open `DocumentDetail` with the cited title (`s7`, `s8_enterOpened`, `s8_spaceOpened`). No exceptions and no console errors. However, a citation to a deleted document opens a stale "ghost" detail until the list is refreshed (see defect 2). |
++| AC-6 | PASS | `<time datetime=ISO>` shows `Nov 15, 2026, 10:59 PM`. All 9 `datetime` values match `qa-history.json`, and the text matches their local (UTC-3) rendering (`p2.json` `s10_times`). |
++| AC-7 | PASS | Restart: 11 exchanges before = 11 after = 11 in the file. Question, timestamp and citation titles match exactly (`sameAsBefore: true`, `sameAsFile: true`, `17-after-restart.png`). |
++| AC-8 | PASS | Immediately after Enter, the pending turn shows the question + "Answering…". While it was pending: Enter, a click on Ask, and Enter again gave an `ASK_QUESTION` delta of **1**. The question appears only once, and the second draft stays in the input. |
++| AC-9 | PASS with defect | With a corrupted history file: an inline "NOT ANSWERED" turn appears, all 10 earlier exchanges stay, and `Q&A failed` is logged. After restoring the file, Retry succeeds and the error turn is removed (`13-error.png`, `14-after-retry.png`). However, a second failure silently drops the first failed question (see defect 1). |
++| AC-10 | PASS | Empty state on a fresh data dir (`01-empty.png`), after Clear (`19`), and after a restart (`20`). |
++| AC-11 | PASS | In-page "Delete all 11 exchanges? This cannot be undone." with Cancel / Clear conversation. Focus moves to Cancel. Cancel keeps all 11. Confirm empties the view and the file (`[]`), and the empty state persists after restart. |
++| AC-12 | PASS | scrollHeight 4112 > clientHeight 592. After the new answer the panel was at the bottom and the whole last exchange was visible (`07-autoscroll.png`). |
++| AC-13 | PASS | `div[role=log][aria-live=polite]` > `ol` > `li` > `article[aria-label="Exchange 1 of 9"]`. The input has `<label for=question-input>`. Citations are `<button>`s; the only clickable divs are the pre-existing `DocumentList` rows, outside the conversation. Keyboard-only flow works. The focused citation shows `outline: solid 2px rgb(136,136,187)` and matches `:focus-visible`. |
++| AC-14 | PASS | A single `interface Window` (`src/renderer/types.d.ts:5`). The renderer uses only `window.knowledgeBase`. No service or main changes in `f53fa54`. |
++| AC-15 | PASS | `ConversationHistory.tsx` deleted, `lastResponse` gone, build passes, `git status` was clean at the start. |
++| §6.8 logs | PASS | 8 startup init lines. `run2.log`: 12 `ASK_QUESTION` = 10 `Q&A response` + 2 `Q&A failed`. The `citationCount` values (2,2,0,2,…) match the citations on screen. |
++
++## Scores
++
++| Criterion | Score | Evidence |
++|---|---|---|
++| Functional completeness | **5** | AC-1, 3, 7, 8 and 12 all passed in the running app: 10 exchanges accumulated, nothing changed or truncated (1,750/1,750 chars), the restart round-trip matched the file exactly, and there was no double submit. |
++| Visual design | **4** | Clear You/Assistant distinction, the existing palette, and inline styles (`04`, `08`). The confidence bar and the "· open" marker are nice touches. One deduction: with a document open at small window sizes, the 40% detail strip leaves the conversation only ~230 px (`11-narrow-700px.png`). The error red `#d9534f` is outside the listed palette, but it's reasonable for errors. |
++| Timestamps | **5** | Readable local time in a `<time datetime>` element, verified against the file for all 9 entries. Invalid dates fall back to "Unknown time" (unit test). Minor: the resolution is minutes only, so rapid asks all show "10:59 PM". The contract's own example format accepts this. |
++| Citation display | **4** | Title, chunk and full excerpt shown; usable with mouse, Enter and Space; selected-state marker; zero-citation wording. Deduction for defect 2: a stale document list opens a deleted document's detail panel instead of the "no longer available" notice (`15-stale-citation-before-refresh.png`). |
++| Interactivity | **4** | Citation → document, Retry, Dismiss, Clear with confirmation, and a Close button on the detail strip all work. Deductions: Escape does not cancel the Clear confirmation (`escClosed: false`), and there is no copy action. Asking a new question after a failure discards the failed one (defect 1). |
++| Edge cases | **4** | Empty, loading, load-error (`21-startup-corrupt-history.png`), long answer, long unbroken question, no citations, ask failure, and a deleted cited document after refresh are all handled with no exceptions. Deductions: defect 1 (a failed question is lost on the next failure or ask), defect 2 (ghost document), and defect 4 (in the load-error state Clear is disabled, so there is no in-app recovery). |
++| Accessibility | **4** | role=log + aria-live, `ol`/`li`/`article`, a real `<label>`, button citations, `:focus-visible` outline, `role=alert` on errors, and focus moves to Cancel and back on Cancel. Deductions: after confirming Clear, focus falls to `<body>` (`afterClear.focus: BODY`). Escape doesn't close the confirmation. From the input, forward Tab needs 18 presses to reach the newest citation, because the input comes after every citation in DOM order (Shift+Tab takes 1). Announcements were not verified with a screen reader. |
++| Code quality | **4** | check, build, architecture and vitest all pass. Display helpers are pure and tested. No new IPC. The duplicate `Window` typing was removed and there's no dead code. Deductions: deviation D-1 was recorded only in `generator-report.md`, not in the contract's "Contract deviations" section as the contract requires. `ConversationView.tsx` is 454 lines with all the sub-components inline. |
++
++**Overall: 4.3** (34 / 8 = 4.25)
++
++## Defects the Generator must fix (most important first)
++
++1. **A failed question is silently lost** (AC-9 / in-scope item 7, "question text not silently lost").
++   - **Cause:** `App.tsx:66` calls `setAskError(null)` at the start of every ask, and `askError` holds only one entry (`ConversationView.tsx:415`).
++   - **Repro:** corrupt the history, ask "How does retrieval work?", then ask "Second failing question". Only the second question remains (`p3.json` `err2`). The first was never answered, and it isn't in the input, the view, or the file.
++   - The same thing happens when you simply ask a new question after a failure: the failed one disappears without being retried.
++   - **Fix:** keep the failed question until it is retried or dismissed (or restore it to the input), and don't overwrite one error with another.
++2. **A citation to a deleted document opens a ghost `DocumentDetail`** (AC-5).
++   - **Cause:** `handleOpenCitation` (`App.tsx:95-98`) trusts the cached `documents` list. After `documents.delete(id)` without a Refresh, clicking the citation shows the deleted document's metadata and actions (`15-stale-citation-before-refresh.png`). The "This document is no longer available." notice appears only after a manual Refresh (`16`).
++   - **Fix:** confirm through `documents.get(id)`, or refresh the list before selecting.
++3. **Focus is lost after confirming Clear** (accessibility). `confirmClear` (`ConversationView.tsx:286-290`) unmounts the focused button and doesn't move focus, so it lands on `<body>`. Move it to the question input or to the conversation heading.
++4. **There's no recovery from a corrupted or unreadable history at startup.** The panel shows "Could not load the conversation history. Try again", but Try again can never succeed, and Clear is disabled because `history.length === 0` (`ConversationView.tsx:334`) (`21-startup-corrupt-history.png`). Allow Clear in the `error` load state.
++5. **Escape does not cancel the in-page Clear confirmation** (`ConversationView.tsx:315-328`). Add an Escape handler on the confirm group that calls `cancelClear`.
++6. **Keyboard reach to the newest answer's citations is poor going forward.** From the input, 18 forward Tabs are needed (`s8_forwardTabsToNewestCitation`), because Tab walks through every citation in history first. Shift+Tab works in 1 press. At minimum, document this. Better: add a skip link or a shortcut that focuses the newest exchange.
++7. **Record the contract deviation in the right place.** D-1 (the preload sandbox fix) belongs under "Contract deviations" in `sprint-contract.md`, as the contract requires, not only in `generator-report.md`. Do this if the user permits that edit; otherwise get the user's sign-off on recording it elsewhere.
++8. **The error turn shows raw technical text** ("Details: SyntaxError: Expected property name or '}' in JSON at position 1…", `13-error.png`). Keep the details behind a disclosure, or use plain wording.
++
++**Not counted against this sprint (pre-existing, out of scope):** the status bar shows an empty "Index:" and "Documents:". `DocumentList` rows are clickable `<div>`s that can't be reached by keyboard. The CSP dev warning. The mock answer text doesn't match the question (for example, the indexing question gets an answer about importing). The IPC table in `docs/ARCHITECTURE.md` is missing `qa:clear-history` and `conversation:get`.

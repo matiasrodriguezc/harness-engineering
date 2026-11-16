@@ -1,0 +1,450 @@
+commit 9c06b72b606333eb192844d7d14687cc0ffb610f
+Author: run <run@local>
+Date:   Sun Nov 15 22:26:19 2026 -0300
+
+    fin de sesión: 2-evaluador
+
+diff --git a/evaluation/p10-malformed.png b/evaluation/p10-malformed.png
+new file mode 100644
+index 0000000..adf5821
+Binary files /dev/null and b/evaluation/p10-malformed.png differ
+diff --git a/evaluation/p11-corrupt.png b/evaluation/p11-corrupt.png
+new file mode 100644
+index 0000000..45228b9
+Binary files /dev/null and b/evaluation/p11-corrupt.png differ
+diff --git a/evaluation/p6-citation.png b/evaluation/p6-citation.png
+new file mode 100644
+index 0000000..d8bb105
+Binary files /dev/null and b/evaluation/p6-citation.png differ
+diff --git a/evaluation/p8-clear-pending.png b/evaluation/p8-clear-pending.png
+new file mode 100644
+index 0000000..13b18c4
+Binary files /dev/null and b/evaluation/p8-clear-pending.png differ
+diff --git a/evaluation/probe-conversation.mjs b/evaluation/probe-conversation.mjs
+new file mode 100644
+index 0000000..98d346d
+--- /dev/null
++++ b/evaluation/probe-conversation.mjs
+@@ -0,0 +1,234 @@
++#!/usr/bin/env node
++/**
++ * End-to-end check of the multi-turn conversation UI in the real Electron app.
++ *
++ * Usage: npm run build && node --experimental-websocket scripts/verify-conversation.mjs
++ *
++ * Launches the built app with a throwaway --user-data-dir (your real app data is
++ * not touched), drives the renderer over the Chrome DevTools Protocol, asserts on
++ * the DOM, and writes screenshots to docs/verification/.
++ *
++ * Seeding note: the "+ Import" button in the starter is a no-op, so sample
++ * documents are imported through the same preload API the UI uses
++ * (window.knowledgeBase.documents.import / indexing.start).
++ */
++import { spawn } from 'node:child_process';
++import { mkdtempSync, writeFileSync, readFileSync, chmodSync, rmSync, mkdirSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { join, resolve, dirname } from 'node:path';
++import { fileURLToPath } from 'node:url';
++
++const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
++const shotsDir = join(root, 'evaluation');
++const samples = join(root, 'data', 'sample-documents');
++const userDataDir = mkdtempSync(join(tmpdir(), 'kb-verify-'));
++const dataDir = join(userDataDir, 'knowledge-base-data');
++const PORT = 9333;
++const results = [];
++let electron;
++
++const sleep = ms => new Promise(r => setTimeout(r, ms));
++
++function check(name, ok, detail = '') {
++  results.push({ name, ok, detail });
++  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
++}
++
++async function launch() {
++  electron = spawn(join(root, 'node_modules', '.bin', 'electron'), [
++    '.', `--remote-debugging-port=${PORT}`, `--user-data-dir=${userDataDir}`,
++  ], {
++    cwd: root,
++    stdio: ['ignore', 'pipe', 'pipe'],
++    // Electron refuses to start with some NODE_OPTIONS (e.g. --openssl-legacy-provider).
++    env: { ...process.env, NODE_OPTIONS: '' },
++  });
++  electron.logs = '';
++  electron.stdout.on('data', d => { electron.logs += d; });
++  electron.stderr.on('data', d => { electron.logs += d; });
++
++  for (let i = 0; i < 60; i++) {
++    try {
++      const targets = await (await fetch(`http://127.0.0.1:${PORT}/json`)).json();
++      const page = targets.find(t => t.type === 'page' && t.url.startsWith('file:'));
++      if (page) return connect(page.webSocketDebuggerUrl);
++    } catch { /* not up yet */ }
++    await sleep(250);
++  }
++  throw new Error('Electron did not expose a debuggable page');
++}
++
++async function connect(url) {
++  const ws = new WebSocket(url);
++  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
++  let id = 0;
++  const waiting = new Map();
++  ws.onmessage = ev => {
++    const msg = JSON.parse(ev.data);
++    if (msg.id && waiting.has(msg.id)) {
++      waiting.get(msg.id)(msg);
++      waiting.delete(msg.id);
++    }
++  };
++  const send = (method, params = {}) => new Promise(res => {
++    const msgId = ++id;
++    waiting.set(msgId, res);
++    ws.send(JSON.stringify({ id: msgId, method, params }));
++  });
++  const evaluate = async expression => {
++    const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
++    if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description ?? 'eval failed');
++    return r.result?.result?.value;
++  };
++  const waitFor = async (expression, timeout = 8000) => {
++    const end = Date.now() + timeout;
++    while (Date.now() < end) {
++      if (await evaluate(expression)) return true;
++      await sleep(100);
++    }
++    return false;
++  };
++  const screenshot = async name => {
++    const r = await send('Page.captureScreenshot', { format: 'png' });
++    writeFileSync(join(shotsDir, `${name}.png`), Buffer.from(r.result.data, 'base64'));
++  };
++  await send('Runtime.enable');
++  await send('Page.enable');
++  await send('Emulation.setFocusEmulationEnabled', { enabled: true });
++  await waitFor(`!!document.querySelector('#question-input')`);
++  return { evaluate, waitFor, screenshot, close: () => ws.close() };
++}
++
++let lastLogs = '';
++async function quit() {
++  if (!electron) return;
++  const proc = electron;
++  electron = null;
++  lastLogs += proc.logs;
++  if (proc.exitCode === null && proc.signalCode === null) {
++    const exited = new Promise(r => proc.once('exit', r));
++    proc.kill();
++    await exited;
++  }
++}
++
++// Helpers evaluated in the page.
++const ask = q => `(() => {
++  const input = document.querySelector('#question-input');
++  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(q)});
++  input.dispatchEvent(new Event('input', { bubbles: true }));
++  document.querySelector('form button[type=submit]').click();
++  return true;
++})()`;
++const count = `document.querySelectorAll('ol[role=log] article').length`;
++const clickButton = (text, scope = 'document') => `(() => {
++  const b = [...${scope}.querySelectorAll('button')].find(b => b.textContent.trim().startsWith(${JSON.stringify(text)}));
++  if (!b) return false; b.click(); return true;
++})()`;
++
++const key = async (page, k, code, extra = {}) => page.evaluate(`true`);
++async function main() {
++  mkdirSync(shotsDir, { recursive: true });
++  let page = await launch();
++  // CDP key helper
++  const press = async (k) => page.evaluate(`(() => { const e = document.activeElement; return e ? (e.id || e.tagName + ':' + (e.textContent||'').trim().slice(0,30)) : 'none'; })()`);
++  await page.evaluate(`(async () => {
++    for (const f of ['design-notes.md', 'retrieval-plan.md', 'meeting-summary.txt'])
++      await window.knowledgeBase.documents.import(${JSON.stringify(samples)} + '/' + f);
++    await window.knowledgeBase.indexing.start();
++  })()`);
++  await page.evaluate(clickButton('Refresh'));
++  await page.waitFor(`document.body.innerText.includes('Documents (3)')`);
++
++  // P1: Enter-key submission via real form submit (requestSubmit simulates Enter)
++  await page.evaluate(`(() => { const i = document.querySelector('#question-input'); i.focus();
++    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, 'How are documents indexed into chunks?');
++    i.dispatchEvent(new Event('input', { bubbles: true })); i.form.requestSubmit(); })()`);
++  await page.waitFor(`${count} === 1`);
++  check('P1 Enter submit works, focus stays in input', await page.evaluate(`document.activeElement.id === 'question-input'`));
++
++  // P2: very long unbroken question -> no horizontal overflow in thread
++  await page.evaluate(ask('x'.repeat(600) + ' index?'));
++  await page.waitFor(`${count} === 2`);
++  const ov = await page.evaluate(`(() => { const s = document.querySelector('ol[role=log]').parentElement; return [s.scrollWidth, s.clientWidth, document.documentElement.scrollWidth, document.documentElement.clientWidth]; })()`);
++  check('P2 long unbroken question does not overflow', ov[0] <= ov[1] && ov[2] <= ov[3], JSON.stringify(ov));
++
++  // P3: follow-up chain context (grandparent)
++  await page.evaluate(clickButton('Follow up', `document.querySelectorAll('ol[role=log] article')[0]`));
++  await page.evaluate(ask('and then?'));
++  await page.waitFor(`${count} === 3`);
++  await page.evaluate(clickButton('Follow up', `document.querySelectorAll('ol[role=log] article')[2]`));
++  await page.evaluate(ask('why?'));
++  await page.waitFor(`${count} === 4`);
++  const chain = await page.evaluate(`[...document.querySelectorAll('ol[role=log] article')].slice(2).map(a => a.querySelectorAll('[id^=sources-] li').length)`);
++  check('P3 follow-up of follow-up still grounded (grandparent context)', chain[1] > 0, JSON.stringify(chain));
++
++  // P4: Escape on clear-confirm; focus after Cancel
++  await page.evaluate(clickButton('Clear conversation'));
++  const afterCancel = await page.evaluate(`(() => { const b=[...document.querySelectorAll('[role=group] button')].find(b=>b.textContent==='Cancel'); b.click(); return new Promise(r=>setTimeout(()=>r(document.activeElement.tagName + '|' + document.activeElement.textContent.slice(0,30)),100)); })()`);
++  check('P4 focus after cancelling clear returns to a sensible control', !/^BODY/.test(afterCancel), afterCancel);
++
++  // P5: tab order includes citations/follow-up; ARIA validity of role=log on ol
++  const aria = await page.evaluate(`(() => { const ol=document.querySelector('ol[role=log]'); return { role: ol.getAttribute('role'), liParentRole: ol.getAttribute('role') }; })()`);
++  check('P5 thread keeps list semantics (ol not overridden by role=log)', aria.role !== 'log', JSON.stringify(aria));
++
++  // P6: citation click shows the cited chunk
++  await page.evaluate(`document.querySelectorAll('ol[role=log] article')[0].querySelector('[id^=sources-] button').click()`);
++  await page.waitFor(`!!document.querySelector('section[aria-label="Document detail"] h2')`);
++  await sleep(300);
++  const chunkShown = await page.evaluate(`(() => { const s=document.querySelector('section[aria-label="Document detail"]'); return /Chunk \\d+ \\(/.test(s.innerText); })()`);
++  check('P6 opening a citation reveals/highlights the cited chunk', chunkShown);
++  await page.screenshot('p6-citation');
++  await page.evaluate(clickButton('Close'));
++
++  // P7: narrow window 800x600 (minWidth)
++  await page.evaluate(`true`);
++  // P8: clear while pending
++  await page.evaluate(ask('What does the meeting summary say?'));
++  await sleep(20);
++  await page.evaluate(clickButton('Clear conversation'));
++  await page.evaluate(clickButton('Clear', `document.querySelector('[role=group]')`));
++  await sleep(1200);
++  const afterClearPending = await page.evaluate(`${count}`);
++  check('P8 clearing while a question is pending leaves an empty conversation', afterClearPending === 0, `exchanges after=${afterClearPending}`);
++  await page.screenshot('p8-clear-pending');
++
++  // P9: many exchanges (300) render time
++  const hist = [];
++  for (let i = 0; i < 300; i++) hist.push({ id: 'bulk-' + i, question: 'Bulk question ' + i, askedAt: new Date(Date.now() - (300-i)*60000).toISOString(), response: { answer: 'Answer ' + i, citations: [], confidence: 0.3, timestamp: new Date().toISOString() } });
++  writeFileSync(join(dataDir, 'qa-history.json'), JSON.stringify(hist));
++  const t0 = Date.now();
++  await page.evaluate(clickButton('Refresh'));
++  await page.waitFor(`${count} === 300`);
++  check('P9 300 exchanges render', true, `${Date.now() - t0}ms`);
++  const atBottom = await page.evaluate(`(() => { const s=document.querySelector('ol[role=log]').parentElement; return s.scrollHeight - s.scrollTop - s.clientHeight; })()`);
++  check('P9b thread scrolled to newest after load', atBottom < 5, `distance=${atBottom}`);
++
++  // P10: malformed entry (no response)
++  writeFileSync(join(dataDir, 'qa-history.json'), JSON.stringify([{ id: 'ok', question: 'good', askedAt: new Date().toISOString(), response: { answer: 'fine', citations: [], confidence: 0.3, timestamp: new Date().toISOString() } }, { question: 'broken entry' }]));
++  await page.evaluate(clickButton('Refresh'));
++  await sleep(500);
++  const mal = await page.evaluate(`({ n: ${count}, err: document.body.innerText.includes('Could not load'), text: (document.querySelector('[role=alert]')||{}).innerText })`);
++  check('P10 one malformed entry does not hide the whole history', mal.n >= 1, JSON.stringify(mal));
++  await page.screenshot('p10-malformed');
++
++  // P11: corrupt JSON then ask
++  writeFileSync(join(dataDir, 'qa-history.json'), '{not json');
++  await page.evaluate(clickButton('Refresh'));
++  await sleep(400);
++  const cor = await page.evaluate(`({ err: (document.querySelector('[role=alert]')||{}).innerText, n: ${count} })`);
++  check('P11 corrupt history shows a readable error', !!cor.err, JSON.stringify(cor));
++  await page.evaluate(ask('How is the architecture designed?'));
++  await sleep(1200);
++  const cor2 = await page.evaluate(`(document.querySelector('ol[role=log] [role=alert]')||{}).innerText`);
++  check('P11b asking with corrupt history gives actionable error', !!cor2 && !/Unexpected token|JSON/.test(cor2), JSON.stringify(cor2));
++  await page.screenshot('p11-corrupt');
++  check('P11c corrupt file untouched (no silent data loss)', readFileSync(join(dataDir, 'qa-history.json'), 'utf-8') === '{not json');
++
++  page.close();
++  await quit();
++}
++main()
++  .catch(err => { check('script completed', false, String(err)); })
++  .finally(async () => { await quit().catch(() => {}); rmSync(userDataDir, { recursive: true, force: true });
++    console.log(`\n${results.filter(r=>r.ok).length}/${results.length} probes passed`); });
+diff --git a/evaluator-rubric.md b/evaluator-rubric.md
+new file mode 100644
+index 0000000..f1aff1f
+--- /dev/null
++++ b/evaluator-rubric.md
+@@ -0,0 +1,182 @@
++# Evaluator rubric: multi-turn Q&A conversation history
++
++- Evaluated commit: `8c65398 Add multi-turn Q&A conversation history`
++- Date: 2026-11-15. Electron 33 on macOS (darwin).
++- Rubric: `rubric-template.md`. There is no `sprint-contract.md` in the repo, so only the rubric was used.
++- Evaluator role: independent reviewer. No application code was changed. The only files added are this one and `evaluation/`, which holds my probe script and screenshots.
++
++## What I ran
++
++| Step | Result |
++|---|---|
++| `npm run check` | exit 0 |
++| `bash scripts/check-architecture.sh` | all 3 boundary checks PASS |
++| `npm test` | 11/11 pass (`tests/qa-conversation.test.ts`) |
++| `npm run build` | succeeds |
++| The generator's `scripts/verify-conversation.mjs`, run against the real Electron app. I pointed screenshots at my scratchpad so the generator's evidence was not overwritten. | **23/23 PASS.** This reproduces `docs/verification/README.md` |
++| My own probes: `evaluation/probe-conversation.mjs`. Same CDP harness, throwaway user-data dir, real Electron app | **7/13 pass.** Failures listed below |
++
++Rerun the probes with: `npm run build && node --experimental-websocket evaluation/probe-conversation.mjs`. The script writes screenshots to `evaluation/`.
++
++Independent probe results:
++
++```
++PASS  P1 Enter submit works, focus stays in input
++PASS  P2 long unbroken question does not overflow — [920,920,1200,1200]
++PASS  P3 follow-up of follow-up still grounded — [2,2]   (see note in Interactivity)
++FAIL  P4 focus after cancelling clear returns to a sensible control — BODY
++FAIL  P5 thread keeps list semantics (ol not overridden by role=log) — role="log"
++FAIL  P6 opening a citation reveals/highlights the cited chunk
++FAIL  P8 clearing while a question is pending leaves an empty conversation — exchanges after=1
++PASS  P9 300 exchanges render — 105ms
++FAIL  P9b thread scrolled to newest after load — distance=11.5px  (false positive: this is the 12px container padding; not a defect)
++PASS* P10 one malformed entry …  (my assertion was wrong; it passed only because stale data stayed on screen; this is a real defect, see #1)
++PASS  P11 corrupt history shows an error — raw "SyntaxError: Expected property name…"
++FAIL  P11b asking with corrupt history gives actionable error — raw SyntaxError text
++PASS  P11c corrupt file untouched (no silent data loss)
++```
++
++After correcting the two mis-scored probes (P9b, P10), the result is **6 real defects out of 13 probes**.
++
++## Scores
++
++| # | Criterion | Score |
++|---|---|---|
++| 1 | Functional completeness | 4 |
++| 2 | Visual design | 4 |
++| 3 | Timestamps | 5 |
++| 4 | Citation display | 3 |
++| 5 | Interactivity | 4 |
++| 6 | Edge cases | 3 |
++| 7 | Accessibility | 4 |
++| 8 | Code quality | 4 |
++| | **Overall (31 / 8)** | **3.9** |
++
++### 1. Functional completeness: 4
++
++What works:
++- I asked 3 questions in a row in the running app. All 3 appear in order as question and answer pairs (E2E check "all questions shown in order").
++- The rendered answer text equals the persisted text exactly ("answers shown in full").
++- The conversation survives an app restart ("conversation persists across app restart").
++- 300 exchanges render in about 105 ms (P9).
++- The service persists `id`, `askedAt` and `followUpOf` (`src/services/qa-service.ts:144`). It also normalizes older entries (`qa-service.ts:160-168`), and the E2E test confirms a legacy entry is displayed.
++
++Why it is not a 5:
++- If the history fails to load, the UI keeps showing the **previous, stale conversation** as if it were current. Example: "300 exchanges" and "History (300)" stayed on screen after the file was corrupted (`evaluation/p11-corrupt.png`). The cause is in `src/renderer/App.tsx:48-55`, which sets `historyError` but never resets `conversation`.
++- A question asked while a Clear is confirmed comes back after the clear (P8, `evaluation/p8-clear-pending.png`).
++
++### 2. Visual design: 4
++
++What works:
++- Questions and answers are clearly distinct (`docs/verification/02-conversation.png` and my own run's screenshot). User questions are right-aligned purple bubbles with a "You" label. Answers are left-aligned dark bubbles with an "Assistant" label.
++- The palette (`#16213e` / `#0f3460` / `#533483`) matches the existing sidebar, header and buttons.
++- Low confidence is shown in amber.
++
++Why it is not a 5:
++- Citation excerpts render with `white-space: pre-wrap` and include raw markdown/newlines. Their blank lines make the Sources block taller than the answer (screenshot 02: a two-citation block fills most of the viewport).
++- A collapsed long answer is cut at exactly 1200 characters, which can be mid-word (`ExchangeItem.tsx:153`). Excerpts, by contrast, cut on a word boundary.
++
++### 3. Timestamps: 5
++
++- Every exchange shows two timestamps: the question time (`askedAt`) and the answer time.
++- Both use `<time datetime>` (`ExchangeItem.tsx:103,133`). The format is readable: "Today, 10:23 PM", "Yesterday, …", and "Mar 4, 2025, 07:00 AM" for older years (seen in the running app, E2E check).
++- Hovering shows the full date in a tooltip (`formatFullTimestamp`).
++- The sidebar History also shows timestamps.
++- Minor issue: "Today" is computed at render time and is never refreshed, so it goes stale after midnight. The 2-digit hour gives "07:00 AM". Neither affects the score.
++
++### 4. Citation display: 3
++
++What works:
++- Each answer lists numbered sources showing the document title, the chunk, and an excerpt in a `<blockquote>` (E2E "answer citations show document and excerpt").
++- The sources list can be collapsed.
++- A deleted document is marked "(document no longer available)".
++- Answers without citations are clearly labelled.
++
++Why it is only a 3 ("usable" is weak):
++- Clicking a citation only opens the document header. The cited chunk is not shown, scrolled to or highlighted (P6, `evaluation/p6-citation.png`). Chunks stay hidden until the user clicks "Show Chunks" and then searches the list for "Chunk N" by hand.
++- Chunk numbers are 0-based ("chunk 0"), which is an internal index exposed to the user.
++- Excerpts show raw markdown (`# Software Design Notes\n\n## Architecture…`).
++
++### 5. Interactivity: 4
++
++These all work in the running app:
++- Copy answer, with "Copied" feedback.
++- Follow up: a context chip appears, focus moves to the input, Esc cancels, and the follow-up is linked to its parent with a "jump to" link.
++- Expand and collapse long answers.
++- Collapse sources.
++- The sidebar History jumps to an exchange, focuses it and highlights it.
++- Retry and Dismiss on errors.
++- Clear with an inline confirmation.
++- Enter submits the question (P1).
++
++Issues:
++- Clearing while a question is pending: the cleared conversation immediately regains that exchange (P8). The confirmation text "Delete all N exchanges?" is therefore not true.
++- Follow-up context covers only one level. `qa-service.ts:80` adds only the immediate parent's *question*. It does not add the parent's answer or any earlier turns. In a chain A → "and then?" → "why?", the third turn is retrieved with "and then? why?". P3 still found citations only because short words like "and" and "then" match almost any chunk, so that probe does not prove the context is real.
++- Esc does not cancel the Clear confirmation.
++
++### 6. Edge cases: 3
++
++Handled and verified in the app:
++- Empty history.
++- Long answer (collapsed, then expanded to the full 3190 characters).
++- A very long unbroken question (no overflow, P2).
++- An answer without citations.
++- An IPC write failure, with Retry.
++- A legacy entry without id or timestamp.
++
++Not handled:
++- **One malformed history entry hides the whole conversation.** An entry without `response` makes `getConversation` throw at `qa-service.ts:164` (`entry.response.timestamp`), so none of the valid entries can be shown (P10, `evaluation/p10-malformed.png`).
++- **Corrupt `qa-history.json` produces raw developer errors.** The user sees "TypeError: Cannot read properties of undefined (reading 'timestamp')" and "SyntaxError: Expected property name or '}' in JSON at position 1". These are shown both as the load error and as the reason a new question "could not be answered" (P11/P11b). The UI gives no guidance on recovery. On the positive side, the corrupt file is not overwritten (P11c).
++- The load-error banner sits at the top of the scroll area, above the stale exchanges. After scrolling to the bottom, the user does not see it (`p11-corrupt.png` shows only the per-question error).
++- The clear-while-pending race (see #5).
++
++### 7. Accessibility: 4
++
++What works:
++- The input is labelled with a visually hidden `<label>` (`QuestionPanel.tsx:228`).
++- Each exchange is an `<article>` labelled by its question, which is an `<h3>` under the "Conversation" `<h2>`.
++- `<time>` elements are used.
++- Toggles carry `aria-expanded` / `aria-controls`.
++- Errors use `role="alert"` and copy feedback uses `role="status"`.
++- The sidebar has `aria-current`, and `:focus-visible` outlines are styled.
++- All controls are native `<button>`s.
++- Selecting from History moves focus to the exchange.
++
++Issues:
++- `role="log"` on the `<ol>` (`QuestionPanel.tsx:155`) overrides its list role. The `<li>` children are then list items with no list, which is an axe "listitem" violation, and screen readers lose the count of exchanges (P5).
++- After Cancel in the Clear confirmation, focus falls back to `<body>` (P4). The Cancel button that had focus via `autoFocus` is unmounted and focus is not restored to "Clear conversation".
++- The Documents/History tabs use `aria-pressed` toggle buttons instead of a `tablist` (`App.tsx:146-161`). This is acceptable but not idiomatic.
++- I did not measure contrast with a tool. Colors checked by eye (#9a9ac0 on #1a1a2e) look adequate.
++
++### 8. Code quality: 4
++
++What works:
++- `npm run check` passes, `check-architecture.sh` passes, there are 11 unit tests, and the build succeeds.
++- Layer boundaries are respected. Normalization lives in the service (`getConversation`). The renderer only formats for display (`src/renderer/format.ts`). Preload only forwards `ipcRenderer.invoke`.
++- `docs/ARCHITECTURE.md` and `AGENTS.md` were updated, and the E2E script is reproducible.
++
++Issues:
++- **Dead API surface.** The renderer no longer uses the `qa:history` channel, the preload `qa.history` or its type in `src/renderer/types.d.ts`. Only `conversation:get` is consumed (`grep` shows no renderer caller).
++- `formatIpcError` (`format.ts:34`) strips only Electron's wrapper. Raw `TypeError`/`SyntaxError` messages from the service still reach the user, because the service has no error translation.
++- `QuestionPanel` imports style constants (`userBubble`, `smallButton`, `metaText`) from the `ExchangeItem` component module. This is minor coupling, and a shared styles module would be cleaner.
++- No unit test covers malformed history entries, which is the case that breaks.
++
++## Defects the generator must fix (most important first)
++
++1. **Stale conversation shown after a load failure.** When `conversation.get()` fails, `App.tsx:48-55` keeps the previous `conversation` state. Counts ("300 exchanges", "History (300)") and old exchanges stay on screen as though they were current. Clear or visibly mark the stale state, and keep the error visible near the composer, not only at the top of the scroll area. (Evidence: P11, `evaluation/p11-corrupt.png`)
++2. **One malformed history entry breaks the whole conversation.** `getConversation()` (`qa-service.ts:160-168`) throws on an entry without `response` (or `question`). Skip invalid entries or normalize them per entry, log a WARN, and add a unit test for it. (Evidence: P10, `evaluation/p10-malformed.png`)
++3. **Raw developer errors shown to users.** Messages like "TypeError: Cannot read properties of undefined…" and "SyntaxError: Expected property name… position 1" appear both as the load error and as the reason a question failed. Translate persistence/parse failures into a user-facing message, e.g. "Conversation history file is unreadable", ideally with the file location. (P11/P11b)
++4. **Citations do not lead to the cited text.** Clicking a citation opens only the document header. Chunks stay collapsed, and the cited chunk is neither shown nor scrolled to nor highlighted. Pass the chunk index along so `DocumentDetail` reveals and highlights it. Also consider showing 1-based chunk numbers to users. (P6, `evaluation/p6-citation.png`)
++5. **Clear while a question is pending brings the exchange back.** The confirmation says "Delete all N exchanges?", yet the in-flight question is saved after the clear and reappears. Either disable Clear while a question is pending, or discard the late result. (P8, `evaluation/p8-clear-pending.png`)
++6. **`role="log"` on `<ol>` breaks list semantics** (`QuestionPanel.tsx:154-159`). Put `role="log"` on a wrapping `<div>` and keep the `<ol>`/`<li>` structure. (P5)
++7. **Focus is lost after cancelling the Clear confirmation.** Focus lands on `<body>`. Return it to the "Clear conversation" button. Make Esc cancel the confirmation too. (P4)
++8. **Follow-up context is too thin for multi-turn use.** `qa-service.ts:80` concatenates only the immediate parent's question. A chain of follow-ups loses the original topic, and retrieval is carried by stop-word matches. At minimum, include the ancestor chain or the parent's answer/citations, and add a test with a chain longer than 2.
++9. **Citation excerpts dominate the layout.** `pre-wrap` keeps raw markdown and blank lines, so the Sources block is often taller than the answer. Collapse whitespace or clamp the excerpt height.
++10. **Dead `qa:history` API.** The channel, the preload `qa.history` and its renderer type are unused now that `conversation:get` exists. Remove them, or document why they stay.
++11. **The long-answer cut is mid-word** (`ExchangeItem.tsx:153`). Reuse the word-boundary logic used for excerpts.
++12. **"Today/Yesterday" labels never refresh** while the app stays open across midnight. This is low priority.
++
++Out of scope for this feature, but visible in the conversation (pre-existing in the starter and already listed in `docs/verification/README.md`):
++- The no-match fallback answer says "No relevant documents have been indexed yet" even when 3 documents are indexed (`qa-service.ts` `generateAnswer`). Users will see this in the conversation and be misled.
++- "+ Import" is a no-op.
++- The status bar shows empty `Index:` and `Documents:` values.

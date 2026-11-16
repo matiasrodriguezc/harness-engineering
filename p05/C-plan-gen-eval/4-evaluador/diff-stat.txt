@@ -1,0 +1,51 @@
+68dff5e Re-review conversation history after generator fixes (overall 4.5)
+
+ .../evaluator/round2/01-empty.png                  | Bin 0 -> 102405 bytes
+ .../evaluator/round2/01-jump-button-focused.png    | Bin 0 -> 190601 bytes
+ .../evaluator/round2/02-after-jump.png             | Bin 0 -> 184362 bytes
+ .../evaluator/round2/02-fixture.png                | Bin 0 -> 339865 bytes
+ .../evaluator/round2/03-pending.png                | Bin 0 -> 273496 bytes
+ .../evaluator/round2/03-two-failures.png           | Bin 0 -> 180047 bytes
+ .../evaluator/round2/04-first-answer.png           | Bin 0 -> 273440 bytes
+ .../round2/04-order-after-new-success.png          | Bin 0 -> 180428 bytes
+ .../evaluator/round2/05-after-retry-dismiss.png    | Bin 0 -> 241770 bytes
+ .../evaluator/round2/05-two-exchanges.png          | Bin 0 -> 211067 bytes
+ .../evaluator/round2/06-deleted-citation.png       | Bin 0 -> 312209 bytes
+ .../evaluator/round2/06-no-citations.png           | Bin 0 -> 208196 bytes
+ .../evaluator/round2/07-autoscroll.png             | Bin 0 -> 247751 bytes
+ .../round2/07-new-answer-hidden-by-failure.png     | Bin 0 -> 239395 bytes
+ .../evaluator/round2/08-after-restart.png          | Bin 0 -> 238823 bytes
+ .../evaluator/round2/08-citation-click.png         | Bin 0 -> 268809 bytes
+ .../evaluator/round2/09-clear-confirm.png          | Bin 0 -> 251139 bytes
+ .../round2/09-keyboard-focus-citation.png          | Bin 0 -> 247823 bytes
+ .../evaluator/round2/10-after-clear.png            | Bin 0 -> 91073 bytes
+ .../evaluator/round2/10-keyboard-opened.png        | Bin 0 -> 236585 bytes
+ .../evaluator/round2/11-narrow-700px.png           | Bin 0 -> 79916 bytes
+ .../evaluator/round2/11-restart-after-clear.png    | Bin 0 -> 91073 bytes
+ .../evaluator/round2/12-long-unbroken-question.png | Bin 0 -> 184581 bytes
+ .../evaluator/round2/12-startup-corrupt.png        | Bin 0 -> 92548 bytes
+ .../evaluator/round2/13-recovered.png              | Bin 0 -> 231602 bytes
+ .../evaluator/round2/file-before-restart.json      | 120 +++++++++++
+ .../conversation-history/evaluator/round2/p1.json  |  22 ++
+ .../conversation-history/evaluator/round2/p2.json  | 160 ++++++++++++++
+ .../conversation-history/evaluator/round2/p2.out   | 160 ++++++++++++++
+ .../conversation-history/evaluator/round2/p3.json  | 122 +++++++++++
+ .../conversation-history/evaluator/round2/r2a.json | 235 +++++++++++++++++++++
+ .../conversation-history/evaluator/round2/r2b.json | 140 ++++++++++++
+ .../conversation-history/evaluator/round2/r2c.json |  13 ++
+ .../conversation-history/evaluator/round2/run1.log |  40 ++++
+ .../conversation-history/evaluator/round2/run2.log | 207 ++++++++++++++++++
+ .../conversation-history/evaluator/round2/run3.log |  19 ++
+ .../conversation-history/evaluator/round2/run4.log |  16 ++
+ .../conversation-history/evaluator/round2/run5.log |  34 +++
+ .../evaluator/round2/scripts/cdp.mjs               |  22 ++
+ .../evaluator/round2/scripts/launch.sh             |   4 +
+ .../evaluator/round2/scripts/p1.mjs                |  14 ++
+ .../evaluator/round2/scripts/p2.mjs                |  99 +++++++++
+ .../evaluator/round2/scripts/p4.mjs                |  23 ++
+ .../evaluator/round2/scripts/p5.mjs                |   4 +
+ .../evaluator/round2/scripts/r2a.mjs               |  81 +++++++
+ .../evaluator/round2/scripts/r2b.mjs               |  35 +++
+ .../evaluator/round2/scripts/r2c.mjs               |  20 ++
+ evaluator-rubric.md                                | 109 +++++-----
+ 48 files changed, 1646 insertions(+), 53 deletions(-)

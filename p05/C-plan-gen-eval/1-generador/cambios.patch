@@ -1,0 +1,2009 @@
+commit f53fa54f17b531c5233b77d17aa516ec789a3254
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 22:53:40 2026 -0300
+
+    Show Q&A history as a multi-turn conversation in the question panel
+    
+    - New ConversationView replaces the single lastResponse block: all exchanges
+      oldest-first with You/Assistant turns, full answers, readable timestamps,
+      confidence, and citations (title, chunk, excerpt) as buttons that open the
+      cited document; stale citations show a notice instead of failing.
+    - Pending turn with 'Answering…' and a ref guard against double submit;
+      persisted history replaces the optimistic turn in one render.
+    - Inline error turn with Retry/Dismiss; earlier exchanges stay visible.
+    - Empty and loading states, in-page Clear confirmation via qa.clearHistory(),
+      auto-scroll to the newest exchange.
+    - Accessibility: role=log/aria-live, ol/li/article, labelled input,
+      :focus-visible outline.
+    - Sidebar History tab and ConversationHistory.tsx removed (lossy duplicate).
+    - Display helpers in conversation-format.ts with vitest unit tests.
+    - Generator self-check evidence and deviation D-1 (preload sandbox fix) in
+      docs/evidence/conversation-history/generator/generator-report.md.
+
+diff --git a/docs/evidence/conversation-history/generator/01-empty.png b/docs/evidence/conversation-history/generator/01-empty.png
+new file mode 100644
+index 0000000..9356224
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/01-empty.png differ
+diff --git a/docs/evidence/conversation-history/generator/02-pending.png b/docs/evidence/conversation-history/generator/02-pending.png
+new file mode 100644
+index 0000000..9e7b9ea
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/02-pending.png differ
+diff --git a/docs/evidence/conversation-history/generator/03-first-answer.png b/docs/evidence/conversation-history/generator/03-first-answer.png
+new file mode 100644
+index 0000000..8bb2045
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/03-first-answer.png differ
+diff --git a/docs/evidence/conversation-history/generator/04-two-exchanges.png b/docs/evidence/conversation-history/generator/04-two-exchanges.png
+new file mode 100644
+index 0000000..b18c57d
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/04-two-exchanges.png differ
+diff --git a/docs/evidence/conversation-history/generator/05-no-citations.png b/docs/evidence/conversation-history/generator/05-no-citations.png
+new file mode 100644
+index 0000000..0b21b62
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/05-no-citations.png differ
+diff --git a/docs/evidence/conversation-history/generator/06-autoscroll.png b/docs/evidence/conversation-history/generator/06-autoscroll.png
+new file mode 100644
+index 0000000..2de952a
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/06-autoscroll.png differ
+diff --git a/docs/evidence/conversation-history/generator/07-citation-click.png b/docs/evidence/conversation-history/generator/07-citation-click.png
+new file mode 100644
+index 0000000..2d33ef8
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/07-citation-click.png differ
+diff --git a/docs/evidence/conversation-history/generator/08-keyboard-focus-citation.png b/docs/evidence/conversation-history/generator/08-keyboard-focus-citation.png
+new file mode 100644
+index 0000000..3043b05
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/08-keyboard-focus-citation.png differ
+diff --git a/docs/evidence/conversation-history/generator/09-keyboard-opened.png b/docs/evidence/conversation-history/generator/09-keyboard-opened.png
+new file mode 100644
+index 0000000..ceb81d3
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/09-keyboard-opened.png differ
+diff --git a/docs/evidence/conversation-history/generator/10-stale-citation.png b/docs/evidence/conversation-history/generator/10-stale-citation.png
+new file mode 100644
+index 0000000..46e839c
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/10-stale-citation.png differ
+diff --git a/docs/evidence/conversation-history/generator/11-error.png b/docs/evidence/conversation-history/generator/11-error.png
+new file mode 100644
+index 0000000..77cedef
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/11-error.png differ
+diff --git a/docs/evidence/conversation-history/generator/12-after-retry.png b/docs/evidence/conversation-history/generator/12-after-retry.png
+new file mode 100644
+index 0000000..cd04bf3
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/12-after-retry.png differ
+diff --git a/docs/evidence/conversation-history/generator/13-restart-long-fixture.png b/docs/evidence/conversation-history/generator/13-restart-long-fixture.png
+new file mode 100644
+index 0000000..ad57adc
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/13-restart-long-fixture.png differ
+diff --git a/docs/evidence/conversation-history/generator/14-clear-confirm.png b/docs/evidence/conversation-history/generator/14-clear-confirm.png
+new file mode 100644
+index 0000000..809c4cd
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/14-clear-confirm.png differ
+diff --git a/docs/evidence/conversation-history/generator/15-after-clear.png b/docs/evidence/conversation-history/generator/15-after-clear.png
+new file mode 100644
+index 0000000..4bf8791
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/15-after-clear.png differ
+diff --git a/docs/evidence/conversation-history/generator/16-restart-after-clear.png b/docs/evidence/conversation-history/generator/16-restart-after-clear.png
+new file mode 100644
+index 0000000..4bf8791
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/16-restart-after-clear.png differ
+diff --git a/docs/evidence/conversation-history/generator/generator-report.md b/docs/evidence/conversation-history/generator/generator-report.md
+new file mode 100644
+index 0000000..fbc520c
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/generator-report.md
+@@ -0,0 +1,78 @@
++# Generator self-check: multi-turn Q&A conversation history
++
++This is the Generator's own evidence. It is **not** the Evaluator's `verification-report.md`: the Evaluator should still run §6 of `sprint-contract.md` independently.
++
++- **Date:** 2026-11-15
++- **Commits:**
++  - `b17561e`: Step 0 baseline type fix
++  - `96007e7`: preload sandbox fix (see deviation D-1 below)
++  - the feature commit that follows them
++
++## Contract deviations
++
++`sprint-contract.md` was left unedited, as the user instructed, so deviations are recorded here instead of in its "Contract deviations" section.
++
++### D-1: preload fix outside the feature scope (commit `96007e7`)
++
++- **What:** `src/preload/preload.ts` no longer `require`s `../shared/types` at runtime. It keeps a local channel map typed as `typeof IPC_CHANNELS` through a type-only import, so the compiler still rejects any drift from `src/shared/types.ts`. Checked: changing `'qa:ask'` to `'qa:askx'` fails `tsc` with TS2322.
++- **Why:** with Electron 33, preloads are sandboxed by default and can only require `electron`. The original preload threw `module not found: ../shared/types` ("Unable to load preload script" in the renderer console), so `window.knowledgeBase` was `undefined`. No IPC worked, §6.2 seeding was impossible, and AC-1–AC-13 could not be verified at all. The contract's §2 did not catch this because `npm run build` succeeds and the failure only appears at runtime.
++- **Impact on criteria:** none. There is no new IPC channel, no service or main-process change, and no change to the `qa-history.json` schema. It is a narrow supporting fix, as `AGENTS.md` allows ("unless a blocker forces a narrow supporting fix"). §5 asks for the IPC layer to stay unchanged unless a criterion cannot be met otherwise, and here none of them could be.
++
++## How this was verified
++
++The built app (`npx tsc -p tsconfig.node.json && vite build`, the same build steps as `npm run dev`) was launched as:
++
++```
++env -u NODE_OPTIONS npx electron . --user-data-dir=<scratch>/ud --remote-debugging-port=9333
++```
++
++- **Isolated data dir.** `--user-data-dir` points at a scratch directory, so the real `~/Library/Application Support/knowledge-base` was never touched.
++- **`NODE_OPTIONS`.** On this machine `NODE_OPTIONS` contains `--openssl-legacy-provider`, which Electron rejects, so it has to be unset.
++- **How the app was driven.** `scripts/phase1.mjs` and `scripts/phase2.mjs` drive the app through the Chrome DevTools Protocol (zero dependencies; Node 20 with `--experimental-websocket`). They use real `Input.dispatchKeyEvent`/`dispatchMouseEvent` events (Tab, Shift+Tab, Enter, Space, clicks), take screenshots with `Page.captureScreenshot`, and listen for `Runtime.exceptionThrown` and `console.error`.
++- **Restarts.** A restart is SIGTERM to Electron followed by a relaunch with the same data dir. That is equivalent to Cmd+Q, because the app has no unsaved state and `qa-history.json` is written synchronously on every ask.
++- **Fixture.** The §6.3 fixture script was run verbatim between quit and relaunch.
++
++Raw results are in `phase1-results.json`, `phase2-restart-results.json` and `phase2-after-clear-results.json`. Logs are in `run1.log` (session 1), `run2.log` (restart and clear) and `run3.log` (restart after clear).
++
++## Results by AC
++
++| AC | Result | Evidence |
++|---|---|---|
++| AC-0 | PASS | `npm run check` exit 0; `check-architecture.sh` → `PASS: All architecture boundary checks passed` |
++| AC-1 | PASS | 9 exchanges accumulated oldest-first; earlier ones unchanged (`04-two-exchanges.png`, `06-autoscroll.png`) |
++| AC-2 | PASS | "You" / "Assistant" text labels; user turns right-aligned in a `#0f3460` bubble; answers in a bordered `#1a1a3e` card |
++| AC-3 | PASS | Fixture answer rendered at 1,750/1,750 chars with no ellipsis; answer, scroller and document all have `scrollWidth <= clientWidth` (`13-restart-long-fixture.png`). `grep substring\|...` in components finds only the input placeholder and object spreads |
++| AC-4 | PASS | Each citation shows title · chunk N · full excerpt (`03-first-answer.png`). The `xyzzy plugh` answer shows "No sources cited." with no Sources header (`05-no-citations.png`) |
++| AC-5 | PASS | Mouse click, Enter and Space on a citation all open `DocumentDetail` with the cited title (`07`, `09`). Stale citation (document deleted): the citation stays visible, shows "This document is no longer available.", and produces 0 console errors and 0 exceptions (`10-stale-citation.png`) |
++| AC-6 | PASS | `<time dateTime=ISO>` shows `Nov 15, 2026, 10:51 PM`. All 8 on-screen `datetime` values equal `qa-history.json` timestamps, and their text equals the local formatting of those timestamps |
++| AC-7 | PASS | After restart, 10/10 exchanges match the file in question, order, timestamp and citations (title + chunk) |
++| AC-8 | PASS | Pending turn shows the question + "Answering…" (`02-pending.png`). Enter + an Ask click during the pending answer gave an `ASK_QUESTION` delta of 1, left no duplicate turn, and kept the second draft in the input |
++| AC-9 | PASS | Corrupted `qa-history.json` → "NOT ANSWERED" inline turn with the question, Retry and Dismiss. 8 earlier exchanges kept; `Q&A failed` in the log (`11-error.png`). After the file was restored, Retry succeeded and the error turn was removed (`12-after-retry.png`) |
++| AC-10 | PASS | Empty state on a fresh data dir (`01-empty.png`), after Clear (`15`) and after restart (`16`) |
++| AC-11 | PASS | In-page "Delete all 10 exchanges?" with Cancel / Clear conversation; focus moves to Cancel. Cancel keeps 10 exchanges in the view and the file, and focus returns to Clear. Confirm → file `[]` → empty state, which persists after restart |
++| AC-12 | PASS | scrollHeight 3478 > clientHeight 592; after the new answer the view is at the bottom and the last exchange is visible (`06-autoscroll.png`) |
++| AC-13 | PASS | `div[role=log][aria-live=polite]` > `ol` > `li` > `article[aria-label="Exchange n of N"]`. The input is named by `<label for=question-input>`. Citations are `<button>`s and there are no clickable divs. Keyboard-only path: focus the input, type, Enter, Shift+Tab to the newest citation (`:focus-visible` outline `#8888bb`, `08`), Enter opens the document |
++| AC-14 | PASS | Renderer uses only `window.knowledgeBase`. A single `interface Window` in `src/renderer/types.d.ts` (the duplicate in `App.tsx` was removed). No service, main or IPC changes |
++| AC-15 | PASS | `ConversationHistory.tsx` deleted (the TODO is gone); `lastResponse` removed; `npm run build` passes |
++
++**Log checks (§6.8), `run1.log`:**
++
++- 6 initialization lines at startup
++- 10 `ASK_QUESTION` lines = 9 `Q&A response` + 1 `Q&A failed`
++- the `citationCount` values `2,2,0,2,2,2,2,2,2` match the citations shown on screen
++
++## Design decisions
++
++- **Sidebar History tab:** removed, together with `ConversationHistory.tsx` (in-scope item 10). The sidebar now shows only the document list, under a "Documents (n)" header. The exchange count lives in the conversation header instead.
++- **Layout:** the conversation fills the right panel above the question input. A selected document opens in a strip above the conversation (max 40% height, with a Close button), so following a citation never hides the conversation.
++- **Pending-turn reconciliation:** after `qa.ask` resolves, the renderer reloads `conversation.get()` and then sets the history and clears the pending turn in the same synchronous block, so no render shows the question twice. If the reload fails, it appends `{question, response}` locally instead. A `useRef` guard blocks double submits even before React state updates; the Ask button uses `aria-disabled` rather than `disabled`, so it keeps focus.
++- **Focus styles:** one `:focus-visible` rule in `index.html`, because inline styles cannot express pseudo-classes. The input's inline `outline: none` was removed.
++- **Display helpers:** `components/conversation-format.ts` (`formatTimestamp`, `describeConfidence`, `describeAskError`) is display-only and unit-tested by `conversation-format.test.ts`: `npx vitest run` → 7 passed.
++
++## Known limitations / risks
++
++1. **Keyboard reach.** The conversation comes before the input in DOM order, so a keyboard user reaches the newest citations from the input with **Shift+Tab**. Forward Tab cycles through the header, the documents panel and every earlier citation first.
++2. **Pre-existing, out of scope: status bar.** The status bar shows an empty "Index:" and "Documents:", because `indexing.status` returns the IndexingService's status shape, not `AppStatus`. This is visible in every screenshot and was not introduced by this sprint.
++3. **Pre-existing, out of scope: CSP warning.** Electron's dev-mode "Insecure Content-Security-Policy" `console.warning` appears on load. There are no console errors.
++4. **Mock answer quality.** Answers come from the mock `QaService`. For example, the indexing question matched the "import/document" pattern first, so the answer text is about importing.
++5. **Error detail text.** The error turn shows a "Details:" line with the raw `SyntaxError` text from main. This helps debugging, but it is technical wording for end users.
+diff --git a/docs/evidence/conversation-history/generator/phase1-results.json b/docs/evidence/conversation-history/generator/phase1-results.json
+new file mode 100644
+index 0000000..cff0d1a
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/phase1-results.json
+@@ -0,0 +1,223 @@
++[
++  {
++    "id": "AC-10",
++    "name": "empty state shown on fresh data dir",
++    "ok": true,
++    "detail": {}
++  },
++  {
++    "id": "seed",
++    "name": "3 documents listed",
++    "ok": true,
++    "detail": {}
++  },
++  {
++    "id": "AC-8",
++    "name": "pending turn shows question + Answering…",
++    "ok": true,
++    "detail": {
++      "pendingSeen": "YOU\nHow does the indexing pipeline chunk documents?\nASSISTANT\nAnswering…"
++    }
++  },
++  {
++    "id": "AC-4",
++    "name": "answer 1 has >=1 citation button with title, chunk, excerpt",
++    "ok": true,
++    "detail": {
++      "text": "YOU\nHow does the indexing pipeline chunk documents?\nASSISTANT\nNov 15, 2026, 10:51 PM\nConfidence: High (85%)\nDocuments are imported by copying the source file to the local data directory. The system extracts text content and creates metadata including title, filename, size, and import timestamp. After import, documents can be indexed for search. Based on the document \"meeting-summary\", 2. Chunking Strategy\nDocuments will be split into chunks of approximately 500 characters at paragrap.\nSOURCES (2)\nmeeting-summary · chunk 1\n“2. Chunking Strategy\nDocuments will be split into chunks of approximately 500 characters at paragraph boundaries. Each chunk will include metadata like character count and word count. The indexing pip”\nmeeting-summary · chunk 2\n“3. Grounded Q&A Requirements\nAll Q&A responses must include citations that reference specific document chunks. The system should rank chunks by keyword overlap and return the most relevant excerpts. A”",
++      "citations": 2,
++      "time": "Nov 15, 2026, 10:51 PM",
++      "dt": "2026-11-16T01:51:20.029Z"
++    }
++  },
++  {
++    "id": "AC-6",
++    "name": "readable timestamp (not ISO)",
++    "ok": true,
++    "detail": {
++      "time": "Nov 15, 2026, 10:51 PM",
++      "datetime": "2026-11-16T01:51:20.029Z"
++    }
++  },
++  {
++    "id": "AC-8",
++    "name": "one ASK_QUESTION for one ask",
++    "ok": true,
++    "detail": {
++      "delta": 1
++    }
++  },
++  {
++    "id": "AC-8",
++    "name": "Enter + click during pending add no extra ASK_QUESTION",
++    "ok": true,
++    "detail": {
++      "delta": 1,
++      "busyLabel": "Answering…",
++      "inputKeptText": "second submit attempt"
++    }
++  },
++  {
++    "id": "AC-8",
++    "name": "no duplicate question turn after resolve",
++    "ok": true,
++    "detail": {
++      "turns": [
++        "YOU\nHow does the indexing pipeline chunk documents?",
++        "YOU\nWhat did the meeting decide about retrieval?"
++      ]
++    }
++  },
++  {
++    "id": "AC-1",
++    "name": "two exchanges oldest-first",
++    "ok": true,
++    "detail": {
++      "qs": [
++        "How does the indexing pipeline chunk documents?",
++        "What did the meeting decide about retrieval?"
++      ]
++    }
++  },
++  {
++    "id": "AC-2",
++    "name": "\"You\" / \"Assistant\" text labels present",
++    "ok": true,
++    "detail": {
++      "roles": 3
++    }
++  },
++  {
++    "id": "AC-4",
++    "name": "zero-citation answer says \"No sources cited\", no Sources header",
++    "ok": true,
++    "detail": {
++      "text": "YOU\nxyzzy plugh\nASSISTANT\nNov 15, 2026, 10:51 PM\nConfidence: Low (30%)\nNo relevant documents have been indexed yet. Please import and index documents before asking questions.\nNo sources cited.",
++      "buttons": 0
++    }
++  },
++  {
++    "id": "AC-12",
++    "name": "conversation taller than panel and newest exchange in view",
++    "ok": true,
++    "detail": {
++      "scrollHeight": 3478,
++      "clientHeight": 592,
++      "scrollTop": 2886,
++      "atBottom": true,
++      "lastBottomVisible": true
++    }
++  },
++  {
++    "id": "AC-3",
++    "name": "no horizontal overflow of window",
++    "ok": true,
++    "detail": {
++      "doc": true,
++      "body": true
++    }
++  },
++  {
++    "id": "AC-5",
++    "name": "mouse click on citation shows cited document",
++    "ok": true,
++    "detail": {
++      "cited": "meeting-summary",
++      "shown": "meeting-summary"
++    }
++  },
++  {
++    "id": "AC-13",
++    "name": "keyboard flow: input reached, focus visible, submit, Shift+Tab to citation, Enter opens doc",
++    "ok": true,
++    "detail": {
++      "tabsToInput": 4,
++      "inputFocusVisible": true,
++      "focused": {
++        "tag": "BUTTON",
++        "inNewest": true,
++        "text": "retrieval-plan",
++        "focusVisible": true,
++        "outline": "solid rgb(136, 136, 187)"
++      },
++      "kbShown": "retrieval-plan"
++    }
++  },
++  {
++    "id": "AC-5",
++    "name": "Space on focused citation opens document",
++    "ok": true,
++    "detail": {}
++  },
++  {
++    "id": "AC-13",
++    "name": "role=log + aria-live, ol/li/article, labelled input, citations are buttons",
++    "ok": true,
++    "detail": {
++      "logRole": "log",
++      "ariaLive": "polite",
++      "listTag": "OL",
++      "itemTag": "LI",
++      "articleTag": "ARTICLE",
++      "inputLabel": "Question about your documents",
++      "citationTags": [
++        "BUTTON"
++      ],
++      "clickableDivs": 0
++    }
++  },
++  {
++    "id": "AC-6",
++    "name": "on-screen times match qa-history.json timestamps",
++    "ok": true,
++    "detail": {
++      "count": 8,
++      "first": {
++        "dt": "2026-11-16T01:51:20.029Z",
++        "text": "Nov 15, 2026, 10:51 PM"
++      },
++      "file0": "2026-11-16T01:51:20.029Z"
++    }
++  },
++  {
++    "id": "AC-5",
++    "name": "stale citation: stays visible, shows notice, no console error / exception",
++    "ok": true,
++    "detail": {
++      "newProblems": []
++    }
++  },
++  {
++    "id": "AC-9",
++    "name": "inline error, earlier exchanges kept, not shown as answered, log has Q&A failed",
++    "ok": true,
++    "detail": {
++      "err": {
++        "text": "YOU\nHow does retrieval work?\nNOT ANSWERED\nThe question could not be answered.\nDetails: SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)\nRetry\nDismiss",
++        "exchanges": 8
++      },
++      "nErrBefore": 8,
++      "logHasFail": true
++    }
++  },
++  {
++    "id": "AC-9",
++    "name": "after restoring file, retry succeeds and error turn removed",
++    "ok": true,
++    "detail": {
++      "errorGone": true,
++      "lastQ": "How does retrieval work?"
++    }
++  },
++  {
++    "id": "AC-5/console",
++    "name": "no uncaught exceptions or console errors during session",
++    "ok": false,
++    "detail": [
++      {
++        "kind": "console.warning",
++        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged."
++      }
++    ]
++  }
++]
+\ No newline at end of file
+diff --git a/docs/evidence/conversation-history/generator/phase2-after-clear-results.json b/docs/evidence/conversation-history/generator/phase2-after-clear-results.json
+new file mode 100644
+index 0000000..1780fcc
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/phase2-after-clear-results.json
+@@ -0,0 +1,20 @@
++[
++  {
++    "id": "AC-11",
++    "name": "empty state persists after restart; sidebar History tab removed",
++    "ok": true,
++    "detail": {
++      "empty": true,
++      "heading": "Conversation (0 exchanges)",
++      "historyTab": false
++    }
++  },
++  {
++    "id": "console",
++    "name": "no console errors / uncaught exceptions",
++    "ok": true,
++    "detail": [
++      "console.warning"
++    ]
++  }
++]
+\ No newline at end of file
+diff --git a/docs/evidence/conversation-history/generator/phase2-restart-results.json b/docs/evidence/conversation-history/generator/phase2-restart-results.json
+new file mode 100644
+index 0000000..70cafa2
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/phase2-restart-results.json
+@@ -0,0 +1,61 @@
++[
++  {
++    "id": "AC-7",
++    "name": "after restart: same count, order, timestamps, citations as qa-history.json",
++    "ok": true,
++    "detail": {
++      "screen": 10,
++      "file": 10
++    }
++  },
++  {
++    "id": "AC-3",
++    "name": "long fixture answer rendered in full (>=1500 chars), wraps, no horizontal scroll",
++    "ok": true,
++    "detail": {
++      "len": 1750,
++      "endsWith": "r wrapping. ",
++      "hasEllipsis": false,
++      "ansFits": true,
++      "scFits": true,
++      "docFits": true
++    }
++  },
++  {
++    "id": "AC-11",
++    "name": "in-page confirmation; Cancel keeps everything (file + view)",
++    "ok": true,
++    "detail": {
++      "prompt": {
++        "text": "Delete all 10 exchanges? This cannot be undone.CancelClear conversation",
++        "focused": "Cancel"
++      },
++      "afterCancel": {
++        "n": 10,
++        "focus": "Clear"
++      }
++    }
++  },
++  {
++    "id": "AC-11",
++    "name": "Confirm empties view and qa-history.json is []",
++    "ok": true,
++    "detail": {
++      "raw": "[]"
++    }
++  },
++  {
++    "id": "AC-10",
++    "name": "empty state after Clear",
++    "ok": true,
++    "detail": {}
++  },
++  {
++    "id": "console",
++    "name": "no console errors / uncaught exceptions",
++    "ok": true,
++    "detail": [
++      "console.warning"
++    ]
++  }
++]
+\ No newline at end of file
+diff --git a/docs/evidence/conversation-history/generator/run1.log b/docs/evidence/conversation-history/generator/run1.log
+new file mode 100644
+index 0000000..4ad68fa
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/run1.log
+@@ -0,0 +1,133 @@
++
++DevTools listening on ws://127.0.0.1:9333/devtools/browser/7bc9c45e-5981-42ea-8059-bcbd982e6587
++{"timestamp":"2026-11-16T01:51:05.092Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T01:51:05.096Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T01:51:05.096Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/f0c3b5d6-37bc-4d61-9ea1-7f5d8b863e59/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T01:51:05.097Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T01:51:05.097Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T01:51:05.097Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T01:51:05.097Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T01:51:05.097Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:51:05.097Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:51:05.097Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T01:51:05.203Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T01:51:05.401Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T01:51:05.401Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:51:19.559Z","level":"INFO","service":"IPC","message":"IMPORT_DOCUMENT","data":{"filePath":"/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/data/sample-documents/design-notes.md"}}
++{"timestamp":"2026-11-16T01:51:19.560Z","level":"INFO","service":"IPC","message":"Document imported","data":{"id":"f350b571-60ed-4361-a6be-fc060b06ece1","title":"design-notes","size":1940}}
++{"timestamp":"2026-11-16T01:51:19.561Z","level":"INFO","service":"IPC","message":"IMPORT_DOCUMENT","data":{"filePath":"/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/data/sample-documents/meeting-summary.txt"}}
++{"timestamp":"2026-11-16T01:51:19.561Z","level":"INFO","service":"IPC","message":"Document imported","data":{"id":"fc47ab7a-43a2-453d-b022-693bf539cf38","title":"meeting-summary","size":1160}}
++{"timestamp":"2026-11-16T01:51:19.561Z","level":"INFO","service":"IPC","message":"IMPORT_DOCUMENT","data":{"filePath":"/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/data/sample-documents/retrieval-plan.md"}}
++{"timestamp":"2026-11-16T01:51:19.562Z","level":"INFO","service":"IPC","message":"Document imported","data":{"id":"d335d76a-fb0d-45eb-9fa9-1f64c798de66","title":"retrieval-plan","size":1639}}
++{"timestamp":"2026-11-16T01:51:19.562Z","level":"INFO","service":"IPC","message":"START_INDEXING","data":{"documentId":"all"}}
++{"timestamp":"2026-11-16T01:51:19.562Z","level":"INFO","service":"IndexingService","message":"startIndexing called","data":{"documentId":"all"}}
++{"timestamp":"2026-11-16T01:51:19.562Z","level":"INFO","service":"IndexingService","message":"Batch indexing starting","data":{"totalDocs":3,"alreadyIndexed":0}}
++{"timestamp":"2026-11-16T01:51:19.562Z","level":"INFO","service":"IndexingService","message":"Indexing document","data":{"docId":"f350b571-60ed-4361-a6be-fc060b06ece1","title":"design-notes","contentLength":1940}}
++{"timestamp":"2026-11-16T01:51:19.562Z","level":"INFO","service":"IndexingService","message":"chunkDocument","data":{"documentId":"f350b571-60ed-4361-a6be-fc060b06ece1","contentLength":1940,"paragraphCount":15}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"chunkDocument complete","data":{"documentId":"f350b571-60ed-4361-a6be-fc060b06ece1","totalChunks":6,"totalChars":1929}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"Document indexed","data":{"docId":"f350b571-60ed-4361-a6be-fc060b06ece1","chunkCount":6}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"Indexing document","data":{"docId":"fc47ab7a-43a2-453d-b022-693bf539cf38","title":"meeting-summary","contentLength":1160}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"chunkDocument","data":{"documentId":"fc47ab7a-43a2-453d-b022-693bf539cf38","contentLength":1160,"paragraphCount":7}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"chunkDocument complete","data":{"documentId":"fc47ab7a-43a2-453d-b022-693bf539cf38","totalChunks":3,"totalChars":1155}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"Document indexed","data":{"docId":"fc47ab7a-43a2-453d-b022-693bf539cf38","chunkCount":3}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"Indexing document","data":{"docId":"d335d76a-fb0d-45eb-9fa9-1f64c798de66","title":"retrieval-plan","contentLength":1639}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"chunkDocument","data":{"documentId":"d335d76a-fb0d-45eb-9fa9-1f64c798de66","contentLength":1639,"paragraphCount":15}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"chunkDocument complete","data":{"documentId":"d335d76a-fb0d-45eb-9fa9-1f64c798de66","totalChunks":5,"totalChars":1630}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"Document indexed","data":{"docId":"d335d76a-fb0d-45eb-9fa9-1f64c798de66","chunkCount":5}}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IndexingService","message":"Batch indexing complete"}
++{"timestamp":"2026-11-16T01:51:19.563Z","level":"INFO","service":"IPC","message":"Indexing complete","data":{"status":"ready","indexed":3,"total":3}}
++{"timestamp":"2026-11-16T01:51:19.571Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T01:51:19.608Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does the indexing pipeline chunk documents?"}}
++{"timestamp":"2026-11-16T01:51:19.608Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does the indexing pipeline chunk documents?"}}
++{"timestamp":"2026-11-16T01:51:20.029Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:20.029Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":7,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:51:20.029Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":381}}
++{"timestamp":"2026-11-16T01:51:20.029Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":1}}
++{"timestamp":"2026-11-16T01:51:20.029Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:51:20.030Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:51:20.280Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What did the meeting decide about retrieval?"}}
++{"timestamp":"2026-11-16T01:51:20.280Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What did the meeting decide about retrieval?"}}
++{"timestamp":"2026-11-16T01:51:20.638Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:20.638Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":7,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:51:20.639Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":336}}
++{"timestamp":"2026-11-16T01:51:20.639Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":2}}
++{"timestamp":"2026-11-16T01:51:20.639Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:51:20.640Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:51:20.861Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"xyzzy plugh"}}
++{"timestamp":"2026-11-16T01:51:20.861Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"xyzzy plugh"}}
++{"timestamp":"2026-11-16T01:51:21.369Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:21.369Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":2,"relevantChunks":0}}
++{"timestamp":"2026-11-16T01:51:21.370Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.3,"citationCount":0,"answerLength":103}}
++{"timestamp":"2026-11-16T01:51:21.370Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":3}}
++{"timestamp":"2026-11-16T01:51:21.370Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.3,"citationCount":0}}
++{"timestamp":"2026-11-16T01:51:21.370Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:51:21.511Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What retrieval approach is planned?"}}
++{"timestamp":"2026-11-16T01:51:21.511Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What retrieval approach is planned?"}}
++{"timestamp":"2026-11-16T01:51:21.825Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:21.826Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:51:21.826Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":335}}
++{"timestamp":"2026-11-16T01:51:21.827Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":4}}
++{"timestamp":"2026-11-16T01:51:21.827Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:51:21.828Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:51:21.884Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How are documents imported?"}}
++{"timestamp":"2026-11-16T01:51:21.884Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How are documents imported?"}}
++{"timestamp":"2026-11-16T01:51:22.337Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:22.337Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:51:22.337Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":380}}
++{"timestamp":"2026-11-16T01:51:22.338Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":5}}
++{"timestamp":"2026-11-16T01:51:22.338Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:51:22.338Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:51:22.370Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"Summarize the meeting notes"}}
++{"timestamp":"2026-11-16T01:51:22.370Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"Summarize the meeting notes"}}
++{"timestamp":"2026-11-16T01:51:22.600Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:22.600Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:51:22.600Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":359}}
++{"timestamp":"2026-11-16T01:51:22.601Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":6}}
++{"timestamp":"2026-11-16T01:51:22.601Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:51:22.601Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:51:22.649Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What search strategy is used?"}}
++{"timestamp":"2026-11-16T01:51:22.649Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What search strategy is used?"}}
++{"timestamp":"2026-11-16T01:51:23.102Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:23.102Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:51:23.102Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":402}}
++{"timestamp":"2026-11-16T01:51:23.103Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":7}}
++{"timestamp":"2026-11-16T01:51:23.103Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:51:23.103Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:51:23.466Z","level":"INFO","service":"IPC","message":"GET_CHUNKS","data":{"documentId":"fc47ab7a-43a2-453d-b022-693bf539cf38"}}
++{"timestamp":"2026-11-16T01:51:23.632Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What design pattern is used?"}}
++{"timestamp":"2026-11-16T01:51:23.632Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What design pattern is used?"}}
++{"timestamp":"2026-11-16T01:51:23.979Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:23.979Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:51:23.979Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":380}}
++{"timestamp":"2026-11-16T01:51:23.982Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":8}}
++{"timestamp":"2026-11-16T01:51:23.982Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:51:23.982Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:51:24.131Z","level":"INFO","service":"IPC","message":"GET_CHUNKS","data":{"documentId":"d335d76a-fb0d-45eb-9fa9-1f64c798de66"}}
++{"timestamp":"2026-11-16T01:51:24.138Z","level":"INFO","service":"IPC","message":"GET_CHUNKS","data":{"documentId":"fc47ab7a-43a2-453d-b022-693bf539cf38"}}
++{"timestamp":"2026-11-16T01:51:24.277Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T01:51:24.278Z","level":"INFO","service":"IPC","message":"DELETE_DOCUMENT","data":{"id":"fc47ab7a-43a2-453d-b022-693bf539cf38"}}
++{"timestamp":"2026-11-16T01:51:24.281Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T01:51:24.593Z","level":"INFO","service":"IPC","message":"GET_DOCUMENT","data":{"id":"fc47ab7a-43a2-453d-b022-693bf539cf38"}}
++{"timestamp":"2026-11-16T01:51:25.093Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T01:51:25.102Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T01:51:25.102Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T01:51:25.345Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:25.345Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:51:25.345Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":335}}
++{"timestamp":"2026-11-16T01:51:25.346Z","level":"ERROR","service":"IPC","message":"Q&A failed","data":{"question":"How does retrieval work?","error":"SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)"}}
++Error occurred in handler for 'qa:ask': SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
++    at JSON.parse (<anonymous>)
++    at PersistenceService.readJson (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/persistence-service.js:56:21)
++    at QaService.getHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:98:33)
++    at QaService.saveToHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:123:30)
++    at QaService.ask (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:93:14)
++    at async /Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/main/ipc-handlers.js:58:30
++    at async WebContents.<anonymous> (node:electron/js2c/browser_init:2:87023)
++{"timestamp":"2026-11-16T01:51:25.479Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T01:51:25.479Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T01:51:25.738Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T01:51:25.738Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T01:51:25.738Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":335}}
++{"timestamp":"2026-11-16T01:51:25.738Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":9}}
++{"timestamp":"2026-11-16T01:51:25.738Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T01:51:25.738Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
+diff --git a/docs/evidence/conversation-history/generator/run2.log b/docs/evidence/conversation-history/generator/run2.log
+new file mode 100644
+index 0000000..63a2dfc
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/run2.log
+@@ -0,0 +1,18 @@
++
++DevTools listening on ws://127.0.0.1:9333/devtools/browser/55fb17be-0ee3-4b57-b698-81e7884ecd5e
++{"timestamp":"2026-11-16T01:52:04.237Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T01:52:04.240Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T01:52:04.240Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/f0c3b5d6-37bc-4d61-9ea1-7f5d8b863e59/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T01:52:04.240Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T01:52:04.240Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T01:52:04.240Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T01:52:04.240Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T01:52:04.240Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:52:04.240Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:52:04.240Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T01:52:04.377Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T01:52:04.606Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T01:52:04.606Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T01:52:06.419Z","level":"INFO","service":"IPC","message":"CLEAR_HISTORY"}
++{"timestamp":"2026-11-16T01:52:06.420Z","level":"INFO","service":"QaService","message":"Q&A history cleared"}
++{"timestamp":"2026-11-16T01:52:06.420Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
+diff --git a/docs/evidence/conversation-history/generator/run3.log b/docs/evidence/conversation-history/generator/run3.log
+new file mode 100644
+index 0000000..3a84eec
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/run3.log
+@@ -0,0 +1,15 @@
++
++DevTools listening on ws://127.0.0.1:9333/devtools/browser/95873f77-821a-47e1-87de-1c861d71dbab
++{"timestamp":"2026-11-16T01:52:07.581Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T01:52:07.582Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T01:52:07.582Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/f0c3b5d6-37bc-4d61-9ea1-7f5d8b863e59/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T01:52:07.582Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T01:52:07.582Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T01:52:07.582Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T01:52:07.582Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T01:52:07.582Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:52:07.582Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T01:52:07.582Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T01:52:07.650Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T01:52:07.784Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T01:52:07.785Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
+diff --git a/docs/evidence/conversation-history/generator/scripts/cdp.mjs b/docs/evidence/conversation-history/generator/scripts/cdp.mjs
+new file mode 100644
+index 0000000..b4c7c79
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/scripts/cdp.mjs
+@@ -0,0 +1,73 @@
++// Minimal CDP client (Node 20 + --experimental-websocket). No dependencies.
++import fs from 'node:fs';
++
++export async function connect(port = 9333) {
++  const list = await (await fetch(`http://localhost:${port}/json/list`)).json();
++  const page = list.find(t => t.type === 'page');
++  const ws = new WebSocket(page.webSocketDebuggerUrl);
++  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
++  let id = 0;
++  const pending = new Map();
++  const problems = [];
++  ws.onmessage = ev => {
++    const msg = JSON.parse(ev.data);
++    if (msg.id && pending.has(msg.id)) {
++      const { res, rej } = pending.get(msg.id);
++      pending.delete(msg.id);
++      msg.error ? rej(new Error(JSON.stringify(msg.error))) : res(msg.result);
++    } else if (msg.method === 'Runtime.exceptionThrown') {
++      problems.push({ kind: 'exception', text: msg.params.exceptionDetails.exception?.description ?? msg.params.exceptionDetails.text });
++    } else if (msg.method === 'Runtime.consoleAPICalled' && (msg.params.type === 'error' || msg.params.type === 'warning')) {
++      problems.push({ kind: `console.${msg.params.type}`, text: msg.params.args.map(a => a.value ?? a.description).join(' ') });
++    }
++  };
++  const send = (method, params = {}) => new Promise((res, rej) => {
++    const mid = ++id;
++    pending.set(mid, { res, rej });
++    ws.send(JSON.stringify({ id: mid, method, params }));
++  });
++  await send('Runtime.enable');
++  await send('Page.enable');
++
++  const evaluate = async expression => {
++    const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
++    if (r.exceptionDetails) throw new Error('evaluate failed: ' + JSON.stringify(r.exceptionDetails));
++    return r.result.value;
++  };
++  const key = async (keyName, opts = {}) => {
++    const map = {
++      Enter: { code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' },
++      Tab: { code: 'Tab', windowsVirtualKeyCode: 9 },
++      ' ': { code: 'Space', windowsVirtualKeyCode: 32, text: ' ' },
++    };
++    const k = map[keyName];
++    const modifiers = opts.shift ? 8 : 0;
++    await send('Input.dispatchKeyEvent', { type: k.text ? 'keyDown' : 'rawKeyDown', key: keyName, modifiers, ...k });
++    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: keyName, modifiers, code: k.code, windowsVirtualKeyCode: k.windowsVirtualKeyCode });
++  };
++  const type = text => send('Input.insertText', { text });
++  const clickAt = async (x, y) => {
++    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
++    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
++    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
++  };
++  /** Clicks the centre of the element returned by a JS expression (scrolling it into view first). */
++  const click = async selectorExpr => {
++    const r = await evaluate(`(() => { const el = ${selectorExpr}; if (!el) return null; el.scrollIntoView({block:'center'}); const b = el.getBoundingClientRect(); return {x: b.x + b.width/2, y: b.y + Math.min(b.height/2, 10)}; })()`);
++    if (!r) throw new Error('click target not found: ' + selectorExpr);
++    await clickAt(r.x, r.y);
++  };
++  const screenshot = async file => {
++    const r = await send('Page.captureScreenshot', { format: 'png' });
++    fs.writeFileSync(file, Buffer.from(r.data, 'base64'));
++  };
++  const waitFor = async (expr, timeout = 5000) => {
++    const t0 = Date.now();
++    while (Date.now() - t0 < timeout) {
++      if (await evaluate(expr)) return true;
++      await new Promise(r => setTimeout(r, 50));
++    }
++    throw new Error('timeout waiting for: ' + expr);
++  };
++  return { send, evaluate, key, type, click, screenshot, waitFor, problems, close: () => ws.close() };
++}
+diff --git a/docs/evidence/conversation-history/generator/scripts/phase1.mjs b/docs/evidence/conversation-history/generator/scripts/phase1.mjs
+new file mode 100644
+index 0000000..c213bf5
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/scripts/phase1.mjs
+@@ -0,0 +1,177 @@
++// Session 1: empty state, seeding, asks, pending/double-submit, no-citation, autoscroll,
++// citation mouse + keyboard, a11y DOM, timestamps, error path.
++import fs from 'node:fs';
++import { connect } from './cdp.mjs';
++
++const [, , REPO, KB, LOG, OUT] = process.argv;
++const c = await connect();
++const results = [];
++const check = (id, name, ok, detail) => { results.push({ id, name, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} [${id}] ${name} :: ${JSON.stringify(detail)}`); };
++const askCount = () => fs.readFileSync(LOG, 'utf8').split('\n').filter(l => l.includes('"ASK_QUESTION"')).length;
++const exchanges = `document.querySelectorAll('[role=log] ol > li article[aria-label^="Exchange"]').length`;
++const ask = async q => {
++  await c.evaluate(`document.getElementById('question-input').focus()`);
++  await c.type(q);
++  await c.key('Enter');
++};
++const settled = `!document.querySelector('[aria-busy=true]')`;
++
++await c.waitFor(`!!document.querySelector('#conversation-heading') && !document.body.innerText.includes('Loading conversation')`);
++
++// AC-10 empty state
++await c.screenshot(`${OUT}/01-empty.png`);
++check('AC-10', 'empty state shown on fresh data dir', await c.evaluate(`document.body.innerText.includes('No questions yet')`), {});
++
++// Seed documents (§6.2), then Refresh
++await c.evaluate(`(async () => { for (const f of ['design-notes.md','meeting-summary.txt','retrieval-plan.md']) await window.knowledgeBase.documents.import('${REPO}/data/sample-documents/' + f); await window.knowledgeBase.indexing.start(); })()`);
++await c.click(`[...document.querySelectorAll('header button')].find(b => b.textContent.trim() === 'Refresh')`);
++await c.waitFor(`document.body.innerText.includes('Documents (3)')`);
++check('seed', '3 documents listed', true, {});
++
++// Step 2: first question, observe pending
++const before2 = askCount();
++await ask('How does the indexing pipeline chunk documents?');
++const pendingSeen = await c.evaluate(`(() => { const p = document.querySelector('[aria-busy=true]'); return p ? p.innerText : null; })()`);
++await c.screenshot(`${OUT}/02-pending.png`);
++await c.waitFor(settled);
++await c.waitFor(`${exchanges} === 1`);
++check('AC-8', 'pending turn shows question + Answering…', pendingSeen && pendingSeen.includes('How does the indexing pipeline') && pendingSeen.includes('Answering…'), { pendingSeen });
++const ex1 = await c.evaluate(`(() => { const a = document.querySelector('[role=log] article'); return { text: a.innerText, citations: a.querySelectorAll('button').length, time: a.querySelector('time')?.textContent, dt: a.querySelector('time')?.getAttribute('datetime') }; })()`);
++check('AC-4', 'answer 1 has >=1 citation button with title, chunk, excerpt', ex1.citations >= 1 && /chunk \d+/.test(ex1.text) && ex1.text.includes('“'), ex1);
++check('AC-6', 'readable timestamp (not ISO)', ex1.time && !ex1.time.includes('T') && /\d{4}/.test(ex1.time), { time: ex1.time, datetime: ex1.dt });
++check('AC-8', 'one ASK_QUESTION for one ask', askCount() - before2 === 1, { delta: askCount() - before2 });
++await c.screenshot(`${OUT}/03-first-answer.png`);
++
++// Step 3: double submit while pending
++const before3 = askCount();
++await ask('What did the meeting decide about retrieval?');
++await c.type('second submit attempt');
++await c.key('Enter');
++await c.click(`document.querySelector('form button[type=submit]')`);
++const busyLabel = await c.evaluate(`document.querySelector('form button[type=submit]').textContent`);
++await c.waitFor(settled);
++await c.waitFor(`${exchanges} === 2`);
++const inputAfter = await c.evaluate(`document.getElementById('question-input').value`);
++check('AC-8', 'Enter + click during pending add no extra ASK_QUESTION', askCount() - before3 === 1, { delta: askCount() - before3, busyLabel, inputKeptText: inputAfter });
++const turns = await c.evaluate(`[...document.querySelectorAll('[role=log] article')].map(a => a.querySelector('div').innerText)`);
++check('AC-8', 'no duplicate question turn after resolve', turns.filter(t => t.includes('What did the meeting decide')).length === 1, { turns });
++await c.evaluate(`(() => { const i = document.getElementById('question-input'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, ''); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
++
++// Step 4: order + first unchanged
++const qs = await c.evaluate(`[...document.querySelectorAll('[role=log] article[aria-label^="Exchange"]')].map(a => a.innerText.split('\\n')[1])`);
++check('AC-1', 'two exchanges oldest-first', qs[0].startsWith('How does the indexing') && qs[1].startsWith('What did the meeting'), { qs });
++const roles = await c.evaluate(`[...document.querySelector('[role=log] article').querySelectorAll('div')].map(d => d.textContent).filter(t => t === 'You' || t.startsWith('Assistant')).length`);
++check('AC-2', '"You" / "Assistant" text labels present', roles >= 2, { roles });
++await c.screenshot(`${OUT}/04-two-exchanges.png`);
++
++// Step 5: no citations
++await ask('xyzzy plugh');
++await c.waitFor(`${exchanges} === 3`);
++const last = await c.evaluate(`(() => { const all = document.querySelectorAll('[role=log] article'); const a = all[all.length-1]; return { text: a.innerText, buttons: a.querySelectorAll('button').length }; })()`);
++check('AC-4', 'zero-citation answer says "No sources cited", no Sources header', last.text.includes('No sources cited') && !last.text.includes('SOURCES') && !last.text.includes('Sources') && last.buttons === 0, last);
++await c.screenshot(`${OUT}/05-no-citations.png`);
++
++// Step 6: overflow + autoscroll
++for (const q of ['What retrieval approach is planned?', 'How are documents imported?', 'Summarize the meeting notes', 'What search strategy is used?']) {
++  const n = await c.evaluate(exchanges);
++  await ask(q);
++  await c.waitFor(`${exchanges} === ${n + 1}`);
++  await c.waitFor(settled);
++}
++await new Promise(r => setTimeout(r, 200));
++const scroll = await c.evaluate(`(() => { const log = document.querySelector('[role=log]'); const sc = log.parentElement; const arts = log.querySelectorAll('article'); const lastA = arts[arts.length-1].getBoundingClientRect(); const box = sc.getBoundingClientRect(); return { scrollHeight: sc.scrollHeight, clientHeight: sc.clientHeight, scrollTop: sc.scrollTop, atBottom: sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 2, lastBottomVisible: lastA.bottom <= box.bottom + 2 && lastA.bottom > box.top }; })()`);
++check('AC-12', 'conversation taller than panel and newest exchange in view', scroll.scrollHeight > scroll.clientHeight && scroll.atBottom && scroll.lastBottomVisible, scroll);
++await c.screenshot(`${OUT}/06-autoscroll.png`);
++const noHScroll = await c.evaluate(`({ doc: document.documentElement.scrollWidth <= document.documentElement.clientWidth, body: document.body.scrollWidth <= document.body.clientWidth })`);
++check('AC-3', 'no horizontal overflow of window', noHScroll.doc && noHScroll.body, noHScroll);
++
++// Step 7: mouse click citation from exchange 1
++const cited = await c.evaluate(`document.querySelector('[role=log] article button span').textContent`);
++await c.click(`document.querySelector('[role=log] article button')`);
++await c.waitFor(`!!document.querySelector('section[aria-label="Selected document"] h2')`);
++const shown = await c.evaluate(`document.querySelector('section[aria-label="Selected document"] h2').textContent`);
++check('AC-5', 'mouse click on citation shows cited document', shown === cited, { cited, shown });
++await c.screenshot(`${OUT}/07-citation-click.png`);
++await c.click(`document.querySelector('button[aria-label="Close document"]')`);
++
++// Step 8: keyboard only
++await c.evaluate(`document.activeElement && document.activeElement.blur()`);
++// Tab from the top of the page until the question input has focus
++let tabs = 0;
++for (; tabs < 200; tabs++) {
++  if (await c.evaluate(`document.activeElement?.id === 'question-input'`)) break;
++  await c.key('Tab', { shift: true });
++}
++const inputFocusVisible = await c.evaluate(`document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle !== 'none'`);
++const nBefore = await c.evaluate(exchanges);
++await c.type('What design pattern is used?');
++await c.key('Enter');
++await c.waitFor(`${exchanges} === ${nBefore + 1}`);
++await c.waitFor(settled);
++// Shift+Tab from the input reaches the newest answer's last citation
++await c.key('Tab', { shift: true });
++const focused = await c.evaluate(`(() => { const el = document.activeElement; const arts = document.querySelectorAll('[role=log] article'); return { tag: el.tagName, inNewest: arts[arts.length-1].contains(el), text: el.querySelector('span')?.textContent, focusVisible: el.matches(':focus-visible'), outline: getComputedStyle(el).outlineStyle + ' ' + getComputedStyle(el).outlineColor }; })()`);
++await c.screenshot(`${OUT}/08-keyboard-focus-citation.png`);
++await c.key('Enter');
++await c.waitFor(`!!document.querySelector('section[aria-label="Selected document"] h2')`);
++const kbShown = await c.evaluate(`document.querySelector('section[aria-label="Selected document"] h2').textContent`);
++check('AC-13', 'keyboard flow: input reached, focus visible, submit, Shift+Tab to citation, Enter opens doc', inputFocusVisible && focused.tag === 'BUTTON' && focused.inNewest && focused.focusVisible && kbShown === focused.text, { tabsToInput: tabs, inputFocusVisible, focused, kbShown });
++// Space activation on another citation
++await c.evaluate(`document.querySelector('button[aria-label="Close document"]').click()`);
++await c.evaluate(`[...document.querySelectorAll('[role=log] article button')][0].focus()`);
++await c.key(' ');
++await c.waitFor(`!!document.querySelector('section[aria-label="Selected document"] h2')`);
++check('AC-5', 'Space on focused citation opens document', true, {});
++await c.screenshot(`${OUT}/09-keyboard-opened.png`);
++
++// Step 9: DOM semantics
++const dom = await c.evaluate(`(() => { const log = document.querySelector('[role=log]'); const i = document.getElementById('question-input'); const lab = document.querySelector('label[for=question-input]'); return { logRole: log.getAttribute('role'), ariaLive: log.getAttribute('aria-live'), listTag: log.firstElementChild.tagName, itemTag: log.querySelector('li').tagName, articleTag: log.querySelector('li > article').tagName, inputLabel: lab && lab.textContent, citationTags: [...new Set([...log.querySelectorAll('article ul li > *')].map(e => e.tagName))], clickableDivs: [...log.querySelectorAll('div')].filter(d => d.onclick).length }; })()`);
++check('AC-13', 'role=log + aria-live, ol/li/article, labelled input, citations are buttons', dom.logRole === 'log' && dom.ariaLive === 'polite' && dom.listTag === 'OL' && dom.articleTag === 'ARTICLE' && dom.inputLabel && dom.citationTags.join() === 'BUTTON', dom);
++
++// Step 10: timestamps match file
++const fileHist = JSON.parse(fs.readFileSync(`${KB}/qa-history.json`, 'utf8'));
++const screenTimes = await c.evaluate(`[...document.querySelectorAll('[role=log] article time')].map(t => ({ dt: t.getAttribute('datetime'), text: t.textContent }))`);
++const tsOk = screenTimes.length === fileHist.length && screenTimes.every((t, i) => t.dt === fileHist[i].response.timestamp && t.text === new Date(fileHist[i].response.timestamp).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }));
++check('AC-6', 'on-screen times match qa-history.json timestamps', tsOk, { count: screenTimes.length, first: screenTimes[0], file0: fileHist[0].response.timestamp });
++
++// Stale citation (AC-5): delete the cited doc of exchange 1 via API, click its citation
++const docs = await c.evaluate(`window.knowledgeBase.documents.list()`);
++const staleTitle = await c.evaluate(`document.querySelector('[role=log] article button span').textContent`);
++const victim = docs.find(d => d.title === staleTitle);
++fs.copyFileSync(`${KB}/documents-meta.json`, `${OUT}/../documents-meta.backup.json`);
++await c.evaluate(`window.knowledgeBase.documents.delete('${victim.id}')`);
++await c.evaluate(`document.querySelector('button[aria-label="Close document"]')?.click()`);
++await c.evaluate(`document.querySelector('header button').click()`);
++await new Promise(r => setTimeout(r, 300));
++const probsBefore = c.problems.length;
++await c.click(`document.querySelector('[role=log] article button')`);
++await c.waitFor(`document.querySelector('[role=log] article').innerText.includes('no longer available')`);
++await new Promise(r => setTimeout(r, 300));
++check('AC-5', 'stale citation: stays visible, shows notice, no console error / exception', c.problems.length === probsBefore && !(await c.evaluate(`!!document.querySelector('section[aria-label="Selected document"]')`)), { newProblems: c.problems.slice(probsBefore) });
++await c.screenshot(`${OUT}/10-stale-citation.png`);
++// Restore the document metadata so later steps see 3 documents again (file restored while app runs; list re-reads it)
++fs.copyFileSync(`${OUT}/../documents-meta.backup.json`, `${KB}/documents-meta.json`);
++fs.unlinkSync(`${OUT}/../documents-meta.backup.json`);
++await c.evaluate(`document.querySelector('header button').click()`);
++
++// Error path (§6.5)
++const nErrBefore = await c.evaluate(exchanges);
++const good = fs.readFileSync(`${KB}/qa-history.json`, 'utf8');
++fs.writeFileSync(`${KB}/qa-history.json`, '{not json\n');
++await ask('How does retrieval work?');
++await c.waitFor(`!!document.querySelector('[role=log] article[aria-label^="Question that could not"]')`);
++const err = await c.evaluate(`(() => { const a = document.querySelector('[role=log] article[aria-label^="Question that could not"]'); return { text: a.innerText, exchanges: ${exchanges} }; })()`);
++await c.screenshot(`${OUT}/11-error.png`);
++const logHasFail = fs.readFileSync(LOG, 'utf8').includes('Q&A failed');
++check('AC-9', 'inline error, earlier exchanges kept, not shown as answered, log has Q&A failed', err.text.includes('could not be answered') && err.text.includes('How does retrieval work?') && err.exchanges === nErrBefore && logHasFail, { err, nErrBefore, logHasFail });
++fs.writeFileSync(`${KB}/qa-history.json`, good);
++await c.click(`[...document.querySelectorAll('[role=log] button')].find(b => b.textContent === 'Retry')`);
++await c.waitFor(`${exchanges} === ${nErrBefore + 1}`);
++await c.waitFor(settled);
++const afterRetry = await c.evaluate(`({ errorGone: !document.querySelector('[role=log] article[aria-label^="Question that could not"]'), lastQ: [...document.querySelectorAll('[role=log] article')].pop().innerText.split('\\n')[1] })`);
++check('AC-9', 'after restoring file, retry succeeds and error turn removed', afterRetry.errorGone && afterRetry.lastQ === 'How does retrieval work?', afterRetry);
++await c.screenshot(`${OUT}/12-after-retry.png`);
++
++check('AC-5/console', 'no uncaught exceptions or console errors during session', c.problems.length === 0, c.problems);
++fs.writeFileSync(`${OUT}/phase1-results.json`, JSON.stringify(results, null, 2));
++c.close();
+diff --git a/docs/evidence/conversation-history/generator/scripts/phase2.mjs b/docs/evidence/conversation-history/generator/scripts/phase2.mjs
+new file mode 100644
+index 0000000..0ef3b5d
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/scripts/phase2.mjs
+@@ -0,0 +1,49 @@
++// Usage: phase2.mjs <mode> <KB> <OUT>
++// mode=restart: verify persisted conversation + long fixture; then Clear cancel/confirm.
++// mode=after-clear: verify empty state persists after restart.
++import fs from 'node:fs';
++import { connect } from './cdp.mjs';
++
++const [, , MODE, KB, OUT] = process.argv;
++const c = await connect();
++const results = [];
++const check = (id, name, ok, detail) => { results.push({ id, name, ok: !!ok, detail }); console.log(`${ok ? 'PASS' : 'FAIL'} [${id}] ${name} :: ${JSON.stringify(detail)}`); };
++await c.waitFor(`!!document.querySelector('#conversation-heading') && !document.body.innerText.includes('Loading conversation')`);
++await new Promise(r => setTimeout(r, 300));
++const file = () => JSON.parse(fs.readFileSync(`${KB}/qa-history.json`, 'utf8'));
++
++if (MODE === 'restart') {
++  const hist = file();
++  const screen = await c.evaluate(`[...document.querySelectorAll('[role=log] article[aria-label^="Exchange"]')].map(a => ({ q: a.firstElementChild.lastElementChild.textContent, dt: a.querySelector('time').getAttribute('datetime'), cites: [...a.querySelectorAll('ul button')].map(b => b.querySelector('span').textContent + '#' + b.querySelectorAll('span')[1].textContent.replace(/\\D/g, '')) }))`);
++  const same = screen.length === hist.length && hist.every((h, i) => screen[i].q === h.question && screen[i].dt === h.response.timestamp && screen[i].cites.join() === h.response.citations.map(x => x.documentTitle + '#' + x.chunkIndex).join());
++  check('AC-7', 'after restart: same count, order, timestamps, citations as qa-history.json', same, { screen: screen.length, file: hist.length });
++  // Long-answer fixture is the last exchange
++  const fixture = await c.evaluate(`(() => { const arts = [...document.querySelectorAll('[role=log] article[aria-label^="Exchange"]')]; const a = arts.find(x => x.textContent.includes('FIXTURE: long answer')); a.scrollIntoView({block:'start'}); const ans = [...a.querySelectorAll('div')].find(d => d.textContent.startsWith('Long answer sentence')); const sc = document.querySelector('[role=log]').parentElement; return { len: ans.textContent.length, endsWith: ans.textContent.slice(-12), hasEllipsis: ans.textContent.includes('...') || ans.textContent.includes('…'), ansFits: ans.scrollWidth <= ans.clientWidth, scFits: sc.scrollWidth <= sc.clientWidth, docFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth }; })()`);
++  const fixtureFile = hist.find(h => h.question === 'FIXTURE: long answer').response.answer;
++  check('AC-3', 'long fixture answer rendered in full (>=1500 chars), wraps, no horizontal scroll', fixture.len === fixtureFile.length && fixture.len >= 1500 && !fixture.hasEllipsis && fixture.ansFits && fixture.scFits && fixture.docFits, fixture);
++  await c.screenshot(`${OUT}/13-restart-long-fixture.png`);
++
++  // Clear -> Cancel
++  await c.click(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Clear')`);
++  const prompt = await c.evaluate(`({ text: document.querySelector('[role=group]')?.textContent, focused: document.activeElement.textContent })`);
++  await c.screenshot(`${OUT}/14-clear-confirm.png`);
++  await c.click(`[...document.querySelectorAll('[role=group] button')].find(b => b.textContent === 'Cancel')`);
++  await new Promise(r => setTimeout(r, 200));
++  const afterCancel = await c.evaluate(`({ n: document.querySelectorAll('[role=log] article[aria-label^="Exchange"]').length, focus: document.activeElement.textContent })`);
++  check('AC-11', 'in-page confirmation; Cancel keeps everything (file + view)', prompt.text?.includes('Delete all') && prompt.focused === 'Cancel' && afterCancel.n === hist.length && file().length === hist.length, { prompt, afterCancel });
++  // Clear -> Confirm
++  await c.click(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Clear')`);
++  await c.click(`[...document.querySelectorAll('[role=group] button')].find(b => b.textContent === 'Clear conversation')`);
++  await c.waitFor(`document.body.innerText.includes('No questions yet')`);
++  const raw = fs.readFileSync(`${KB}/qa-history.json`, 'utf8').trim();
++  check('AC-11', 'Confirm empties view and qa-history.json is []', raw === '[]', { raw });
++  check('AC-10', 'empty state after Clear', true, {});
++  await c.screenshot(`${OUT}/15-after-clear.png`);
++} else {
++  const st = await c.evaluate(`({ empty: document.body.innerText.includes('No questions yet'), heading: document.getElementById('conversation-heading').textContent, historyTab: [...document.querySelectorAll('button')].some(b => /^History/.test(b.textContent)) })`);
++  check('AC-11', 'empty state persists after restart; sidebar History tab removed', st.empty && st.heading.includes('0 exchanges') && !st.historyTab, st);
++  await c.screenshot(`${OUT}/16-restart-after-clear.png`);
++}
++check('console', 'no console errors / uncaught exceptions', c.problems.filter(p => p.kind !== 'console.warning').length === 0, c.problems.map(p => p.kind));
++fs.writeFileSync(`${OUT}/phase2-${MODE}-results.json`, JSON.stringify(results, null, 2));
++c.close();
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index 4d25b8b..871a385 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -1,10 +1,11 @@
+-import { useState, useCallback, useEffect } from 'react';
++import { useState, useCallback, useEffect, useRef } from 'react';
+ import { DocumentList } from './components/DocumentList';
+ import { QuestionPanel } from './components/QuestionPanel';
+ import { DocumentDetail } from './components/DocumentDetail';
+-import { ConversationHistory } from './components/ConversationHistory';
++import { ConversationView, AskError, HistoryLoadState } from './components/ConversationView';
+ import { StatusBar } from './components/StatusBar';
+-import { Document, AppStatus, QAResponse, QAHistory } from '../shared/types';
++import { describeAskError } from './components/conversation-format';
++import { Document, AppStatus, Citation, QAHistory } from '../shared/types';
+ 
+ export function App() {
+   const [documents, setDocuments] = useState<Document[]>([]);
+@@ -14,9 +15,12 @@ export function App() {
+     indexStatus: 'idle',
+     lastActivity: '',
+   });
+-  const [lastResponse, setLastResponse] = useState<QAResponse | null>(null);
+   const [conversationHistory, setConversationHistory] = useState<QAHistory[]>([]);
+-  const [activeTab, setActiveTab] = useState<'documents' | 'conversation'>('documents');
++  const [historyLoadState, setHistoryLoadState] = useState<HistoryLoadState>('loading');
++  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
++  const [askError, setAskError] = useState<AskError | null>(null);
++  // Synchronous guard: state updates are async, so two rapid submits could both see pendingQuestion === null.
++  const askInFlight = useRef(false);
+ 
+   const refreshDocuments = useCallback(async () => {
+     try {
+@@ -29,19 +33,24 @@ export function App() {
+     }
+   }, []);
+ 
+-  const refreshHistory = useCallback(async () => {
++  /** Loads the persisted conversation. Returns null if it could not be read. */
++  const loadHistory = useCallback(async (): Promise<QAHistory[] | null> => {
+     try {
+       const history = await window.knowledgeBase.conversation.get();
+       setConversationHistory(history);
+-    } catch (err) {
+-      console.error('Failed to refresh conversation history:', err);
++      setHistoryLoadState('loaded');
++      return history;
++    } catch {
++      // Keep whatever is already on screen; only report an error if nothing was ever loaded.
++      setHistoryLoadState(prev => (prev === 'loading' ? 'error' : prev));
++      return null;
+     }
+   }, []);
+ 
+   useEffect(() => {
+     refreshDocuments();
+-    refreshHistory();
+-  }, [refreshDocuments, refreshHistory]);
++    loadHistory();
++  }, [refreshDocuments, loadHistory]);
+ 
+   const handleImport = useCallback(async () => {
+     console.log('Import triggered - use window.knowledgeBase.documents.import(filePath)');
+@@ -52,14 +61,65 @@ export function App() {
+   }, []);
+ 
+   const handleAskQuestion = useCallback(async (question: string) => {
++    if (askInFlight.current) return;
++    askInFlight.current = true;
++    setAskError(null);
++    setPendingQuestion(question);
+     try {
+       const response = await window.knowledgeBase.qa.ask(question);
+-      setLastResponse(response);
+-      refreshHistory();
++      // The service persists the exchange before replying, so the reloaded history already
++      // contains it. Replace the optimistic turn with the persisted one in the same synchronous
++      // block so no render shows the question twice.
++      let persisted: QAHistory[] | null = null;
++      try {
++        persisted = await window.knowledgeBase.conversation.get();
++      } catch {
++        persisted = null;
++      }
++      if (persisted) {
++        setConversationHistory(persisted);
++        setHistoryLoadState('loaded');
++      } else {
++        setConversationHistory(prev => [...prev, { question, response }]);
++      }
++      setPendingQuestion(null);
+     } catch (err) {
+-      console.error('Q&A failed:', err);
++      setAskError({ question, message: describeAskError(err) });
++      setPendingQuestion(null);
++    } finally {
++      askInFlight.current = false;
++    }
++  }, []);
++
++  const handleOpenCitation = useCallback(async (citation: Citation): Promise<boolean> => {
++    const known = documents.find(d => d.id === citation.documentId);
++    if (known) {
++      setSelectedDoc(known);
++      return true;
++    }
++    // The list may be stale (e.g. documents seeded since the last refresh); ask main directly.
++    try {
++      const doc = await window.knowledgeBase.documents.get(citation.documentId);
++      if (!doc) return false;
++      setSelectedDoc(doc);
++      refreshDocuments();
++      return true;
++    } catch {
++      return false;
+     }
+-  }, [refreshHistory]);
++  }, [documents, refreshDocuments]);
++
++  const handleClearConversation = useCallback(async (): Promise<boolean> => {
++    try {
++      await window.knowledgeBase.qa.clearHistory();
++      setAskError(null);
++      const reloaded = await loadHistory();
++      if (reloaded === null) setConversationHistory([]);
++      return true;
++    } catch {
++      return false;
++    }
++  }, [loadHistory]);
+ 
+   return (
+     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+@@ -89,119 +149,98 @@ export function App() {
+       </header>
+ 
+       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+-        {/* Left panel: Document list + Conversation tabs */}
++        {/* Left panel: document list */}
+         <div style={{
+           width: '280px',
++          flexShrink: 0,
+           borderRight: '1px solid #0f3460',
+           display: 'flex',
+           flexDirection: 'column',
+           background: '#16213e',
+         }}>
+           <div style={{
++            padding: '8px 16px',
+             display: 'flex',
++            alignItems: 'center',
++            justifyContent: 'space-between',
+             borderBottom: '1px solid #0f3460',
+           }}>
++            <h2 style={{ fontSize: '12px', fontWeight: 500 }}>
++              Documents ({documents.length})
++            </h2>
+             <button
+-              onClick={() => setActiveTab('documents')}
++              onClick={handleImport}
+               style={{
+-                flex: 1,
+-                padding: '8px',
+-                background: activeTab === 'documents' ? '#0f3460' : 'transparent',
+-                color: activeTab === 'documents' ? '#e0e0e0' : '#666',
++                padding: '4px 10px',
++                background: '#533483',
++                color: '#fff',
+                 border: 'none',
+-                borderBottom: activeTab === 'documents' ? '2px solid #533483' : '2px solid transparent',
++                borderRadius: '3px',
+                 cursor: 'pointer',
+                 fontSize: '12px',
+-                fontWeight: 500,
+               }}
+             >
+-              Documents ({documents.length})
++              + Import
+             </button>
+-            <button
+-              onClick={() => setActiveTab('conversation')}
++          </div>
++          <DocumentList
++            documents={documents}
++            onSelect={handleSelectDocument}
++            selectedId={selectedDoc?.id ?? null}
++          />
++        </div>
++
++        {/* Right panel: selected document (if any) above the conversation and question input */}
++        <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
++          {selectedDoc && (
++            <section
++              aria-label="Selected document"
+               style={{
+-                flex: 1,
+-                padding: '8px',
+-                background: activeTab === 'conversation' ? '#0f3460' : 'transparent',
+-                color: activeTab === 'conversation' ? '#e0e0e0' : '#666',
+-                border: 'none',
+-                borderBottom: activeTab === 'conversation' ? '2px solid #533483' : '2px solid transparent',
+-                cursor: 'pointer',
+-                fontSize: '12px',
+-                fontWeight: 500,
++                flexShrink: 0,
++                maxHeight: '40%',
++                overflow: 'auto',
++                padding: '16px 20px',
++                borderBottom: '1px solid #0f3460',
++                position: 'relative',
+               }}
+             >
+-              History ({conversationHistory.length})
+-            </button>
+-          </div>
+-          {activeTab === 'documents' ? (
+-            <>
+-              <div style={{
+-                padding: '6px 16px',
+-                display: 'flex',
+-                justifyContent: 'flex-end',
+-              }}>
+-                <button
+-                  onClick={handleImport}
+-                  style={{
+-                    padding: '4px 10px',
+-                    background: '#533483',
+-                    color: '#fff',
+-                    border: 'none',
+-                    borderRadius: '3px',
+-                    cursor: 'pointer',
+-                    fontSize: '12px',
+-                  }}
+-                >
+-                  + Import
+-                </button>
+-              </div>
+-              <DocumentList
+-                documents={documents}
+-                onSelect={handleSelectDocument}
+-                selectedId={selectedDoc?.id ?? null}
+-              />
+-            </>
+-          ) : (
+-            <ConversationHistory history={conversationHistory} />
++              <button
++                type="button"
++                onClick={() => setSelectedDoc(null)}
++                aria-label="Close document"
++                style={{
++                  float: 'right',
++                  padding: '4px 10px',
++                  background: 'transparent',
++                  color: '#8888bb',
++                  border: '1px solid #0f3460',
++                  borderRadius: '4px',
++                  cursor: 'pointer',
++                  fontSize: '12px',
++                }}
++              >
++                Close
++              </button>
++              <DocumentDetail key={selectedDoc.id} document={selectedDoc} />
++            </section>
+           )}
+-        </div>
+ 
+-        {/* Right panel: Document detail + Q&A */}
+-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+-          <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+-            {selectedDoc ? (
+-              <DocumentDetail document={selectedDoc} />
+-            ) : (
+-              <div style={{ color: '#666', textAlign: 'center', paddingTop: '40px' }}>
+-                Select a document or ask a question to get started
+-              </div>
+-            )}
+-            {lastResponse && (
+-              <div style={{
+-                marginTop: '16px',
+-                padding: '16px',
+-                background: '#1a1a3e',
+-                borderRadius: '6px',
+-                border: '1px solid #0f3460',
+-              }}>
+-                <div style={{ fontSize: '14px', lineHeight: 1.6 }}>{lastResponse.answer}</div>
+-                {lastResponse.citations.length > 0 && (
+-                  <div style={{ marginTop: '10px', fontSize: '12px', color: '#8888bb' }}>
+-                    <strong>Citations:</strong>
+-                    {lastResponse.citations.map((c, i) => (
+-                      <div key={i} style={{ marginTop: '4px', paddingLeft: '8px', borderLeft: '2px solid #533483' }}>
+-                        {c.documentTitle} (chunk {c.chunkIndex}): {c.excerpt.substring(0, 100)}...
+-                      </div>
+-                    ))}
+-                  </div>
+-                )}
+-              </div>
+-            )}
+-          </div>
++          <ConversationView
++            history={conversationHistory}
++            loadState={historyLoadState}
++            pendingQuestion={pendingQuestion}
++            askError={askError}
++            documentCount={documents.length}
++            selectedDocId={selectedDoc?.id ?? null}
++            onOpenCitation={handleOpenCitation}
++            onRetry={handleAskQuestion}
++            onDismissError={() => setAskError(null)}
++            onReloadHistory={loadHistory}
++            onClear={handleClearConversation}
++          />
+ 
+-          <QuestionPanel onAsk={handleAskQuestion} />
+-        </div>
++          <QuestionPanel onAsk={handleAskQuestion} busy={pendingQuestion !== null} />
++        </main>
+       </div>
+ 
+       <StatusBar status={appStatus} />
+diff --git a/src/renderer/components/ConversationHistory.tsx b/src/renderer/components/ConversationHistory.tsx
+deleted file mode 100644
+index adc97d8..0000000
+--- a/src/renderer/components/ConversationHistory.tsx
++++ /dev/null
+@@ -1,35 +0,0 @@
+-import { QAHistory } from '../../shared/types';
+-
+-interface Props {
+-  history: QAHistory[];
+-}
+-
+-/**
+- * ConversationHistory - Placeholder component
+- *
+- * TODO: Implement a full multi-turn conversation history view.
+- * For now this displays a basic list of past Q&A exchanges.
+- */
+-export function ConversationHistory({ history }: Props) {
+-  if (history.length === 0) {
+-    return (
+-      <div style={{ padding: '20px', color: '#666', textAlign: 'center', fontSize: '13px' }}>
+-        No conversation history yet. Ask a question to get started.
+-      </div>
+-    );
+-  }
+-
+-  return (
+-    <div style={{ padding: '12px' }}>
+-      <div style={{ fontSize: '13px', color: '#888', marginBottom: '8px' }}>
+-        History ({history.length})
+-      </div>
+-      {history.map((item, i) => (
+-        <div key={i} style={{ marginBottom: '8px', fontSize: '12px' }}>
+-          <div style={{ color: '#a0a0c0' }}>Q: {item.question}</div>
+-          <div style={{ color: '#888' }}>A: {item.response.answer.substring(0, 80)}...</div>
+-        </div>
+-      ))}
+-    </div>
+-  );
+-}
+diff --git a/src/renderer/components/ConversationView.tsx b/src/renderer/components/ConversationView.tsx
+new file mode 100644
+index 0000000..78a42f7
+--- /dev/null
++++ b/src/renderer/components/ConversationView.tsx
+@@ -0,0 +1,454 @@
++import { useEffect, useRef, useState } from 'react';
++import type { CSSProperties } from 'react';
++import { Citation, QAHistory } from '../../shared/types';
++import { describeConfidence, formatTimestamp } from './conversation-format';
++
++export type HistoryLoadState = 'loading' | 'loaded' | 'error';
++
++export interface AskError {
++  question: string;
++  message: string;
++}
++
++interface Props {
++  history: QAHistory[];
++  loadState: HistoryLoadState;
++  pendingQuestion: string | null;
++  askError: AskError | null;
++  documentCount: number;
++  selectedDocId: string | null;
++  /** Resolves to false when the cited document no longer exists. */
++  onOpenCitation: (citation: Citation) => Promise<boolean>;
++  onRetry: (question: string) => void;
++  onDismissError: () => void;
++  onReloadHistory: () => void;
++  /** Resolves to false when clearing failed. */
++  onClear: () => Promise<boolean>;
++}
++
++const palette = {
++  panel: '#16213e',
++  card: '#1a1a3e',
++  border: '#0f3460',
++  accent: '#533483',
++  text: '#e0e0e0',
++  muted: '#8888bb',
++  error: '#d9534f',
++};
++
++const smallButton: CSSProperties = {
++  padding: '4px 10px',
++  background: palette.border,
++  color: palette.text,
++  border: '1px solid #1a1a4e',
++  borderRadius: '4px',
++  cursor: 'pointer',
++  fontSize: '12px',
++};
++
++const turnLabel: CSSProperties = {
++  fontSize: '11px',
++  fontWeight: 600,
++  textTransform: 'uppercase',
++  letterSpacing: '0.05em',
++  color: palette.muted,
++  marginBottom: '4px',
++};
++
++const textBlock: CSSProperties = {
++  fontSize: '14px',
++  lineHeight: 1.6,
++  whiteSpace: 'pre-wrap',
++  overflowWrap: 'anywhere',
++};
++
++function citationKey(exchangeIndex: number, citationIndex: number): string {
++  return `${exchangeIndex}:${citationIndex}`;
++}
++
++function UserTurn({ question }: { question: string }) {
++  return (
++    <div style={{
++      alignSelf: 'flex-end',
++      maxWidth: '85%',
++      minWidth: 0,
++      padding: '10px 14px',
++      background: palette.border,
++      borderRadius: '8px 8px 2px 8px',
++    }}>
++      <div style={turnLabel}>You</div>
++      <div style={textBlock}>{question}</div>
++    </div>
++  );
++}
++
++function CitationList({
++  citations,
++  exchangeIndex,
++  selectedDocId,
++  unavailable,
++  onActivate,
++}: {
++  citations: Citation[];
++  exchangeIndex: number;
++  selectedDocId: string | null;
++  unavailable: Set<string>;
++  onActivate: (citation: Citation, key: string) => void;
++}) {
++  if (citations.length === 0) {
++    return (
++      <div style={{ marginTop: '10px', fontSize: '12px', color: palette.muted, fontStyle: 'italic' }}>
++        No sources cited.
++      </div>
++    );
++  }
++
++  return (
++    <div style={{ marginTop: '12px' }}>
++      <div style={{ ...turnLabel, marginBottom: '6px' }}>Sources ({citations.length})</div>
++      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
++        {citations.map((c, i) => {
++          const key = citationKey(exchangeIndex, i);
++          const isMissing = unavailable.has(key);
++          const isSelected = selectedDocId === c.documentId;
++          return (
++            <li key={key}>
++              <button
++                type="button"
++                onClick={() => onActivate(c, key)}
++                title={`Open "${c.documentTitle}"`}
++                style={{
++                  display: 'block',
++                  width: '100%',
++                  textAlign: 'left',
++                  padding: '8px 10px',
++                  background: isSelected ? palette.border : palette.panel,
++                  color: palette.text,
++                  border: `1px solid ${palette.border}`,
++                  borderLeft: `3px solid ${palette.accent}`,
++                  borderRadius: '4px',
++                  cursor: 'pointer',
++                  fontSize: '12px',
++                  lineHeight: 1.5,
++                  overflowWrap: 'anywhere',
++                }}
++              >
++                <span style={{ fontWeight: 600 }}>{c.documentTitle}</span>
++                <span style={{ color: palette.muted }}> · chunk {c.chunkIndex}</span>
++                {isSelected && <span style={{ color: palette.muted }}> · open</span>}
++                <span style={{ display: 'block', marginTop: '2px', color: '#c0c0e0', whiteSpace: 'pre-wrap' }}>
++                  “{c.excerpt}”
++                </span>
++                {isMissing && (
++                  <span style={{ display: 'block', marginTop: '4px', color: palette.error }}>
++                    This document is no longer available.
++                  </span>
++                )}
++              </button>
++            </li>
++          );
++        })}
++      </ul>
++    </div>
++  );
++}
++
++function Exchange({
++  item,
++  index,
++  total,
++  selectedDocId,
++  unavailable,
++  onActivate,
++}: {
++  item: QAHistory;
++  index: number;
++  total: number;
++  selectedDocId: string | null;
++  unavailable: Set<string>;
++  onActivate: (citation: Citation, key: string) => void;
++}) {
++  const { response } = item;
++  const confidence = describeConfidence(response.confidence);
++  return (
++    <article
++      aria-label={`Exchange ${index + 1} of ${total}`}
++      style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
++    >
++      <UserTurn question={item.question} />
++      <div style={{
++        alignSelf: 'stretch',
++        minWidth: 0,
++        padding: '12px 14px',
++        background: palette.card,
++        border: `1px solid ${palette.border}`,
++        borderRadius: '8px 8px 8px 2px',
++      }}>
++        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'baseline', ...turnLabel }}>
++          <span>Assistant</span>
++          <time
++            dateTime={response.timestamp}
++            style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}
++          >
++            {formatTimestamp(response.timestamp)}
++          </time>
++          <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
++            <span
++              aria-hidden="true"
++              style={{
++                display: 'inline-block',
++                width: '40px',
++                height: '6px',
++                marginRight: '6px',
++                background: palette.border,
++                borderRadius: '3px',
++                overflow: 'hidden',
++                verticalAlign: 'middle',
++              }}
++            >
++              <span style={{
++                display: 'block',
++                width: `${confidence.percent}%`,
++                height: '100%',
++                background: palette.accent,
++              }} />
++            </span>
++            Confidence: {confidence.level} ({confidence.percent}%)
++          </span>
++        </div>
++        <div style={textBlock}>{response.answer}</div>
++        <CitationList
++          citations={response.citations}
++          exchangeIndex={index}
++          selectedDocId={selectedDocId}
++          unavailable={unavailable}
++          onActivate={onActivate}
++        />
++      </div>
++    </article>
++  );
++}
++
++export function ConversationView({
++  history,
++  loadState,
++  pendingQuestion,
++  askError,
++  documentCount,
++  selectedDocId,
++  onOpenCitation,
++  onRetry,
++  onDismissError,
++  onReloadHistory,
++  onClear,
++}: Props) {
++  const scrollRef = useRef<HTMLDivElement>(null);
++  const clearButtonRef = useRef<HTMLButtonElement>(null);
++  const cancelButtonRef = useRef<HTMLButtonElement>(null);
++  const [confirmingClear, setConfirmingClear] = useState(false);
++  const [clearFailed, setClearFailed] = useState(false);
++  const [unavailable, setUnavailable] = useState<Set<string>>(() => new Set());
++
++  const busy = pendingQuestion !== null;
++
++  // Keep the newest exchange in view whenever a turn is added, resolved or fails.
++  useEffect(() => {
++    const el = scrollRef.current;
++    if (el) el.scrollTop = el.scrollHeight;
++  }, [history.length, pendingQuestion, askError, loadState]);
++
++  // Citation indices shift when history is cleared; drop stale "unavailable" marks.
++  useEffect(() => {
++    if (history.length === 0) setUnavailable(new Set());
++  }, [history.length]);
++
++  useEffect(() => {
++    if (confirmingClear) cancelButtonRef.current?.focus();
++  }, [confirmingClear]);
++
++  const handleActivate = async (citation: Citation, key: string) => {
++    const found = await onOpenCitation(citation);
++    setUnavailable(prev => {
++      if (found === !prev.has(key)) return prev;
++      const next = new Set(prev);
++      if (found) next.delete(key);
++      else next.add(key);
++      return next;
++    });
++  };
++
++  const cancelClear = () => {
++    setConfirmingClear(false);
++    // Return focus to the control that opened the confirmation.
++    requestAnimationFrame(() => clearButtonRef.current?.focus());
++  };
++
++  const confirmClear = async () => {
++    const ok = await onClear();
++    setClearFailed(!ok);
++    setConfirmingClear(false);
++  };
++
++  const showEmpty = loadState === 'loaded' && history.length === 0 && !busy && !askError;
++
++  return (
++    <section
++      aria-labelledby="conversation-heading"
++      style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
++    >
++      <div style={{
++        display: 'flex',
++        alignItems: 'center',
++        justifyContent: 'space-between',
++        flexWrap: 'wrap',
++        gap: '8px',
++        padding: '8px 20px',
++        background: palette.panel,
++        borderBottom: `1px solid ${palette.border}`,
++      }}>
++        <h2 id="conversation-heading" style={{ fontSize: '13px', fontWeight: 600 }}>
++          Conversation
++          <span style={{ color: palette.muted, fontWeight: 400 }}>
++            {' '}({history.length} {history.length === 1 ? 'exchange' : 'exchanges'})
++          </span>
++        </h2>
++        {confirmingClear ? (
++          <div role="group" aria-label="Confirm clearing the conversation" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
++            <span>Delete all {history.length} exchanges? This cannot be undone.</span>
++            <button ref={cancelButtonRef} type="button" onClick={cancelClear} style={smallButton}>
++              Cancel
++            </button>
++            <button
++              type="button"
++              onClick={confirmClear}
++              style={{ ...smallButton, background: palette.accent, border: 'none', color: '#fff' }}
++            >
++              Clear conversation
++            </button>
++          </div>
++        ) : (
++          <button
++            ref={clearButtonRef}
++            type="button"
++            onClick={() => setConfirmingClear(true)}
++            disabled={history.length === 0 || busy}
++            style={{
++              ...smallButton,
++              opacity: history.length === 0 || busy ? 0.5 : 1,
++              cursor: history.length === 0 || busy ? 'default' : 'pointer',
++            }}
++          >
++            Clear
++          </button>
++        )}
++      </div>
++
++      {clearFailed && (
++        <div role="alert" style={{ padding: '6px 20px', fontSize: '12px', color: palette.error }}>
++          Could not clear the conversation. Please try again.
++        </div>
++      )}
++
++      <div
++        ref={scrollRef}
++        style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '16px 20px' }}
++      >
++        {loadState === 'loading' && (
++          <div style={{ color: '#666', textAlign: 'center', paddingTop: '24px', fontSize: '13px' }}>
++            Loading conversation…
++          </div>
++        )}
++
++        {loadState === 'error' && (
++          <div role="alert" style={{ color: palette.error, textAlign: 'center', paddingTop: '24px', fontSize: '13px' }}>
++            Could not load the conversation history.{' '}
++            <button type="button" onClick={onReloadHistory} style={smallButton}>Try again</button>
++          </div>
++        )}
++
++        {showEmpty && (
++          <div style={{ color: '#888', textAlign: 'center', paddingTop: '32px', fontSize: '13px', lineHeight: 1.6 }}>
++            <div style={{ fontSize: '15px', color: palette.text, marginBottom: '6px' }}>No questions yet</div>
++            Ask a question below. Each answer will appear here with the sources it cites,
++            <br />
++            and the conversation is kept between sessions.
++            {documentCount === 0 && (
++              <div style={{ marginTop: '8px', color: palette.muted }}>
++                Tip: import and index documents first so answers can cite them.
++              </div>
++            )}
++          </div>
++        )}
++
++        <div role="log" aria-live="polite" aria-label="Conversation messages">
++          <ol style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '20px' }}>
++            {history.map((item, i) => (
++              <li key={`${item.response.timestamp}-${i}`}>
++                <Exchange
++                  item={item}
++                  index={i}
++                  total={history.length}
++                  selectedDocId={selectedDocId}
++                  unavailable={unavailable}
++                  onActivate={handleActivate}
++                />
++              </li>
++            ))}
++
++            {pendingQuestion !== null && (
++              <li key="pending">
++                <article aria-label="Question awaiting an answer" aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
++                  <UserTurn question={pendingQuestion} />
++                  <div style={{
++                    padding: '12px 14px',
++                    background: palette.card,
++                    border: `1px dashed ${palette.border}`,
++                    borderRadius: '8px 8px 8px 2px',
++                  }}>
++                    <div style={turnLabel}>Assistant</div>
++                    <div style={{ ...textBlock, color: palette.muted, fontStyle: 'italic' }}>Answering…</div>
++                  </div>
++                </article>
++              </li>
++            )}
++
++            {askError !== null && (
++              <li key="error">
++                <article aria-label="Question that could not be answered" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
++                  <UserTurn question={askError.question} />
++                  <div role="alert" style={{
++                    padding: '12px 14px',
++                    background: palette.card,
++                    border: `1px solid ${palette.error}`,
++                    borderRadius: '8px 8px 8px 2px',
++                  }}>
++                    <div style={{ ...turnLabel, color: palette.error }}>Not answered</div>
++                    <div style={{ fontSize: '13px', lineHeight: 1.5 }}>
++                      The question could not be answered.
++                    </div>
++                    <div style={{ fontSize: '12px', color: palette.muted, marginTop: '4px', overflowWrap: 'anywhere' }}>
++                      Details: {askError.message}
++                    </div>
++                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
++                      <button
++                        type="button"
++                        onClick={() => onRetry(askError.question)}
++                        disabled={busy}
++                        style={{ ...smallButton, background: palette.accent, border: 'none', color: '#fff' }}
++                      >
++                        Retry
++                      </button>
++                      <button type="button" onClick={onDismissError} style={smallButton}>
++                        Dismiss
++                      </button>
++                    </div>
++                  </div>
++                </article>
++              </li>
++            )}
++          </ol>
++        </div>
++      </div>
++    </section>
++  );
++}
+diff --git a/src/renderer/components/QuestionPanel.tsx b/src/renderer/components/QuestionPanel.tsx
+index 1b80cc5..6dca646 100644
+--- a/src/renderer/components/QuestionPanel.tsx
++++ b/src/renderer/components/QuestionPanel.tsx
+@@ -2,14 +2,16 @@ import React, { useState } from 'react';
+ 
+ interface Props {
+   onAsk: (question: string) => void;
++  /** True while an answer is pending; submissions are ignored until it settles. */
++  busy: boolean;
+ }
+ 
+-export function QuestionPanel({ onAsk }: Props) {
++export function QuestionPanel({ onAsk, busy }: Props) {
+   const [question, setQuestion] = useState('');
+ 
+   const handleSubmit = (e: React.FormEvent) => {
+     e.preventDefault();
+-    if (!question.trim()) return;
++    if (busy || !question.trim()) return;
+     onAsk(question.trim());
+     setQuestion('');
+   };
+@@ -17,6 +19,7 @@ export function QuestionPanel({ onAsk }: Props) {
+   return (
+     <form
+       onSubmit={handleSubmit}
++      aria-label="Ask a question"
+       style={{
+         display: 'flex',
+         padding: '12px 20px',
+@@ -24,24 +27,38 @@ export function QuestionPanel({ onAsk }: Props) {
+         background: '#16213e',
+       }}
+     >
++      <label htmlFor="question-input" style={{
++        position: 'absolute',
++        width: '1px',
++        height: '1px',
++        overflow: 'hidden',
++        clip: 'rect(0 0 0 0)',
++        whiteSpace: 'nowrap',
++      }}>
++        Question about your documents
++      </label>
+       <input
++        id="question-input"
+         type="text"
+         value={question}
+         onChange={e => setQuestion(e.target.value)}
+         placeholder="Ask a question about your documents..."
++        autoComplete="off"
+         style={{
+           flex: 1,
++          minWidth: 0,
+           padding: '10px 14px',
+           background: '#1a1a2e',
+           color: '#e0e0e0',
+           border: '1px solid #0f3460',
+           borderRadius: '6px',
+           fontSize: '14px',
+-          outline: 'none',
+         }}
+       />
++      {/* aria-disabled (not disabled) keeps focus on the button while an answer is pending. */}
+       <button
+         type="submit"
++        aria-disabled={busy}
+         style={{
+           marginLeft: '10px',
+           padding: '10px 20px',
+@@ -49,12 +66,13 @@ export function QuestionPanel({ onAsk }: Props) {
+           color: '#fff',
+           border: 'none',
+           borderRadius: '6px',
+-          cursor: 'pointer',
++          cursor: busy ? 'progress' : 'pointer',
++          opacity: busy ? 0.6 : 1,
+           fontSize: '14px',
+           fontWeight: 500,
+         }}
+       >
+-        Ask
++        {busy ? 'Answering…' : 'Ask'}
+       </button>
+     </form>
+   );
+diff --git a/src/renderer/components/conversation-format.test.ts b/src/renderer/components/conversation-format.test.ts
+new file mode 100644
+index 0000000..50b0023
+--- /dev/null
++++ b/src/renderer/components/conversation-format.test.ts
+@@ -0,0 +1,46 @@
++import { describe, expect, it } from 'vitest';
++import { describeAskError, describeConfidence, formatTimestamp } from './conversation-format';
++
++describe('formatTimestamp', () => {
++  it('formats an ISO timestamp as a readable local date and time', () => {
++    const iso = '2026-11-15T22:42:00';
++    const expected = new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
++    expect(formatTimestamp(iso, 'en-US')).toBe(expected);
++    expect(formatTimestamp(iso, 'en-US')).toMatch(/^Nov 15, 2026, 10:42\sPM$/);
++  });
++
++  it('never returns the raw ISO string', () => {
++    const iso = '2026-11-15T10:42:00.000Z';
++    expect(formatTimestamp(iso, 'en-US')).not.toContain('T10:42');
++  });
++
++  it('handles invalid timestamps without throwing', () => {
++    expect(formatTimestamp('not a date')).toBe('Unknown time');
++  });
++});
++
++describe('describeConfidence', () => {
++  it('maps scores to percent and a text level', () => {
++    expect(describeConfidence(0.85)).toEqual({ percent: 85, level: 'High' });
++    expect(describeConfidence(0.5)).toEqual({ percent: 50, level: 'Medium' });
++    expect(describeConfidence(0.3)).toEqual({ percent: 30, level: 'Low' });
++  });
++
++  it('clamps out-of-range and non-numeric values', () => {
++    expect(describeConfidence(1.7)).toEqual({ percent: 100, level: 'High' });
++    expect(describeConfidence(-1)).toEqual({ percent: 0, level: 'Low' });
++    expect(describeConfidence(Number.NaN)).toEqual({ percent: 0, level: 'Low' });
++  });
++});
++
++describe('describeAskError', () => {
++  it('strips the Electron IPC prefix', () => {
++    const err = new Error("Error invoking remote method 'qa:ask': SyntaxError: Unexpected token n in JSON");
++    expect(describeAskError(err)).toBe('SyntaxError: Unexpected token n in JSON');
++  });
++
++  it('handles non-Error rejections', () => {
++    expect(describeAskError('boom')).toBe('boom');
++    expect(describeAskError('')).toBe('Unknown error');
++  });
++});
+diff --git a/src/renderer/components/conversation-format.ts b/src/renderer/components/conversation-format.ts
+new file mode 100644
+index 0000000..2541be1
+--- /dev/null
++++ b/src/renderer/components/conversation-format.ts
+@@ -0,0 +1,29 @@
++/**
++ * Display-only formatting helpers for the conversation view.
++ * Pure functions so they can be unit-tested without a DOM.
++ */
++
++/** Formats an ISO timestamp as a readable local date and time, e.g. "Nov 15, 2026, 10:42 PM". */
++export function formatTimestamp(iso: string, locale?: string): string {
++  const date = new Date(iso);
++  if (Number.isNaN(date.getTime())) return 'Unknown time';
++  return date.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
++}
++
++export type ConfidenceLevel = 'High' | 'Medium' | 'Low';
++
++/** Maps a 0..1 confidence score to a percentage and a text label (never colour alone). */
++export function describeConfidence(confidence: number): { percent: number; level: ConfidenceLevel } {
++  const clamped = Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0;
++  const percent = Math.round(clamped * 100);
++  const level: ConfidenceLevel = clamped >= 0.7 ? 'High' : clamped >= 0.4 ? 'Medium' : 'Low';
++  return { percent, level };
++}
++
++/** Turns an IPC rejection into a short, user-facing message. */
++export function describeAskError(err: unknown): string {
++  const raw = err instanceof Error ? err.message : String(err);
++  // Electron prefixes rejections with "Error invoking remote method '<channel>': ".
++  const cleaned = raw.replace(/^Error invoking remote method '[^']+':\s*/, '').trim();
++  return cleaned || 'Unknown error';
++}
+diff --git a/src/renderer/index.html b/src/renderer/index.html
+index 0d5f03b..b85bfd8 100644
+--- a/src/renderer/index.html
++++ b/src/renderer/index.html
+@@ -14,6 +14,12 @@
+       overflow: hidden;
+     }
+     #root { height: 100vh; display: flex; flex-direction: column; }
++    /* Visible keyboard focus for all interactive controls (inline styles cannot express :focus-visible). */
++    button:focus-visible, input:focus-visible, a:focus-visible {
++      outline: 2px solid #8888bb;
++      outline-offset: 2px;
++    }
++    input:focus { border-color: #533483 !important; }
+   </style>
+ </head>
+ <body>

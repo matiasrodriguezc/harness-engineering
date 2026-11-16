@@ -1,0 +1,1 @@
+You are the generator. An independent evaluator reviewed your conversation-history feature. Read evaluator-rubric.md and fix every listed defect, then verify your fixes. Do not edit evaluator-rubric.md or rubric-template.md.

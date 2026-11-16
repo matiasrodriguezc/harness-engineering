@@ -1,0 +1,8 @@
+5258920 fin de sesión: 9-juez
+e91e0eb fin de sesión: 4-evaluador
+cbe074c Fix evaluator defects in conversation history
+9c06b72 fin de sesión: 2-evaluador
+8c65398 Add multi-turn Q&A conversation history
+93d865e Bundle the preload script so the renderer bridge actually loads
+452cc75 Fix broken baseline: renderer import paths, unused imports, remove dead ImportPanel
+1655e02 starter P05 + rúbrica

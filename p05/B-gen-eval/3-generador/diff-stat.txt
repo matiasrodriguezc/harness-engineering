@@ -1,0 +1,28 @@
+cbe074c Fix evaluator defects in conversation history
+
+ docs/ARCHITECTURE.md                             |  17 +-
+ docs/verification/02-conversation.png            | Bin 234903 -> 299653 bytes
+ docs/verification/03-citation-opens-document.png | Bin 216585 -> 305333 bytes
+ docs/verification/04-error.png                   | Bin 235825 -> 305108 bytes
+ docs/verification/05-long-answer.png             | Bin 449763 -> 458989 bytes
+ docs/verification/06-history-select.png          | Bin 314311 -> 375859 bytes
+ docs/verification/07-clear-while-pending.png     | Bin 0 -> 92890 bytes
+ docs/verification/08-malformed-entry.png         | Bin 0 -> 173814 bytes
+ docs/verification/09-corrupt-history.png         | Bin 0 -> 201821 bytes
+ docs/verification/README.md                      |  39 +++-
+ scripts/verify-conversation.mjs                  | 118 ++++++++++--
+ src/main/ipc-handlers.ts                         |  16 +-
+ src/preload/preload.ts                           |   1 -
+ src/renderer/App.tsx                             |  51 ++++-
+ src/renderer/components/ConversationHistory.tsx  |   5 +-
+ src/renderer/components/DocumentDetail.tsx       | 101 +++++++---
+ src/renderer/components/ExchangeItem.tsx         |  77 ++++----
+ src/renderer/components/QuestionPanel.tsx        |  79 +++++---
+ src/renderer/format.ts                           |   2 +-
+ src/renderer/styles.ts                           |  43 +++++
+ src/renderer/types.d.ts                          |   1 -
+ src/services/qa-service.ts                       | 225 +++++++++++++++++++----
+ src/shared/text.ts                               |  21 +++
+ src/shared/types.ts                              |   1 -
+ tests/qa-conversation.test.ts                    |  96 +++++++++-
+ 25 files changed, 717 insertions(+), 176 deletions(-)

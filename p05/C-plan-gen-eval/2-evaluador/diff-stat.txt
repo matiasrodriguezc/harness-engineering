@@ -1,0 +1,41 @@
+759b007 Add evaluator rubric and independent evidence for conversation history (overall 4.3)
+
+ .../conversation-history/evaluator/01-empty.png    | Bin 0 -> 102405 bytes
+ .../conversation-history/evaluator/02-fixture.png  | Bin 0 -> 339754 bytes
+ .../conversation-history/evaluator/03-pending.png  | Bin 0 -> 334393 bytes
+ .../evaluator/04-first-answer.png                  | Bin 0 -> 273390 bytes
+ .../evaluator/05-two-exchanges.png                 | Bin 0 -> 211067 bytes
+ .../evaluator/06-no-citations.png                  | Bin 0 -> 208929 bytes
+ .../evaluator/07-autoscroll.png                    | Bin 0 -> 247679 bytes
+ .../evaluator/08-citation-click.png                | Bin 0 -> 269774 bytes
+ .../evaluator/09-keyboard-focus-citation.png       | Bin 0 -> 247808 bytes
+ .../evaluator/10-keyboard-opened.png               | Bin 0 -> 237334 bytes
+ .../evaluator/11-narrow-700px.png                  | Bin 0 -> 80354 bytes
+ .../evaluator/12-long-unbroken-question.png        | Bin 0 -> 186088 bytes
+ .../conversation-history/evaluator/13-error.png    | Bin 0 -> 194603 bytes
+ .../evaluator/14-after-retry.png                   | Bin 0 -> 242536 bytes
+ .../evaluator/15-stale-citation-before-refresh.png | Bin 0 -> 283469 bytes
+ .../evaluator/16-stale-citation-after-refresh.png  | Bin 0 -> 346151 bytes
+ .../evaluator/17-after-restart.png                 | Bin 0 -> 242608 bytes
+ .../evaluator/18-clear-confirm.png                 | Bin 0 -> 254845 bytes
+ .../evaluator/19-after-clear.png                   | Bin 0 -> 91073 bytes
+ .../evaluator/20-restart-after-clear.png           | Bin 0 -> 91073 bytes
+ .../evaluator/21-startup-corrupt-history.png       | Bin 0 -> 76303 bytes
+ .../evaluator/file-before-restart.json             |   1 +
+ .../conversation-history/evaluator/p1.json         |  22 +++
+ .../conversation-history/evaluator/p2.json         | 160 +++++++++++++++++++++
+ .../conversation-history/evaluator/p3.json         | 113 +++++++++++++++
+ .../conversation-history/evaluator/run1.log        |  40 ++++++
+ .../conversation-history/evaluator/run2.log        | 132 +++++++++++++++++
+ .../conversation-history/evaluator/run3.log        |  19 +++
+ .../conversation-history/evaluator/run4.log        |  16 +++
+ .../conversation-history/evaluator/run5.log        |  23 +++
+ .../conversation-history/evaluator/scripts/cdp.mjs |  22 +++
+ .../evaluator/scripts/launch.sh                    |   5 +
+ .../conversation-history/evaluator/scripts/p1.mjs  |  14 ++
+ .../conversation-history/evaluator/scripts/p2.mjs  |  99 +++++++++++++
+ .../conversation-history/evaluator/scripts/p3.mjs  |  35 +++++
+ .../conversation-history/evaluator/scripts/p4.mjs  |  23 +++
+ .../conversation-history/evaluator/scripts/p5.mjs  |   4 +
+ evaluator-rubric.md                                |  76 ++++++++++
+ 38 files changed, 804 insertions(+)

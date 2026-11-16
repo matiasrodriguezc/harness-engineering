@@ -1,0 +1,4 @@
+dc0817a fin de sesión: 9-juez
+354abe0 Add multi-turn Q&A conversation history
+8963465 Fix broken baseline: renderer shared-type import paths, unused React imports, duplicate Window typing; add .gitignore and lockfile
+3d5b433 starter P05 + rúbrica

@@ -1,0 +1,168 @@
+commit dc0817a226d51edd82c745bd896401191548ea53
+Author: run <run@local>
+Date:   Sun Nov 15 22:12:02 2026 -0300
+
+    fin de sesión: 9-juez
+
+diff --git a/judge-report.md b/judge-report.md
+new file mode 100644
+index 0000000..3a00004
+--- /dev/null
++++ b/judge-report.md
+@@ -0,0 +1,156 @@
++# Judge Report: multi-turn Q&A conversation history
++
++Reviewer: independent judge. I did not read `evaluator-rubric.md` or `sprint-contract.md` and did not rely on them.
++Commit reviewed: `354abe0 Add multi-turn Q&A conversation history`
++Date: 2026-11-15
++
++## How I verified it
++
++I didn't modify any repository file except this report. I ran every build and app test in a clean copy of the repo made with `git archive HEAD` in a scratchpad folder. That way the committed `docs/evidence/` and `dist/` stayed untouched.
++
++| Step | Result |
++|---|---|
++| `npm run check` (in repo) | pass, no type errors |
++| `bash scripts/check-architecture.sh` (in repo) | `PASS: All architecture boundary checks passed` |
++| `npx vitest run` (in repo) | 2 files, 13/13 tests pass |
++| `npm run build` (scratch copy) | pass |
++| The author's e2e smoke script (`scripts/smoke-conversation.js`) against the real Electron app (scratch copy, `NODE_OPTIONS=` cleared) | 23/23 PASS, including restart persistence and clear |
++| **My own probe** (`judge-probe.js`, 3 phases) driving the real built app with real key events | results below |
++| **My own probe** (`judge-jump.js`): 15 pre-seeded turns, then jump from the History outline | found a layout defect (see Interactivity) |
++
++I captured screenshots for each probe and inspected them myself: no-citation answer, 22-turn conversation, expanded citation, pending state, History tab, legacy and long history, and the History jump.
++
++## Scores
++
++| # | Criterion | Score |
++|---|---|---|
++| 1 | Functional completeness | 4 |
++| 2 | Visual design | 4 |
++| 3 | Timestamps | 5 |
++| 4 | Citation display | 4 |
++| 5 | Interactivity | 3 |
++| 6 | Edge cases | 3 |
++| 7 | Accessibility | 4 |
++| 8 | Code quality | 4 |
++| | **Overall (average)** | **3.9** (31 / 8 = 3.875) |
++
++## Evidence per criterion
++
++### 1. Functional completeness: 4
++- In the running app I asked 22 questions in a row. These included a multi-line one sent with Shift+Enter, and repeated follow-ups. All 22 user and 22 assistant messages rendered in order. The header showed "22 exchanges" and the History tab "History (22)".
++- After each answer the conversation scrolled to the newest turn (`scrollTop+clientHeight` 9338 vs `scrollHeight` 9354).
++- Follow-ups use the previous question. "Tell me more" after "And what about chunks?" was answered using the previous question as context and showed "Interpreted as a follow-up to your previous question." A question that matches on its own did not get the flag (`usedContext flags: [false,false,true,false,false]`).
++- History persisted across an app restart: the smoke script's phase 2 found all 4 exchanges after relaunch.
++- A 120-word question and a 5,400-character answer rendered without truncation (`long answer full: true`).
++- Not a 5, because the context only works one turn deep: `qa-service.ts` uses only `history[length-1]`, even if that question is days old. Also, citation excerpts are cut to 200 characters (see #4).
++
++### 2. Visual design: 4
++- Screenshots show a clear distinction between the two roles:
++  - User messages are right-aligned purple bubbles (`#533483`) labelled "You".
++  - Assistant messages are left-aligned dark bubbles labelled "Assistant" in a violet accent, with a different corner radius.
++- The palette and fonts match the existing header and sidebar.
++- Long unbroken text wraps inside the bubble (`overflowWrap: anywhere`), with no horizontal overflow (`scrollWidth 920 == clientWidth 920`).
++- Weaknesses:
++  - Answers show raw markdown and text cut mid-word, e.g. `"# Retrieval Plan ## Overview … text retrieval i."`. The service builds this text, but the view presents it as is.
++  - The History jump pushes the whole layout off-screen (see #5).
++
++### 3. Timestamps: 5
++- Every message has a `<time dateTime=…>` element. Of the 6 in the smoke run, the visible text was "Today, 10:09 PM" and the tooltip "11/15/2026, 10:09:56 PM".
++- Seeded history showed "Yesterday, 10:10 PM" and "Mar 1, 2025, 7:00 AM" (the year appears only when it differs from today).
++- Legacy entries without `askedAt` fall back to the answer time instead of showing nothing.
++- The History outline also shows timestamps.
++- Unit tests cover the formatter (`tests/format.test.ts`).
++- Minor: the "Today/Yesterday" labels are not re-rendered when midnight passes while the app is open.
++
++### 4. Citation display: 4
++- Each answer shows "SOURCES (n)". Each source shows `[i] <document title> · chunk N` plus a 90-character preview.
++- Clicking a source (or pressing Enter on it) opens a native `<details>` with the excerpt in a `<blockquote>`, and an "Open document" button. That button opened the cited document in the main pane (smoke check plus screenshot).
++- After I deleted a cited document and pressed Refresh, the button changed to the disabled "Document no longer available".
++- Answers without citations show "No sources cited — this answer is not grounded in your documents."
++- Not a 5:
++  - The expanded "full excerpt" is the service's 200-character cut (`qa-service.ts` `substring(0, 200)`). Every excerpt measured exactly 200 characters, and the screenshot shows an excerpt ending in "The ex". Expanding does not show more than a trimmed fragment.
++  - "Open document" does not scroll to or highlight the cited chunk.
++
++### 5. Interactivity: 3
++What works (all exercised in the running app):
++- Enter sends and Shift+Enter adds a newline.
++- Example-question chips fill the input.
++- Copy puts the exact answer on the system clipboard and gives "Copied" feedback.
++- "Edit & ask again" refills and focuses the input.
++- Citations expand, and "Open document" works.
++- Retry and Dismiss work on errors.
++- Clear history asks for inline confirmation.
++- The submit button shows "Asking…" and is disabled while a question is pending.
++- The History outline jumps to the selected turn and focuses it.
++
++What's broken:
++- **Jumping from the History outline scrolls the whole page.** `el.scrollIntoView({block:'start'})` in `QuestionPanel.tsx` also scrolls the ancestors that have `overflow: hidden`. Measured after one click: `document.documentElement.scrollTop` changes 0 → 93.5 and the header's `top` goes 0 → -93.5. The app header (Refresh), the Documents/History tabs and the Conversation header with "Clear history" are pushed off-screen, and an empty band appears below the status bar (screenshot J0). Because `body` is `overflow: hidden`, the user has no scrollbar to bring them back. The author's smoke test checks only focus, so it misses this.
++- Escape does not cancel the "Delete all N exchanges?" confirmation (still shown after Escape).
++
++### 6. Edge cases: 3
++What's handled:
++- Empty history: "No questions yet…" plus example chips, and an empty-state message in the History tab.
++- Long text: handled (see #1 and #2).
++- No citations: handled (see #4).
++- A failed ask (I swapped in a failing `qa:ask` handler):
++  - shows an inline `role=alert` with the IPC prefix stripped,
++  - offers Retry and Dismiss,
++  - does not persist the failed question.
++- Legacy entries without `id`/`askedAt` and entries without a `citations` field render correctly.
++
++What's not:
++- **A failed Clear history fails silently.** With `qa:clear-history` set to throw "disk full", I clicked Delete. The confirmation closed, all 23 exchanges stayed, and the only trace was a `console.error`. The UI showed no alert or message.
++- **A corrupt history file is silently treated as empty, and the next question overwrites it.** I wrote `{ not json` to `qa-history.json`. The UI showed the normal "No questions yet" state, not the `loadError` banner. Asking one question then replaced the file with a 1-item history, so the original file is gone. `getHistory()` catches the parse error and returns `[]`. As a result, the renderer's "Couldn't load conversation history" path can never fire for a corrupt file.
++
++### 7. Accessibility: 4
++What's good:
++- Semantic structure:
++  - `<section aria-labelledby>` with a real `<h2>`
++  - `<ol aria-label="Questions and answers">`, with `<article>`, `<header>`, `<footer>` and `<time>` for each message
++  - `<nav aria-label="Conversation history">` with real `<button>`s
++- The textarea has an sr-only `<label>` plus an `aria-describedby` hint.
++- Live regions are present:
++  - `role=status` for the pending message
++  - `role=alert` for errors
++  - `aria-live` on the copy result
++- `:focus-visible` outlines are visible (screenshot of a focused "Open document").
++- Keyboard: Shift+Tab from the input walked Copy → summary → summary → "Edit & ask again" → Copy. Enter on a `<summary>` opened it, and Tab then reached "Open document".
++
++What's not:
++- The inactive sidebar tab text is `rgb(102,102,102)` on `#16213e`, a contrast ratio of about **2.8:1**. That fails WCAG AA (4.5:1) for 12px text.
++- The tabs use `aria-pressed` buttons instead of the `tablist`/`tab` pattern.
++- The citation heading is an `<h4>` directly under the `<h2>`, skipping a level.
++- Escape doesn't work in the confirmation (see #5).
++
++### 8. Code quality: 4
++What's good:
++- `npm run check` passes, the architecture script passes, and all 13 unit tests pass.
++- Layer boundaries are respected:
++  - Conversation building and follow-up retrieval live in `QaService` (`getConversation`).
++  - The renderer only displays the data and uses only `window.knowledgeBase`.
++  - The preload exposes only the typed API. Its duplicated channel map is justified (the sandboxed preload can't `require`) and is type-locked to `typeof IPC_CHANNELS`.
++  - The clipboard goes through a main-process IPC handler.
++- `docs/ARCHITECTURE.md` was updated to cover the new channels and data flow.
++
++Deductions:
++- `qa.history` / `qa:history` (`GET_HISTORY`) is still exposed in `preload.ts`, `types.d.ts` and `ipc-handlers.ts`, but nothing in the renderer uses it any more. This is now dead API surface.
++- The large inline style objects are duplicated across components (e.g. the bubble header markup is repeated three times in `QuestionPanel.tsx`).
++- `scripts/smoke-conversation.js` overwrites the committed `docs/evidence/*.png` on every run, so running the documented verification makes the working tree dirty.
++- None of the tests cover the scroll/layout behaviour that is broken.
++
++## Remaining defects (most important first)
++
++1. **History jump scrolls the whole page.** `QuestionPanel.tsx`, the focus-request effect, calls `scrollIntoView` on the turn, which also scrolls the root by about 94px. The app header, sidebar tabs and the "Clear history" bar move off-screen with no way to scroll back. Reproduced in the running app.
++2. **A failed Clear history fails silently.** `App.tsx` `handleClearHistory` swallows the error. The confirmation closes and the user gets no feedback.
++3. **A corrupt `qa-history.json` is silently shown as an empty history and then overwritten** by the next question, with no backup and no warning. The renderer's `loadError` banner can't trigger in this case.
++4. **Citation excerpts are cut at 200 characters, mid-word,** even in the expanded view (e.g. "…The ex"). "Open document" does not point to the cited chunk.
++5. **Answer text shows raw markdown and fragments cut mid-word** (e.g. `"# Retrieval Plan ## Overview … retrieval i."`). The answer generator splices the excerpt in as is.
++6. **The inactive sidebar tab has about 2.8:1 contrast** (`#666` on `#16213e`), which fails WCAG AA. The tabs also use `aria-pressed` instead of `role=tab`.
++7. **Follow-up context only looks at the single most recent exchange,** regardless of its age, and only when the new question matches nothing on its own.
++8. **Escape does not cancel the Clear history confirmation.**
++9. **Dead API surface:** `qa.history` / `qa:history` is no longer used by the renderer but is still exposed in `preload.ts`, `types.d.ts` and `ipc-handlers.ts`.
++10. **The smoke script writes into the committed `docs/evidence/`,** so running the documented verification leaves the repo dirty.
++11. **Minor:**
++    - The heading level skips from `<h2>` to `<h4>` in `CitationList`.
++    - The "Today/Yesterday" labels don't update across midnight.
++    - Inline styles are duplicated across components.

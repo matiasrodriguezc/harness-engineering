@@ -1,0 +1,25 @@
+33b3ff4 Fix evaluator defects 1-6 and 8 in conversation history
+
+ .../generator/fixes/01-two-failures-kept.png       | Bin 0 -> 192225 bytes
+ .../generator/fixes/02-error-details-open.png      | Bin 0 -> 203336 bytes
+ .../generator/fixes/03-after-retry-and-dismiss.png | Bin 0 -> 258717 bytes
+ .../generator/fixes/04-stale-citation-no-ghost.png | Bin 0 -> 298215 bytes
+ .../generator/fixes/05-jump-to-latest-focused.png  | Bin 0 -> 231362 bytes
+ .../generator/fixes/06-after-clear-focus.png       | Bin 0 -> 92883 bytes
+ .../fixes/07-startup-corrupt-clear-enabled.png     | Bin 0 -> 93232 bytes
+ .../generator/fixes/08-startup-corrupt-confirm.png | Bin 0 -> 109426 bytes
+ .../generator/fixes/09-after-recovery-ask.png      | Bin 0 -> 234205 bytes
+ .../generator/fixes/fixes-report.md                |  35 +++
+ .../generator/fixes/results-a.json                 | 164 +++++++++++
+ .../generator/fixes/results-b.json                 |  36 +++
+ .../conversation-history/generator/fixes/run-a.log | 119 ++++++++
+ .../conversation-history/generator/fixes/run-b.log |  34 +++
+ .../generator/fixes/scripts/cdp.mjs                |  75 +++++
+ .../generator/fixes/scripts/fixes.mjs              | 183 ++++++++++++
+ src/renderer/App.tsx                               |  55 ++--
+ src/renderer/components/ConversationTurns.tsx      | 277 ++++++++++++++++++
+ src/renderer/components/ConversationView.tsx       | 321 ++++-----------------
+ src/renderer/components/QuestionPanel.tsx          |  62 +++-
+ .../components/conversation-format.test.ts         |  18 +-
+ src/renderer/components/conversation-format.ts     |  17 ++
+ 22 files changed, 1095 insertions(+), 301 deletions(-)

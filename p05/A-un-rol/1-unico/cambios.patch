@@ -1,0 +1,1730 @@
+commit 354abe0da5eed5d8fab7f79bcb3006665b2e9c01
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 22:07:49 2026 -0300
+
+    Add multi-turn Q&A conversation history
+    
+    - QaService: stable exchange ids + askedAt, getConversation() -> ConversationMessage[],
+      previous-question context for follow-ups, stopword-aware keyword matching,
+      tolerant of legacy/corrupt history
+    - Renderer: chat-style thread with timestamps, expandable citations with
+      open-document, copy, edit & re-ask, pending/error/retry, clear with confirm,
+      history sidebar outline that jumps to a turn
+    - Fix sandboxed preload failing to load (runtime require of shared/types)
+    - Copy via main-process clipboard IPC (navigator.clipboard fails on file://)
+    - Unit tests (vitest), Electron e2e smoke script + screenshots, docs, rubric
+
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 3e6577a..8f613ab 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -88,7 +88,14 @@ All IPC communication uses named channels defined in `src/shared/types.ts`:
+ | `indexing:status` | Renderer -> Main | Get indexing status |
+ | `indexing:chunks` | Renderer -> Main | Get chunks for document |
+ | `qa:ask` | Renderer -> Main | Ask a question |
+-| `qa:history` | Renderer -> Main | Get Q&A history |
++| `qa:history` | Renderer -> Main | Get Q&A history (raw exchanges) |
++| `qa:clear-history` | Renderer -> Main | Delete all Q&A history |
++| `conversation:get` | Renderer -> Main | Get history as ordered user/assistant `ConversationMessage[]` (built by `QaService.getConversation`) |
++| `clipboard:write-text` | Renderer -> Main | Copy text using Electron's main-process clipboard |
++
++The preload script runs sandboxed and cannot `require()` local modules, so it
++keeps its own copy of the channel map, typed as `typeof IPC_CHANNELS` through a
++type-only import. `tsc` fails if the two drift apart.
+ 
+ ## Data Flow
+ 
+@@ -98,6 +105,22 @@ All IPC communication uses named channels defined in `src/shared/types.ts`:
+ 4. Service executes business logic using PersistenceService for storage
+ 5. Result flows back through IPC to the renderer for display
+ 
++## Conversation History
++
++`QaService` stores each exchange in `qa-history.json` as `{ id, question, askedAt, response }`.
++`getConversation()` turns these into user/assistant message pairs that share a `turnId`.
++Older entries without `id`/`askedAt` get `legacy-<index>` ids and fall back to the answer timestamp.
++If a question matches no chunks by itself, retrieval tries again with the
++previous question included, and the answer is marked `usedConversationContext`.
++The renderer (`QuestionPanel`, `CitationList`, `ConversationHistory`) only displays this data.
++
++## Verification
++
++- `npm test`: unit tests in `tests/` (service conversation logic, timestamp formatting)
++- `npm run smoke`: builds the app, starts the real Electron app against a temp data dir, and drives
++  the conversation UI end to end (including a restart). Writes screenshots to `docs/evidence/`.
++  If your shell sets `NODE_OPTIONS` to a flag Electron rejects, run it as `NODE_OPTIONS= npm run smoke`.
++
+ ## Architecture Verification
+ 
+ Run `bash scripts/check-architecture.sh` to verify that no layer boundary
+diff --git a/docs/evidence/01-empty.png b/docs/evidence/01-empty.png
+new file mode 100644
+index 0000000..e627995
+Binary files /dev/null and b/docs/evidence/01-empty.png differ
+diff --git a/docs/evidence/02-conversation.png b/docs/evidence/02-conversation.png
+new file mode 100644
+index 0000000..9af31ee
+Binary files /dev/null and b/docs/evidence/02-conversation.png differ
+diff --git a/docs/evidence/03-citation-open.png b/docs/evidence/03-citation-open.png
+new file mode 100644
+index 0000000..bc91428
+Binary files /dev/null and b/docs/evidence/03-citation-open.png differ
+diff --git a/docs/evidence/04-error.png b/docs/evidence/04-error.png
+new file mode 100644
+index 0000000..0c21757
+Binary files /dev/null and b/docs/evidence/04-error.png differ
+diff --git a/evaluator-rubric.md b/evaluator-rubric.md
+new file mode 100644
+index 0000000..c54fbe4
+--- /dev/null
++++ b/evaluator-rubric.md
+@@ -0,0 +1,45 @@
++# Evaluator Rubric — Multi-turn Q&A conversation history
++
++Self-evaluation by the implementing agent (single-agent run). The scores aim to be strict: if something was only checked in code and never exercised, it is marked that way.
++
++## Verification that was actually run
++
++| Command | Result |
++|---|---|
++| `npm run check` | 0 errors. **Baseline was failing** with 15 TS errors (broken `shared/types` import paths and others); this was fixed first in commit `8963465` |
++| `bash scripts/check-architecture.sh` | `PASS: All architecture boundary checks passed` |
++| `npm test` (vitest) | 2 files, **13/13 tests pass** (`tests/qa-conversation.test.ts`, `tests/format.test.ts`) |
++| `NODE_OPTIONS= npm run smoke` | **23/23 end-to-end checks pass** against the real built Electron app (`scripts/smoke-conversation.js`), including a second launch that tests persistence across restart |
++| Screenshots | `docs/evidence/01-empty.png`, `02-conversation.png`, `03-citation-open.png`, `04-error.png`, all inspected visually |
++
++The smoke run exposed a pre-existing blocker: the sandboxed preload `require`d `../shared/types`, which fails in a sandbox. As a result `window.knowledgeBase` was `undefined` and **no IPC worked in the running app**. Fixed in `src/preload/preload.ts` with a channel map typed against the shared one via a type-only import. It also exposed a second problem: `navigator.clipboard` rejects on the `file://` page. Copy now goes through the `clipboard:write-text` IPC channel.
++
++## Scores
++
++| Criterion | Score | Evidence |
++|---|---|---|
++| Functional completeness | **5** | Smoke: 3 questions typed with real key events (`insertText` + Enter) → "3 questions and 3 answers rendered" and "questions shown verbatim and in order". A 4th very long question was "rendered untruncated". After a restart, "history persisted across restart (4 exchanges)". The service builds the thread (`QaService.getConversation`, `src/services/qa-service.ts`) and a unit test confirms no truncation. Follow-ups use the previous question when they match nothing on their own ("What about that?" → "Interpreted as a follow-up…", with citations). |
++| Visual design | **4** | `02-conversation.png`: user questions are right-aligned purple bubbles labelled "You"; assistant answers are left-aligned dark-navy cards labelled "Assistant". The palette (#16213e / #0f3460 / #533483) and inline-style approach match the rest of the app. Not a 5: the status bar at the bottom shows blank "Index: Documents:" (pre-existing, defect 1), mock answers contain raw markdown excerpts with odd line breaks, and the conversation header is a few px shorter when "Clear history" is hidden. |
++| Timestamps | **4** | Every message has a `<time dateTime>` with a readable label ("Today, 10:05 PM", "Yesterday, …", "Nov 3, …", year added for older dates) and the full date/time as a tooltip (`src/renderer/utils/format.ts`). Smoke: "timestamps rendered on every message" (6/6) and "timestamp text is human readable". Unit tests cover today/yesterday/this year/older/invalid. Legacy entries fall back to the answer timestamp. Not a 5: labels never refresh while the app stays open (a "Today" label stays wrong after midnight). |
++| Citation display | **4** | `CitationList.tsx`: a "Sources (n)" list; each entry shows `[n] document title · chunk k` plus an excerpt preview, and is a native `<details>` that expands to the full excerpt and an "Open document" button. Smoke: "citations rendered (6)", "citation expands to show excerpt", "Open document shows the cited document" (`03-citation-open.png`). Answers without citations show "No sources cited — this answer is not grounded…". Not a 5: the disabled "Document no longer available" state was never exercised end to end, and the excerpt is capped at 200 chars by the existing service. |
++| Interactivity | **4** | All verified in the smoke run: Copy (the clipboard holds exactly the answer text), "Edit & ask again" (refills and focuses the input), expand citation, open the cited document and close it, jump from the History sidebar to a turn (focus and highlight), Retry after an error, "Clear history" with inline Delete/Cancel confirmation, Enter to send. Shift+Enter inserts a newline (code only). The Ask button is disabled while a request is pending (prevents double submits). Not a 5: the example-question buttons, Dismiss and Shift+Enter were never exercised end to end. |
++| Edge cases | **4** | Empty history: empty state with example prompts (`01-empty.png`), verified. Long text: `pre-wrap` + `overflow-wrap:anywhere`, verified untruncated. Errors: the failing handler shows an inline `role="alert"` with Retry and Dismiss, the IPC prefix is stripped, the failed question is not persisted (`04-error.png`). History load failures show an alert with "Try again" (code only). Corrupt history JSON → empty conversation instead of a crash (unit test). Legacy entries without id → `legacy-n` (unit test). Blank questions are rejected by the service (unit test). Not a 5: the no-citations UI was only tested in the service, not end to end. A corrupt history file gets overwritten on the next ask (defect 4). |
++| Accessibility | **3** | Semantic markup: `<section aria-labelledby>`, `<ol>` of `<article>` messages with `<header>/<footer>`, `<time>`, the sidebar is a `<nav aria-label="Conversation history">` of real `<button>`s, citations use native `<details>/<summary>`, the textarea has a `<label>` (sr-only) and an `aria-describedby` hint, pending state is `role="status"`, errors are `role="alert"`, copy result is announced through `aria-live`, global `:focus-visible` outline, sidebar tabs have `aria-pressed`. Verified: Enter-to-send via real key events, and focus moving to the selected turn. **Not verified**: a screen reader, Tab-only navigation, colour-contrast measurement. Tabs do not implement the full tablist/arrow-key pattern. The pre-existing `DocumentList` uses clickable `<div>`s that keyboard users cannot reach. |
++| Code quality | **4** | `npm run check` passes, the architecture check passes, and 13 unit tests plus 23 e2e checks pass. The conversion from history to messages lives in the services layer; the renderer only formats for display; main just routes. No new Node imports in the renderer. Removed: the old `lastResponse` panel and the unused `followUpSuggestions` field. `docs/ARCHITECTURE.md` updated (new channels, preload constraint, verification). Not a 5: the preload channel map is duplicated (compile-checked, but still a copy), `QuestionPanel.tsx` is about 380 lines and could be split, the pre-existing dead `ImportPanel.tsx` remains, and `check-architecture.sh` does not check preload, so the original preload bug got past it. |
++
++**Overall: (5 + 4 + 4 + 4 + 4 + 4 + 3 + 4) / 8 = 4.0**
++
++## Remaining defects (most important first)
++
++1. **Status bar shows blank values.** `indexing:status` returns `IndexStatus` (`status`, `currentIndexed`, …) but the renderer reads it as `AppStatus` (`indexStatus`, `documentsLoaded`), so it renders "Index: Documents:". Pre-existing and outside this feature, but visible on every screen.
++2. **The "+ Import" button does nothing** (`App.tsx` `handleImport` only logs). Without the dev tools or the smoke script, a user cannot add documents, so they cannot get cited answers. Pre-existing.
++3. **Document status never becomes "indexed"**: after indexing, DocumentDetail still shows "Status: imported" and an "Index Document" button (`03-citation-open.png`). Pre-existing.
++4. **A corrupt `qa-history.json` is silently overwritten.** `getHistory()` logs and returns `[]`, and the next `ask()` writes over the file, so the old history is lost. It should back up the bad file first.
++5. **Accessibility is not verified with assistive tech**: no screen-reader pass, no Tab-only walkthrough, no contrast measurement. The sidebar tabs lack the tablist pattern and `DocumentList` items are not focusable.
++6. **The follow-up heuristic is narrow**: context is used only when the question alone matches *zero* chunks. A follow-up that matches weakly on its own (e.g. "what about its size?") ignores the previous turn. Answers are still the existing mock patterns, not generated from the conversation.
++7. **Relative timestamps do not refresh** while the app stays open (no timer re-render).
++8. **Scalability**: the whole history renders every time (no virtualization or paging), and each `ask()` reads and rewrites the entire history file.
++9. **Not exercised end to end**: the "Document no longer available" disabled state, Dismiss, the example-question buttons, Shift+Enter, the history-load-error alert.
++10. **Environment**: the user's shell sets `NODE_OPTIONS=--openssl-legacy-provider`, which Electron refuses to start with. `npm run dev`/`npm run smoke` must be run with `NODE_OPTIONS=` cleared (documented in `docs/ARCHITECTURE.md`).
++11. **The preload duplicates the IPC channel map** (needed because sandboxed preloads cannot `require` local modules). `tsc` catches drift, but a bundled preload would remove the copy. `check-architecture.sh` should also learn to check preload.
++12. **The smoke test writes to the real system clipboard** of the machine running it.
+diff --git a/package.json b/package.json
+index c57e574..d023ab4 100644
+--- a/package.json
++++ b/package.json
+@@ -8,6 +8,7 @@
+     "build": "tsc -p tsconfig.node.json && vite build",
+     "check": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.json",
+     "test": "vitest run",
++    "smoke": "npm run build && electron scripts/smoke-conversation.js",
+     "test:watch": "vitest"
+   },
+   "dependencies": {
+diff --git a/scripts/smoke-conversation.js b/scripts/smoke-conversation.js
+new file mode 100644
+index 0000000..a285636
+--- /dev/null
++++ b/scripts/smoke-conversation.js
+@@ -0,0 +1,179 @@
++/*
++ * End-to-end smoke test for multi-turn conversation history.
++ *
++ * Runs the real built app (dist/) inside Electron against a throwaway data
++ * directory, drives the UI with real keyboard input, asserts on the DOM and
++ * writes screenshots to docs/evidence/.
++ *
++ * Usage:  npm run build && npx electron scripts/smoke-conversation.js
++ * Phase 2 (restart persistence) runs automatically by relaunching itself.
++ */
++const { app, BrowserWindow, ipcMain, clipboard } = require('electron');
++const fs = require('fs');
++const os = require('os');
++const path = require('path');
++const { spawnSync } = require('child_process');
++
++const root = path.resolve(__dirname, '..');
++const evidenceDir = path.join(root, 'docs', 'evidence');
++const phase = process.env.SMOKE_PHASE || '1';
++const userData = process.env.SMOKE_USER_DATA || fs.mkdtempSync(path.join(os.tmpdir(), 'kb-smoke-'));
++app.setPath('userData', userData);
++
++const results = [];
++function check(name, ok, detail = '') {
++  results.push({ name, ok });
++  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`);
++}
++
++const sleep = ms => new Promise(r => setTimeout(r, ms));
++
++async function waitFor(wc, expr, timeout = 8000) {
++  const start = Date.now();
++  while (Date.now() - start < timeout) {
++    if (await wc.executeJavaScript(`Boolean(${expr})`)) return true;
++    await sleep(100);
++  }
++  return false;
++}
++
++async function shot(win, name) {
++  fs.mkdirSync(evidenceDir, { recursive: true });
++  const img = await win.webContents.capturePage();
++  fs.writeFileSync(path.join(evidenceDir, name), img.toPNG());
++}
++
++async function typeAndEnter(wc, text) {
++  await wc.executeJavaScript(`document.getElementById('question-input').focus()`);
++  wc.insertText(text);
++  await sleep(50);
++  wc.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
++  wc.sendInputEvent({ type: 'char', keyCode: '\r' });
++  wc.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
++}
++
++const js = {
++  userCount: `document.querySelectorAll('ol[aria-label="Questions and answers"] > li[aria-label^="You asked"]').length`,
++  answerCount: `document.querySelectorAll('ol[aria-label="Questions and answers"] > li[aria-label^="Assistant answered"]').length`,
++};
++
++async function phase1(win) {
++  const wc = win.webContents;
++  check('empty state shown', await waitFor(wc, `document.body.innerText.includes('No questions yet')`));
++  await shot(win, '01-empty.png');
++
++  // Import + index sample documents through the real preload bridge.
++  const samples = path.join(root, 'data', 'sample-documents');
++  for (const f of fs.readdirSync(samples)) {
++    await wc.executeJavaScript(`window.knowledgeBase.documents.import(${JSON.stringify(path.join(samples, f))})`);
++  }
++  await wc.executeJavaScript(`window.knowledgeBase.indexing.start()`);
++  await wc.executeJavaScript(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Refresh').click()`);
++
++  const questions = ['How does retrieval work?', 'What about that?', 'What was decided in the meeting?'];
++  for (let i = 0; i < questions.length; i++) {
++    await typeAndEnter(wc, questions[i]);
++    await waitFor(wc, `${js.answerCount} === ${i + 1}`);
++  }
++  check('3 questions and 3 answers rendered', (await wc.executeJavaScript(js.userCount)) === 3 && (await wc.executeJavaScript(js.answerCount)) === 3);
++
++  const texts = await wc.executeJavaScript(
++    `[...document.querySelectorAll('ol[aria-label="Questions and answers"] article p')].map(p => p.textContent)`,
++  );
++  check('questions shown verbatim and in order', questions.every((q, i) => texts.indexOf(q) > -1 && (i === 0 || texts.indexOf(q) > texts.indexOf(questions[i - 1]))));
++  check('timestamps rendered on every message', (await wc.executeJavaScript(`document.querySelectorAll('ol[aria-label="Questions and answers"] time').length`)) === 6);
++  check('timestamp text is human readable', /^Today, /.test(await wc.executeJavaScript(`document.querySelector('ol[aria-label="Questions and answers"] time').textContent`)));
++  check('follow-up flagged as using previous question', await wc.executeJavaScript(`document.body.innerText.includes('Interpreted as a follow-up')`));
++  const citationCount = await wc.executeJavaScript(`document.querySelectorAll('ol[aria-label="Questions and answers"] details').length`);
++  check('citations rendered', citationCount >= 3, `${citationCount} citations`);
++  check('input cleared after send', (await wc.executeJavaScript(`document.getElementById('question-input').value`)) === '');
++  await shot(win, '02-conversation.png');
++
++  // Expand first citation and open its document.
++  await wc.executeJavaScript(`document.querySelector('ol[aria-label="Questions and answers"] details summary').click()`);
++  check('citation expands to show excerpt', await wc.executeJavaScript(`!!document.querySelector('details[open] blockquote')`));
++  await wc.executeJavaScript(`[...document.querySelectorAll('details[open] button')].find(b => b.textContent === 'Open document').click()`);
++  check('Open document shows the cited document', await waitFor(wc, `document.querySelector('section[aria-label="Selected document"] h2')`));
++  await shot(win, '03-citation-open.png');
++  await wc.executeJavaScript(`document.querySelector('button[aria-label="Close document"]').click()`);
++
++  // Sidebar outline jumps to a turn.
++  await wc.executeJavaScript(`[...document.querySelectorAll('button')].find(b => b.textContent.startsWith('History')).click()`);
++  const outline = await wc.executeJavaScript(`document.querySelectorAll('nav[aria-label="Conversation history"] button').length`);
++  check('History tab lists all questions', outline === 3);
++  await wc.executeJavaScript(`document.querySelector('nav[aria-label="Conversation history"] button').click()`);
++  check('selecting a history item focuses that turn', await waitFor(wc, `document.activeElement && document.activeElement.getAttribute('aria-label')?.startsWith('You asked')`));
++
++  // Long answer is not truncated.
++  const longQ = 'architecture '.repeat(120).trim();
++  await typeAndEnter(wc, longQ);
++  await waitFor(wc, `${js.answerCount} === 4`);
++  await wc.executeJavaScript(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Copy').click()`);
++  check('Copy gives feedback', await waitFor(wc, `[...document.querySelectorAll('button[aria-label="Copy answer"]')].some(b => /Copied|Copy failed/.test(b.textContent))`));
++  const copied = await wc.executeJavaScript(`[...document.querySelectorAll('button[aria-label="Copy answer"]')].some(b => b.textContent.startsWith('Copied'))`);
++  const firstAnswer = await wc.executeJavaScript(`document.querySelector('li[aria-label^="Assistant answered"] article > p').textContent`);
++  check('Copy succeeded and clipboard holds the answer', copied && clipboard.readText() === firstAnswer);
++  await wc.executeJavaScript(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Edit & ask again').click()`);
++  check('Edit & ask again refills and focuses input', await wc.executeJavaScript(`document.getElementById('question-input').value === ${JSON.stringify(questions[0])} && document.activeElement.id === 'question-input'`));
++  await wc.executeJavaScript(`(() => { const t = document.getElementById('question-input'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, ''); t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
++  check('long question rendered untruncated', await wc.executeJavaScript(`[...document.querySelectorAll('article p')].some(p => p.textContent === ${JSON.stringify(longQ)})`));
++
++  // Error path: swap the qa:ask handler for one that fails.
++  ipcMain.removeHandler('qa:ask');
++  ipcMain.handle('qa:ask', async () => { throw new Error('Simulated backend failure'); });
++  await typeAndEnter(wc, 'This one will fail');
++  check('error shown inline with retry', await waitFor(wc, `[...document.querySelectorAll('[role=alert]')].some(a => a.textContent.includes('Simulated backend failure')) && [...document.querySelectorAll('button')].some(b => b.textContent === 'Retry')`));
++  check('IPC error prefix stripped', !(await wc.executeJavaScript(`document.body.innerText.includes('Error invoking remote method')`)));
++  check('failed question not persisted', (await wc.executeJavaScript(js.answerCount)) === 4);
++  await wc.executeJavaScript(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Retry').click()`);
++  check('Retry re-sends and shows the error again', await waitFor(wc, `[...document.querySelectorAll('[role=alert]')].some(a => a.textContent.includes('Simulated backend failure'))`) && (await wc.executeJavaScript(`document.querySelectorAll('[role=alert]').length`)) === 1);
++  await shot(win, '04-error.png');
++}
++
++async function phase2(win) {
++  const wc = win.webContents;
++  check('history persisted across restart (4 exchanges)', await waitFor(wc, `${js.answerCount} === 4`));
++  // Clear history with inline confirmation.
++  await wc.executeJavaScript(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Clear history').click()`);
++  check('clear asks for confirmation', await waitFor(wc, `document.querySelector('[aria-label="Confirm clearing history"]')`));
++  await wc.executeJavaScript(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Delete').click()`);
++  check('history cleared', await waitFor(wc, `document.body.innerText.includes('No questions yet')`));
++}
++
++app.whenReady().then(async () => {
++  // Load the real app; its whenReady handler creates the window.
++  require(path.join(root, 'dist', 'main', 'main.js'));
++  let win;
++  for (let i = 0; i < 50 && !win; i++) {
++    await sleep(100);
++    win = BrowserWindow.getAllWindows()[0];
++  }
++  if (!win) {
++    console.error('FAIL  window never opened');
++    app.exit(1);
++    return;
++  }
++  if (win.webContents.isLoading()) await new Promise(r => win.webContents.once('did-finish-load', r));
++  await sleep(300);
++
++  try {
++    if (phase === '1') await phase1(win);
++    else await phase2(win);
++  } catch (err) {
++    check('smoke script ran without exceptions', false, String(err));
++  }
++
++  let failed = results.filter(r => !r.ok).length;
++  if (phase === '1') {
++    const child = spawnSync(process.execPath, [__filename], {
++      env: { ...process.env, SMOKE_PHASE: '2', SMOKE_USER_DATA: userData },
++      stdio: ['ignore', 'pipe', 'inherit'],
++      encoding: 'utf-8',
++    });
++    process.stdout.write(child.stdout.split('\n').filter(l => /^(PASS|FAIL)/.test(l)).join('\n') + '\n');
++    if (child.status !== 0) failed++;
++    fs.rmSync(userData, { recursive: true, force: true });
++    console.log(failed === 0 ? 'SMOKE: ALL CHECKS PASSED' : `SMOKE: ${failed} FAILURE(S)`);
++  }
++  app.exit(failed === 0 ? 0 : 1);
++});
+diff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts
+index 112835c..ebf85ec 100644
+--- a/src/main/ipc-handlers.ts
++++ b/src/main/ipc-handlers.ts
+@@ -1,4 +1,4 @@
+-import { IpcMain } from 'electron';
++import { IpcMain, clipboard } from 'electron';
+ import { DocumentService } from '../services/document-service';
+ import { IndexingService } from '../services/indexing-service';
+ import { QaService } from '../services/qa-service';
+@@ -94,6 +94,13 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+   // Conversation
+   ipcMain.handle(IPC_CHANNELS.GET_CONVERSATION, async () => {
+     log.info('GET_CONVERSATION');
+-    return qaService.getHistory();
++    return qaService.getConversation();
++  });
++
++  // Clipboard
++  ipcMain.handle(IPC_CHANNELS.WRITE_CLIPBOARD, async (_event, text: string) => {
++    log.info('WRITE_CLIPBOARD', { length: typeof text === 'string' ? text.length : 0 });
++    if (typeof text !== 'string') throw new Error('Clipboard text must be a string');
++    clipboard.writeText(text);
+   });
+ }
+diff --git a/src/preload/preload.ts b/src/preload/preload.ts
+index 3c2e9ef..e164de7 100644
+--- a/src/preload/preload.ts
++++ b/src/preload/preload.ts
+@@ -1,5 +1,27 @@
+ import { contextBridge, ipcRenderer } from 'electron';
+-import { IPC_CHANNELS } from '../shared/types';
++import type { IPC_CHANNELS as SharedChannels } from '../shared/types';
++
++/*
++ * Sandboxed preload scripts cannot require() local modules, so a runtime import
++ * of ../shared/types fails and the bridge is never exposed. The channel map is
++ * therefore repeated here, but typed against the shared definition: the
++ * type-only import is erased at runtime and tsc rejects any drift.
++ */
++const IPC_CHANNELS: typeof SharedChannels = {
++  LIST_DOCUMENTS: 'documents:list',
++  IMPORT_DOCUMENT: 'documents:import',
++  GET_DOCUMENT: 'documents:get',
++  DELETE_DOCUMENT: 'documents:delete',
++  START_INDEXING: 'indexing:start',
++  GET_INDEXING_STATUS: 'indexing:status',
++  GET_CHUNKS: 'indexing:chunks',
++  ASK_QUESTION: 'qa:ask',
++  GET_HISTORY: 'qa:history',
++  CLEAR_HISTORY: 'qa:clear-history',
++  GET_CONVERSATION: 'conversation:get',
++  WRITE_CLIPBOARD: 'clipboard:write-text',
++  GET_STATUS: 'app:status',
++};
+ 
+ const api = {
+   documents: {
+@@ -21,6 +43,9 @@ const api = {
+   conversation: {
+     get: () => ipcRenderer.invoke(IPC_CHANNELS.GET_CONVERSATION),
+   },
++  clipboard: {
++    writeText: (text: string) => ipcRenderer.invoke(IPC_CHANNELS.WRITE_CLIPBOARD, text),
++  },
+ };
+ 
+ contextBridge.exposeInMainWorld('knowledgeBase', api);
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index 9831cb6..1ec5c74 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -4,7 +4,9 @@ import { QuestionPanel } from './components/QuestionPanel';
+ import { DocumentDetail } from './components/DocumentDetail';
+ import { ConversationHistory } from './components/ConversationHistory';
+ import { StatusBar } from './components/StatusBar';
+-import { Document, AppStatus, QAResponse, QAHistory } from '../shared/types';
++import { Document, AppStatus, ConversationMessage } from '../shared/types';
++import { describeError } from './utils/format';
++import type { FailedQuestion, PendingQuestion, TurnFocusRequest } from './components/QuestionPanel';
+ 
+ 
+ export function App() {
+@@ -15,8 +17,11 @@ export function App() {
+     indexStatus: 'idle',
+     lastActivity: '',
+   });
+-  const [lastResponse, setLastResponse] = useState<QAResponse | null>(null);
+-  const [conversationHistory, setConversationHistory] = useState<QAHistory[]>([]);
++  const [messages, setMessages] = useState<ConversationMessage[]>([]);
++  const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
++  const [pending, setPending] = useState<PendingQuestion | null>(null);
++  const [failed, setFailed] = useState<FailedQuestion | null>(null);
++  const [focusRequest, setFocusRequest] = useState<TurnFocusRequest | null>(null);
+   const [activeTab, setActiveTab] = useState<'documents' | 'conversation'>('documents');
+ 
+   const refreshDocuments = useCallback(async () => {
+@@ -32,10 +37,12 @@ export function App() {
+ 
+   const refreshHistory = useCallback(async () => {
+     try {
+-      const history = await window.knowledgeBase.conversation.get();
+-      setConversationHistory(history);
++      const conversation = await window.knowledgeBase.conversation.get();
++      setMessages(conversation);
++      setHistoryLoadError(null);
+     } catch (err) {
+       console.error('Failed to refresh conversation history:', err);
++      setHistoryLoadError(describeError(err));
+     }
+   }, []);
+ 
+@@ -53,15 +60,49 @@ export function App() {
+   }, []);
+ 
+   const handleAskQuestion = useCallback(async (question: string) => {
++    const askedAt = new Date().toISOString();
++    setFailed(null);
++    setPending({ question, askedAt });
+     try {
+-      const response = await window.knowledgeBase.qa.ask(question);
+-      setLastResponse(response);
+-      refreshHistory();
++      await window.knowledgeBase.qa.ask(question);
++      await refreshHistory();
+     } catch (err) {
+       console.error('Q&A failed:', err);
++      setFailed({ question, askedAt, error: describeError(err) });
++    } finally {
++      setPending(null);
+     }
+   }, [refreshHistory]);
+ 
++  const handleRetry = useCallback(() => {
++    if (failed) handleAskQuestion(failed.question);
++  }, [failed, handleAskQuestion]);
++
++  const handleClearHistory = useCallback(async () => {
++    try {
++      await window.knowledgeBase.qa.clearHistory();
++    } catch (err) {
++      console.error('Failed to clear history:', err);
++    }
++    await refreshHistory();
++  }, [refreshHistory]);
++
++  const isDocumentAvailable = useCallback(
++    (documentId: string) => documents.some(d => d.id === documentId),
++    [documents],
++  );
++
++  const handleOpenDocument = useCallback((documentId: string) => {
++    const doc = documents.find(d => d.id === documentId);
++    if (doc) setSelectedDoc(doc);
++  }, [documents]);
++
++  const handleSelectTurn = useCallback((turnId: string) => {
++    setFocusRequest(prev => ({ turnId, nonce: (prev?.nonce ?? 0) + 1 }));
++  }, []);
++
++  const turnCount = messages.filter(m => m.role === 'user').length;
++
+   return (
+     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+       <header style={{
+@@ -103,6 +144,8 @@ export function App() {
+             borderBottom: '1px solid #0f3460',
+           }}>
+             <button
++              type="button"
++              aria-pressed={activeTab === 'documents'}
+               onClick={() => setActiveTab('documents')}
+               style={{
+                 flex: 1,
+@@ -119,6 +162,8 @@ export function App() {
+               Documents ({documents.length})
+             </button>
+             <button
++              type="button"
++              aria-pressed={activeTab === 'conversation'}
+               onClick={() => setActiveTab('conversation')}
+               style={{
+                 flex: 1,
+@@ -132,7 +177,7 @@ export function App() {
+                 fontWeight: 500,
+               }}
+             >
+-              History ({conversationHistory.length})
++              History ({turnCount})
+             </button>
+           </div>
+           {activeTab === 'documents' ? (
+@@ -164,45 +209,55 @@ export function App() {
+               />
+             </>
+           ) : (
+-            <ConversationHistory history={conversationHistory} />
++            <ConversationHistory messages={messages} onSelectTurn={handleSelectTurn} />
+           )}
+         </div>
+ 
+-        {/* Right panel: Document detail + Q&A */}
+-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+-          <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+-            {selectedDoc ? (
++        {/* Right panel: selected document (optional) above the conversation */}
++        <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
++          {selectedDoc && (
++            <section
++              aria-label="Selected document"
++              style={{ position: 'relative', maxHeight: '45%', overflow: 'auto', padding: '20px', flexShrink: 0 }}
++            >
++              <button
++                type="button"
++                onClick={() => setSelectedDoc(null)}
++                aria-label="Close document"
++                style={{
++                  position: 'absolute',
++                  top: '12px',
++                  right: '16px',
++                  padding: '2px 8px',
++                  background: 'transparent',
++                  color: '#c0c0dd',
++                  border: '1px solid #2a2a5e',
++                  borderRadius: '3px',
++                  cursor: 'pointer',
++                  fontSize: '12px',
++                }}
++              >
++                Close
++              </button>
+               <DocumentDetail document={selectedDoc} />
+-            ) : (
+-              <div style={{ color: '#666', textAlign: 'center', paddingTop: '40px' }}>
+-                Select a document or ask a question to get started
+-              </div>
+-            )}
+-            {lastResponse && (
+-              <div style={{
+-                marginTop: '16px',
+-                padding: '16px',
+-                background: '#1a1a3e',
+-                borderRadius: '6px',
+-                border: '1px solid #0f3460',
+-              }}>
+-                <div style={{ fontSize: '14px', lineHeight: 1.6 }}>{lastResponse.answer}</div>
+-                {lastResponse.citations.length > 0 && (
+-                  <div style={{ marginTop: '10px', fontSize: '12px', color: '#8888bb' }}>
+-                    <strong>Citations:</strong>
+-                    {lastResponse.citations.map((c, i) => (
+-                      <div key={i} style={{ marginTop: '4px', paddingLeft: '8px', borderLeft: '2px solid #533483' }}>
+-                        {c.documentTitle} (chunk {c.chunkIndex}): {c.excerpt.substring(0, 100)}...
+-                      </div>
+-                    ))}
+-                  </div>
+-                )}
+-              </div>
+-            )}
+-          </div>
++            </section>
++          )}
+ 
+-          <QuestionPanel onAsk={handleAskQuestion} />
+-        </div>
++          <QuestionPanel
++            messages={messages}
++            pending={pending}
++            failed={failed}
++            loadError={historyLoadError}
++            focusRequest={focusRequest}
++            onAsk={handleAskQuestion}
++            onRetry={handleRetry}
++            onDismissError={() => setFailed(null)}
++            onReloadHistory={refreshHistory}
++            onClearHistory={handleClearHistory}
++            isDocumentAvailable={isDocumentAvailable}
++            onOpenDocument={handleOpenDocument}
++          />
++        </main>
+       </div>
+ 
+       <StatusBar status={appStatus} />
+diff --git a/src/renderer/components/CitationList.tsx b/src/renderer/components/CitationList.tsx
+new file mode 100644
+index 0000000..e5aff26
+--- /dev/null
++++ b/src/renderer/components/CitationList.tsx
+@@ -0,0 +1,76 @@
++import { Citation } from '../../shared/types';
++
++interface Props {
++  citations: Citation[];
++  /** Returns false when the cited document no longer exists. */
++  isDocumentAvailable: (documentId: string) => boolean;
++  onOpenDocument: (documentId: string) => void;
++}
++
++const PREVIEW_LENGTH = 90;
++
++/** Sources for one answer. Each citation expands (native <details>) to show the full excerpt. */
++export function CitationList({ citations, isDocumentAvailable, onOpenDocument }: Props) {
++  if (citations.length === 0) {
++    return (
++      <p style={{ marginTop: '10px', fontSize: '12px', color: '#a8a8c8', fontStyle: 'italic' }}>
++        No sources cited — this answer is not grounded in your documents.
++      </p>
++    );
++  }
++
++  return (
++    <div style={{ marginTop: '10px' }}>
++      <h4 style={{ fontSize: '11px', fontWeight: 600, color: '#a8a8c8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
++        Sources ({citations.length})
++      </h4>
++      <ol style={{ listStyle: 'none', marginTop: '4px' }}>
++        {citations.map((c, i) => {
++          const available = isDocumentAvailable(c.documentId);
++          const preview = c.excerpt.length > PREVIEW_LENGTH ? `${c.excerpt.slice(0, PREVIEW_LENGTH).trimEnd()}…` : c.excerpt;
++          return (
++            <li key={`${c.documentId}-${c.chunkIndex}-${i}`} style={{ marginTop: '4px' }}>
++              <details style={{ borderLeft: '2px solid #533483', paddingLeft: '8px', fontSize: '12px', color: '#c0c0dd' }}>
++                <summary style={{ cursor: 'pointer', lineHeight: 1.5 }}>
++                  <span style={{ fontWeight: 600, color: '#e0e0e0' }}>[{i + 1}] {c.documentTitle}</span>
++                  <span style={{ color: '#a8a8c8' }}> · chunk {c.chunkIndex}</span>
++                  <span style={{ display: 'block', color: '#a8a8c8' }}>{preview}</span>
++                </summary>
++                <blockquote
++                  style={{
++                    margin: '6px 0',
++                    padding: '8px 10px',
++                    background: '#14142e',
++                    borderRadius: '4px',
++                    whiteSpace: 'pre-wrap',
++                    overflowWrap: 'anywhere',
++                    lineHeight: 1.5,
++                  }}
++                >
++                  {c.excerpt}
++                </blockquote>
++                <button
++                  type="button"
++                  onClick={() => onOpenDocument(c.documentId)}
++                  disabled={!available}
++                  style={{
++                    padding: '3px 10px',
++                    background: available ? '#0f3460' : 'transparent',
++                    color: available ? '#e0e0e0' : '#a8a8c8',
++                    border: '1px solid #1a1a4e',
++                    borderRadius: '3px',
++                    cursor: available ? 'pointer' : 'not-allowed',
++                    fontSize: '11px',
++                    marginBottom: '4px',
++                  }}
++                >
++                  {available ? 'Open document' : 'Document no longer available'}
++                </button>
++              </details>
++            </li>
++          );
++        })}
++      </ol>
++    </div>
++  );
++}
+diff --git a/src/renderer/components/ConversationHistory.tsx b/src/renderer/components/ConversationHistory.tsx
+index adc97d8..d93e913 100644
+--- a/src/renderer/components/ConversationHistory.tsx
++++ b/src/renderer/components/ConversationHistory.tsx
+@@ -1,35 +1,63 @@
+-import { QAHistory } from '../../shared/types';
++import { ConversationMessage } from '../../shared/types';
++import { formatFullTimestamp, formatTimestamp } from '../utils/format';
+ 
+ interface Props {
+-  history: QAHistory[];
++  messages: ConversationMessage[];
++  onSelectTurn: (turnId: string) => void;
+ }
+ 
+-/**
+- * ConversationHistory - Placeholder component
+- *
+- * TODO: Implement a full multi-turn conversation history view.
+- * For now this displays a basic list of past Q&A exchanges.
+- */
+-export function ConversationHistory({ history }: Props) {
+-  if (history.length === 0) {
++/** Outline of past questions in the sidebar; selecting one jumps to it in the conversation. */
++export function ConversationHistory({ messages, onSelectTurn }: Props) {
++  const questions = messages.filter(m => m.role === 'user');
++
++  if (questions.length === 0) {
+     return (
+-      <div style={{ padding: '20px', color: '#666', textAlign: 'center', fontSize: '13px' }}>
++      <p style={{ padding: '20px', color: '#a8a8c8', textAlign: 'center', fontSize: '13px' }}>
+         No conversation history yet. Ask a question to get started.
+-      </div>
++      </p>
+     );
+   }
+ 
+   return (
+-    <div style={{ padding: '12px' }}>
+-      <div style={{ fontSize: '13px', color: '#888', marginBottom: '8px' }}>
+-        History ({history.length})
+-      </div>
+-      {history.map((item, i) => (
+-        <div key={i} style={{ marginBottom: '8px', fontSize: '12px' }}>
+-          <div style={{ color: '#a0a0c0' }}>Q: {item.question}</div>
+-          <div style={{ color: '#888' }}>A: {item.response.answer.substring(0, 80)}...</div>
+-        </div>
+-      ))}
+-    </div>
++    <nav aria-label="Conversation history" style={{ flex: 1, overflowY: 'auto' }}>
++      <ol style={{ listStyle: 'none' }}>
++        {questions.map(q => (
++          <li key={q.id}>
++            <button
++              type="button"
++              onClick={() => onSelectTurn(q.turnId)}
++              title={q.content}
++              style={{
++                display: 'block',
++                width: '100%',
++                textAlign: 'left',
++                padding: '10px 16px',
++                background: 'transparent',
++                color: '#e0e0e0',
++                border: 'none',
++                borderBottom: '1px solid #0f3460',
++                cursor: 'pointer',
++              }}
++            >
++              <span
++                style={{
++                  display: '-webkit-box',
++                  WebkitLineClamp: 2,
++                  WebkitBoxOrient: 'vertical',
++                  overflow: 'hidden',
++                  fontSize: '13px',
++                  overflowWrap: 'anywhere',
++                }}
++              >
++                {q.content}
++              </span>
++              <time dateTime={q.timestamp} title={formatFullTimestamp(q.timestamp)} style={{ display: 'block', fontSize: '11px', color: '#a8a8c8', marginTop: '2px' }}>
++                {formatTimestamp(q.timestamp)}
++              </time>
++            </button>
++          </li>
++        ))}
++      </ol>
++    </nav>
+   );
+ }
+diff --git a/src/renderer/components/QuestionPanel.tsx b/src/renderer/components/QuestionPanel.tsx
+index 1b80cc5..3b18b08 100644
+--- a/src/renderer/components/QuestionPanel.tsx
++++ b/src/renderer/components/QuestionPanel.tsx
+@@ -1,61 +1,382 @@
+-import React, { useState } from 'react';
++import { useEffect, useRef, useState, type CSSProperties } from 'react';
++import { ConversationMessage } from '../../shared/types';
++import { CitationList } from './CitationList';
++import { formatFullTimestamp, formatTimestamp } from '../utils/format';
++
++export interface PendingQuestion {
++  question: string;
++  askedAt: string;
++}
++
++export interface FailedQuestion extends PendingQuestion {
++  error: string;
++}
++
++export interface TurnFocusRequest {
++  turnId: string;
++  /** Changes on every request so selecting the same turn twice still scrolls. */
++  nonce: number;
++}
+ 
+ interface Props {
++  messages: ConversationMessage[];
++  pending: PendingQuestion | null;
++  failed: FailedQuestion | null;
++  loadError: string | null;
++  focusRequest: TurnFocusRequest | null;
+   onAsk: (question: string) => void;
++  onRetry: () => void;
++  onDismissError: () => void;
++  onReloadHistory: () => void;
++  onClearHistory: () => Promise<void>;
++  isDocumentAvailable: (documentId: string) => boolean;
++  onOpenDocument: (documentId: string) => void;
++}
++
++const EXAMPLE_QUESTIONS = [
++  'How does the indexing pipeline work?',
++  'What was decided in the meeting?',
++  'How are documents imported?',
++];
++
++const smallButton: CSSProperties = {
++  padding: '3px 10px',
++  background: 'transparent',
++  color: '#c0c0dd',
++  border: '1px solid #2a2a5e',
++  borderRadius: '3px',
++  cursor: 'pointer',
++  fontSize: '11px',
++};
++
++const metaText: CSSProperties = { fontSize: '11px', color: '#a8a8c8' };
++
++function Timestamp({ iso }: { iso: string }) {
++  return (
++    <time dateTime={iso} title={formatFullTimestamp(iso)} style={metaText}>
++      {formatTimestamp(iso)}
++    </time>
++  );
++}
++
++function CopyButton({ text }: { text: string }) {
++  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
++
++  useEffect(() => {
++    if (state === 'idle') return;
++    const t = setTimeout(() => setState('idle'), 2000);
++    return () => clearTimeout(t);
++  }, [state]);
++
++  const copy = async () => {
++    try {
++      await window.knowledgeBase.clipboard.writeText(text);
++      setState('copied');
++    } catch {
++      setState('failed');
++    }
++  };
++
++  return (
++    <button type="button" onClick={copy} style={smallButton} aria-label="Copy answer">
++      {state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : 'Copy'}
++      <span className="sr-only" aria-live="polite">
++        {state === 'copied' ? 'Answer copied to clipboard' : state === 'failed' ? 'Could not copy answer' : ''}
++      </span>
++    </button>
++  );
+ }
+ 
+-export function QuestionPanel({ onAsk }: Props) {
++function bubble(role: 'user' | 'assistant', highlighted: boolean): CSSProperties {
++  const isUser = role === 'user';
++  return {
++    alignSelf: isUser ? 'flex-end' : 'flex-start',
++    maxWidth: isUser ? '75%' : '85%',
++    minWidth: 0,
++    padding: '10px 14px',
++    borderRadius: isUser ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
++    background: isUser ? '#533483' : '#1a1a3e',
++    border: `1px solid ${highlighted ? '#9d7fe0' : isUser ? '#533483' : '#0f3460'}`,
++    boxShadow: highlighted ? '0 0 0 2px rgba(157,127,224,0.35)' : 'none',
++    transition: 'box-shadow 0.3s, border-color 0.3s',
++  };
++}
++
++const messageText: CSSProperties = {
++  fontSize: '14px',
++  lineHeight: 1.6,
++  whiteSpace: 'pre-wrap',
++  overflowWrap: 'anywhere',
++};
++
++/** Multi-turn Q&A: the conversation thread plus the question composer. */
++export function QuestionPanel({
++  messages,
++  pending,
++  failed,
++  loadError,
++  focusRequest,
++  onAsk,
++  onRetry,
++  onDismissError,
++  onReloadHistory,
++  onClearHistory,
++  isDocumentAvailable,
++  onOpenDocument,
++}: Props) {
+   const [question, setQuestion] = useState('');
++  const [confirmingClear, setConfirmingClear] = useState(false);
++  const [highlightedTurn, setHighlightedTurn] = useState<string | null>(null);
++  const inputRef = useRef<HTMLTextAreaElement>(null);
++  const bottomRef = useRef<HTMLDivElement>(null);
++  const turnRefs = useRef(new Map<string, HTMLLIElement>());
++
++  const turnCount = messages.filter(m => m.role === 'user').length;
++
++  // Keep the newest exchange in view when messages arrive or a question is pending/fails.
++  useEffect(() => {
++    bottomRef.current?.scrollIntoView({ block: 'end' });
++  }, [messages.length, pending, failed]);
++
++  // Jump to a turn selected from the History outline.
++  useEffect(() => {
++    if (!focusRequest) return;
++    const el = turnRefs.current.get(focusRequest.turnId);
++    if (!el) return;
++    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
++    el.focus({ preventScroll: true });
++    setHighlightedTurn(focusRequest.turnId);
++    const t = setTimeout(() => setHighlightedTurn(null), 2000);
++    return () => clearTimeout(t);
++  }, [focusRequest]);
++
++  const fillInput = (text: string) => {
++    setQuestion(text);
++    inputRef.current?.focus();
++  };
+ 
+-  const handleSubmit = (e: React.FormEvent) => {
+-    e.preventDefault();
+-    if (!question.trim()) return;
+-    onAsk(question.trim());
++  const submit = () => {
++    const trimmed = question.trim();
++    if (!trimmed || pending) return;
++    onAsk(trimmed);
+     setQuestion('');
+   };
+ 
++  const handleClear = async () => {
++    await onClearHistory();
++    setConfirmingClear(false);
++  };
++
++  const isEmpty = messages.length === 0 && !pending && !failed && !loadError;
++
+   return (
+-    <form
+-      onSubmit={handleSubmit}
+-      style={{
+-        display: 'flex',
+-        padding: '12px 20px',
+-        borderTop: '1px solid #0f3460',
+-        background: '#16213e',
+-      }}
++    <section
++      aria-labelledby="conversation-heading"
++      style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', borderTop: '1px solid #0f3460' }}
+     >
+-      <input
+-        type="text"
+-        value={question}
+-        onChange={e => setQuestion(e.target.value)}
+-        placeholder="Ask a question about your documents..."
++      <div
+         style={{
+-          flex: 1,
+-          padding: '10px 14px',
+-          background: '#1a1a2e',
+-          color: '#e0e0e0',
+-          border: '1px solid #0f3460',
+-          borderRadius: '6px',
+-          fontSize: '14px',
+-          outline: 'none',
++          display: 'flex',
++          alignItems: 'center',
++          justifyContent: 'space-between',
++          gap: '8px',
++          padding: '8px 20px',
++          background: '#16213e',
++          borderBottom: '1px solid #0f3460',
+         }}
+-      />
+-      <button
+-        type="submit"
+-        style={{
+-          marginLeft: '10px',
+-          padding: '10px 20px',
+-          background: '#533483',
+-          color: '#fff',
+-          border: 'none',
+-          borderRadius: '6px',
+-          cursor: 'pointer',
+-          fontSize: '14px',
+-          fontWeight: 500,
++      >
++        <h2 id="conversation-heading" style={{ fontSize: '14px', fontWeight: 600 }}>
++          Conversation
++          <span style={{ ...metaText, fontWeight: 400, marginLeft: '8px' }}>
++            {turnCount} {turnCount === 1 ? 'exchange' : 'exchanges'}
++          </span>
++        </h2>
++        {turnCount > 0 &&
++          (confirmingClear ? (
++            <div role="group" aria-label="Confirm clearing history" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
++              <span style={{ fontSize: '12px' }}>Delete all {turnCount} exchanges?</span>
++              <button type="button" onClick={handleClear} style={{ ...smallButton, background: '#8b2c3c', color: '#fff', borderColor: '#8b2c3c' }}>
++                Delete
++              </button>
++              <button type="button" onClick={() => setConfirmingClear(false)} style={smallButton} autoFocus>
++                Cancel
++              </button>
++            </div>
++          ) : (
++            <button type="button" onClick={() => setConfirmingClear(true)} style={smallButton}>
++              Clear history
++            </button>
++          ))}
++      </div>
++
++      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px' }}>
++        {loadError && (
++          <div role="alert" style={{ padding: '10px 14px', marginBottom: '12px', background: '#3a1a2a', border: '1px solid #8b2c3c', borderRadius: '6px', fontSize: '13px' }}>
++            Couldn't load conversation history: {loadError}{' '}
++            <button type="button" onClick={onReloadHistory} style={smallButton}>
++              Try again
++            </button>
++          </div>
++        )}
++
++        {isEmpty && (
++          <div style={{ textAlign: 'center', paddingTop: '24px', color: '#a8a8c8', fontSize: '13px' }}>
++            <p>No questions yet. Ask something about your documents — follow-up questions can build on earlier ones.</p>
++            <ul style={{ listStyle: 'none', marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
++              {EXAMPLE_QUESTIONS.map(q => (
++                <li key={q}>
++                  <button type="button" onClick={() => fillInput(q)} style={{ ...smallButton, fontSize: '12px', padding: '5px 12px' }}>
++                    {q}
++                  </button>
++                </li>
++              ))}
++            </ul>
++          </div>
++        )}
++
++        <ol aria-label="Questions and answers" style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '10px' }}>
++          {messages.map(m => {
++            const highlighted = highlightedTurn === m.turnId;
++            if (m.role === 'user') {
++              return (
++                <li
++                  key={m.id}
++                  ref={el => {
++                    if (el) turnRefs.current.set(m.turnId, el);
++                    else turnRefs.current.delete(m.turnId);
++                  }}
++                  tabIndex={-1}
++                  aria-label={`You asked, ${formatTimestamp(m.timestamp)}`}
++                  style={{ display: 'flex', flexDirection: 'column', marginTop: '8px', scrollMarginTop: '8px', borderRadius: '10px' }}
++                >
++                  <article style={bubble('user', highlighted)}>
++                    <header style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '4px' }}>
++                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#e8dcff' }}>You</span>
++                      <Timestamp iso={m.timestamp} />
++                    </header>
++                    <p style={messageText}>{m.content}</p>
++                    <div style={{ marginTop: '6px', textAlign: 'right' }}>
++                      <button type="button" onClick={() => fillInput(m.content)} style={{ ...smallButton, color: '#e8dcff', borderColor: '#7a5bb5' }}>
++                        Edit &amp; ask again
++                      </button>
++                    </div>
++                  </article>
++                </li>
++              );
++            }
++            const confidence = m.confidence !== undefined ? Math.round(m.confidence * 100) : null;
++            return (
++              <li key={m.id} aria-label={`Assistant answered, ${formatTimestamp(m.timestamp)}`} style={{ display: 'flex', flexDirection: 'column' }}>
++                <article style={bubble('assistant', highlighted)}>
++                  <header style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '4px' }}>
++                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#9d7fe0' }}>Assistant</span>
++                    <Timestamp iso={m.timestamp} />
++                  </header>
++                  <p style={messageText}>{m.content}</p>
++                  {m.usedConversationContext && (
++                    <p style={{ ...metaText, marginTop: '6px', fontStyle: 'italic' }}>Interpreted as a follow-up to your previous question.</p>
++                  )}
++                  <CitationList citations={m.citations ?? []} isDocumentAvailable={isDocumentAvailable} onOpenDocument={onOpenDocument} />
++                  <footer style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '8px' }}>
++                    <span style={metaText}>{confidence !== null ? `Confidence ${confidence}%` : ''}</span>
++                    <CopyButton text={m.content} />
++                  </footer>
++                </article>
++              </li>
++            );
++          })}
++
++          {(pending || failed) && (
++            <li style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '8px' }}>
++              <article style={{ ...bubble('user', false), opacity: failed ? 0.7 : 1 }}>
++                <header style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '4px' }}>
++                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#e8dcff' }}>You</span>
++                  <Timestamp iso={(pending ?? failed)!.askedAt} />
++                </header>
++                <p style={messageText}>{(pending ?? failed)!.question}</p>
++              </article>
++              {pending ? (
++                <div role="status" style={{ ...bubble('assistant', false), color: '#a8a8c8', fontSize: '13px', fontStyle: 'italic' }}>
++                  Searching your documents…
++                </div>
++              ) : (
++                <div role="alert" style={{ ...bubble('assistant', false), background: '#3a1a2a', borderColor: '#8b2c3c', fontSize: '13px' }}>
++                  <p>Couldn't get an answer: {failed!.error}</p>
++                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
++                    <button type="button" onClick={onRetry} style={{ ...smallButton, color: '#fff' }}>
++                      Retry
++                    </button>
++                    <button type="button" onClick={onDismissError} style={smallButton}>
++                      Dismiss
++                    </button>
++                  </div>
++                </div>
++              )}
++            </li>
++          )}
++        </ol>
++        <div ref={bottomRef} />
++      </div>
++
++      <form
++        onSubmit={e => {
++          e.preventDefault();
++          submit();
+         }}
++        style={{ display: 'flex', alignItems: 'flex-end', padding: '12px 20px', borderTop: '1px solid #0f3460', background: '#16213e' }}
+       >
+-        Ask
+-      </button>
+-    </form>
++        <label htmlFor="question-input" className="sr-only">
++          Ask a question about your documents
++        </label>
++        <textarea
++          id="question-input"
++          ref={inputRef}
++          value={question}
++          rows={2}
++          onChange={e => setQuestion(e.target.value)}
++          onKeyDown={e => {
++            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
++              e.preventDefault();
++              submit();
++            }
++          }}
++          placeholder={turnCount > 0 ? 'Ask a follow-up question…' : 'Ask a question about your documents…'}
++          aria-describedby="question-hint"
++          style={{
++            flex: 1,
++            resize: 'none',
++            padding: '10px 14px',
++            background: '#1a1a2e',
++            color: '#e0e0e0',
++            border: '1px solid #0f3460',
++            borderRadius: '6px',
++            fontSize: '14px',
++            fontFamily: 'inherit',
++            lineHeight: 1.4,
++          }}
++        />
++        <span id="question-hint" className="sr-only">
++          Press Enter to send, Shift+Enter for a new line.
++        </span>
++        <button
++          type="submit"
++          disabled={!question.trim() || pending !== null}
++          style={{
++            marginLeft: '10px',
++            padding: '10px 20px',
++            background: '#533483',
++            color: '#fff',
++            border: 'none',
++            borderRadius: '6px',
++            cursor: !question.trim() || pending ? 'not-allowed' : 'pointer',
++            opacity: !question.trim() || pending ? 0.6 : 1,
++            fontSize: '14px',
++            fontWeight: 500,
++          }}
++        >
++          {pending ? 'Asking…' : 'Ask'}
++        </button>
++      </form>
++    </section>
+   );
+ }
+diff --git a/src/renderer/index.html b/src/renderer/index.html
+index 0d5f03b..f30301e 100644
+--- a/src/renderer/index.html
++++ b/src/renderer/index.html
+@@ -14,6 +14,14 @@
+       overflow: hidden;
+     }
+     #root { height: 100vh; display: flex; flex-direction: column; }
++    button:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex="-1"]:focus-visible {
++      outline: 2px solid #9d7fe0;
++      outline-offset: 2px;
++    }
++    .sr-only {
++      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
++      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
++    }
+   </style>
+ </head>
+ <body>
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index c15a423..85624e7 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -21,7 +21,10 @@ declare global {
+         clearHistory: () => Promise<void>;
+       };
+       conversation: {
+-        get: () => Promise<import('../shared/types').QAHistory[]>;
++        get: () => Promise<import('../shared/types').ConversationMessage[]>;
++      };
++      clipboard: {
++        writeText: (text: string) => Promise<void>;
+       };
+     };
+   }
+diff --git a/src/renderer/utils/format.ts b/src/renderer/utils/format.ts
+new file mode 100644
+index 0000000..337c197
+--- /dev/null
++++ b/src/renderer/utils/format.ts
+@@ -0,0 +1,36 @@
++/** Display-only formatting helpers for the renderer. */
++
++const timeOpts: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
++
++function isSameDay(a: Date, b: Date): boolean {
++  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
++}
++
++/** Human-readable relative timestamp: "Today, 2:05 PM", "Yesterday, …", "Nov 3, …", "Nov 3, 2025, …". */
++export function formatTimestamp(iso: string, now: Date = new Date()): string {
++  const date = new Date(iso);
++  if (Number.isNaN(date.getTime())) return 'Unknown time';
++  const time = date.toLocaleTimeString(undefined, timeOpts);
++  if (isSameDay(date, now)) return `Today, ${time}`;
++  const yesterday = new Date(now);
++  yesterday.setDate(now.getDate() - 1);
++  if (isSameDay(date, yesterday)) return `Yesterday, ${time}`;
++  const day = date.toLocaleDateString(undefined, {
++    month: 'short',
++    day: 'numeric',
++    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
++  });
++  return `${day}, ${time}`;
++}
++
++/** Full timestamp for tooltips. */
++export function formatFullTimestamp(iso: string): string {
++  const date = new Date(iso);
++  return Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleString();
++}
++
++/** Strip Electron's "Error invoking remote method 'x': Error: " prefix from IPC errors. */
++export function describeError(err: unknown): string {
++  const raw = err instanceof Error ? err.message : String(err);
++  return raw.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '') || 'Unknown error';
++}
+diff --git a/src/services/qa-service.ts b/src/services/qa-service.ts
+index a12de23..c6b0746 100644
+--- a/src/services/qa-service.ts
++++ b/src/services/qa-service.ts
+@@ -1,4 +1,5 @@
+-import { QAResponse, QAHistory, Citation } from '../shared/types';
++import { v4 as uuidv4 } from 'uuid';
++import { QAResponse, QAHistory, Citation, Chunk, ConversationMessage } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ import { IndexingService } from './indexing-service';
+ import { logger } from './logger';
+@@ -38,6 +39,14 @@ const MOCK_PATTERNS: Array<{
+   },
+ ];
+ 
++/** Words too common to signal relevance; ignored during keyword matching. */
++const STOPWORDS = new Set([
++  'the', 'and', 'for', 'are', 'was', 'were', 'what', 'when', 'where', 'which', 'who', 'why', 'how',
++  'does', 'did', 'can', 'could', 'would', 'should', 'about', 'that', 'this', 'these', 'those', 'then',
++  'than', 'with', 'from', 'into', 'its', 'it\'s', 'more', 'tell', 'there', 'their', 'they', 'them',
++  'you', 'your', 'have', 'has', 'had', 'not', 'any', 'all', 'also', 'some', 'work', 'works',
++]);
++
+ export class QaService {
+   private persistence: PersistenceService;
+   private indexingService: IndexingService;
+@@ -49,63 +58,66 @@ export class QaService {
+     this.log.info('QaService initialized');
+   }
+ 
+-  /** Ask a question and get a grounded answer with citations. */
++  /**
++   * Ask a question and get a grounded answer with citations.
++   *
++   * Multi-turn behaviour: if the question alone matches no indexed chunk (typical
++   * for follow-ups such as "what about its chunks?"), retrieval is retried with
++   * the previous question added as context.
++   */
+   async ask(question: string): Promise<QAResponse> {
+-    this.log.info('Processing question', { question });
++    const trimmed = question.trim();
++    if (!trimmed) {
++      throw new Error('Question must not be empty');
++    }
++    const askedAt = new Date().toISOString();
++    this.log.info('Processing question', { question: trimmed });
+ 
+     // Simulate processing delay
+     await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 400));
+ 
+     const chunks = this.indexingService.getAllChunks();
+-    const citations: Citation[] = [];
+-
+     this.log.info('Retrieving from chunks', { totalChunks: chunks.length });
+ 
+-    if (chunks.length > 0) {
+-      // Find relevant chunks using keyword matching
+-      const questionWords = question.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+-      const scored = chunks.map(chunk => {
+-        const contentLower = chunk.content.toLowerCase();
+-        const score = questionWords.reduce(
+-          (acc, word) => acc + (contentLower.includes(word) ? 1 : 0),
+-          0
+-        );
+-        return { chunk, score };
+-      });
+-
+-      // Take top 2 relevant chunks as citations
+-      const relevant = scored
+-        .filter(s => s.score > 0)
+-        .sort((a, b) => b.score - a.score)
+-        .slice(0, 2);
+-
+-      this.log.info('Keyword matching results', {
+-        questionWords: questionWords.length,
+-        relevantChunks: relevant.length,
+-      });
+-
+-      // Get document metadata for citations
+-      const docs = this.persistence.readJson<Array<{ id: string; title: string }>>('documents-meta.json') ?? [];
+-
+-      for (const { chunk } of relevant) {
+-        const doc = docs.find(d => d.id === chunk.documentId);
+-        citations.push({
+-          documentId: chunk.documentId,
+-          documentTitle: doc?.title ?? 'Unknown Document',
+-          chunkIndex: chunk.index,
+-          excerpt: chunk.content.substring(0, 200),
+-        });
++    let retrievalText = trimmed;
++    let relevant = this.findRelevantChunks(trimmed, chunks);
++    let usedConversationContext = false;
++
++    const history = this.getHistory();
++    const previous = history[history.length - 1];
++    if (relevant.length === 0 && previous && chunks.length > 0) {
++      const withContext = `${previous.question} ${trimmed}`;
++      const contextual = this.findRelevantChunks(withContext, chunks);
++      if (contextual.length > 0) {
++        relevant = contextual;
++        retrievalText = withContext;
++        usedConversationContext = true;
+       }
+     }
+ 
++    this.log.info('Keyword matching results', {
++      relevantChunks: relevant.length,
++      usedConversationContext,
++    });
++
++    // Get document metadata for citations
++    const docs = this.persistence.readJson<Array<{ id: string; title: string }>>('documents-meta.json') ?? [];
++    const citations: Citation[] = relevant.map(chunk => ({
++      documentId: chunk.documentId,
++      documentTitle: docs.find(d => d.id === chunk.documentId)?.title ?? 'Unknown Document',
++      chunkIndex: chunk.index,
++      excerpt: chunk.content.substring(0, 200),
++    }));
++
+     // Generate answer from mock patterns or use fallback
+-    const answer = this.generateAnswer(question, citations);
++    const answer = this.generateAnswer(retrievalText, citations);
+ 
+     const response: QAResponse = {
+       answer,
+       citations,
+       confidence: citations.length > 0 ? 0.85 : 0.3,
+       timestamp: new Date().toISOString(),
++      usedConversationContext,
+     };
+ 
+     this.log.info('Q&A response generated', {
+@@ -114,15 +126,55 @@ export class QaService {
+       answerLength: answer.length,
+     });
+ 
+-    // Save to history
+-    this.saveToHistory(question, response);
++    this.saveToHistory({ id: uuidv4(), question: trimmed, askedAt, response });
+ 
+     return response;
+   }
+ 
+-  /** Get the Q&A history. */
++  /** Get the Q&A history, oldest first. Entries always carry an `id` and `askedAt`. */
+   getHistory(): QAHistory[] {
+-    return this.persistence.readJson<QAHistory[]>(QA_HISTORY_FILE) ?? [];
++    let raw: QAHistory[] | null;
++    try {
++      raw = this.persistence.readJson<QAHistory[]>(QA_HISTORY_FILE);
++    } catch (err) {
++      this.log.error('Q&A history file is unreadable; treating as empty', { error: String(err) });
++      return [];
++    }
++    if (!Array.isArray(raw)) return [];
++    return raw.map((entry, i) => ({
++      ...entry,
++      id: entry.id ?? `legacy-${i}`,
++      askedAt: entry.askedAt ?? entry.response.timestamp,
++    }));
++  }
++
++  /** Get the history as an ordered list of user/assistant messages for the conversation view. */
++  getConversation(): ConversationMessage[] {
++    const history = this.getHistory();
++    const messages = history.flatMap((entry): ConversationMessage[] => {
++      const turnId = entry.id as string;
++      return [
++        {
++          id: `${turnId}:q`,
++          turnId,
++          role: 'user',
++          content: entry.question,
++          timestamp: entry.askedAt as string,
++        },
++        {
++          id: `${turnId}:a`,
++          turnId,
++          role: 'assistant',
++          content: entry.response.answer,
++          timestamp: entry.response.timestamp,
++          citations: entry.response.citations ?? [],
++          confidence: entry.response.confidence,
++          usedConversationContext: entry.response.usedConversationContext ?? false,
++        },
++      ];
++    });
++    this.log.info('Conversation built', { turns: history.length, messages: messages.length });
++    return messages;
+   }
+ 
+   /** Clear the Q&A history. */
+@@ -131,6 +183,25 @@ export class QaService {
+     this.log.info('Q&A history cleared');
+   }
+ 
++  /** Rank chunks by keyword overlap with the text and return the top 2 matches. */
++  private findRelevantChunks(text: string, chunks: Chunk[]): Chunk[] {
++    const words = text
++      .toLowerCase()
++      .split(/\s+/)
++      .map(w => w.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, ''))
++      .filter(w => w.length > 2 && !STOPWORDS.has(w));
++    return chunks
++      .map(chunk => {
++        const contentLower = chunk.content.toLowerCase();
++        const score = words.reduce((acc, word) => acc + (contentLower.includes(word) ? 1 : 0), 0);
++        return { chunk, score };
++      })
++      .filter(s => s.score > 0)
++      .sort((a, b) => b.score - a.score)
++      .slice(0, 2)
++      .map(s => s.chunk);
++  }
++
+   private generateAnswer(question: string, citations: Citation[]): string {
+     // Match against mock patterns
+     const questionLower = question.toLowerCase();
+@@ -151,9 +222,9 @@ export class QaService {
+     return 'No relevant documents have been indexed yet. Please import and index documents before asking questions.';
+   }
+ 
+-  private saveToHistory(question: string, response: QAResponse): void {
++  private saveToHistory(entry: QAHistory): void {
+     const history = this.getHistory();
+-    history.push({ question, response });
++    history.push(entry);
+     this.persistence.writeJson(QA_HISTORY_FILE, history);
+     this.log.info('Question saved to history', { historyLength: history.length });
+   }
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index bb67414..de4f5e0 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -30,21 +30,30 @@ export interface QAResponse {
+   citations: Citation[];
+   confidence: number;
+   timestamp: string;
++  /** True when the previous question was used to resolve a follow-up question. */
++  usedConversationContext?: boolean;
+ }
+ 
+ export interface QAHistory {
++  /** Stable id for the exchange. Optional because history written before ids existed lacks it. */
++  id?: string;
+   question: string;
++  /** When the question was asked. Older entries only have `response.timestamp`. */
++  askedAt?: string;
+   response: QAResponse;
+ }
+ 
++/** One message in the conversation view; each Q&A exchange yields a user and an assistant message. */
+ export interface ConversationMessage {
+   id: string;
++  /** Id of the exchange this message belongs to (shared by the question and its answer). */
++  turnId: string;
+   role: 'user' | 'assistant';
+   content: string;
+   timestamp: string;
+   citations?: Citation[];
+   confidence?: number;
+-  followUpSuggestions?: string[];
++  usedConversationContext?: boolean;
+ }
+ 
+ export interface AppStatus {
+@@ -74,6 +83,9 @@ export const IPC_CHANNELS = {
+   // Conversation
+   GET_CONVERSATION: 'conversation:get',
+ 
++  // Clipboard (main-process Electron clipboard; navigator.clipboard is unreliable on file://)
++  WRITE_CLIPBOARD: 'clipboard:write-text',
++
+   // App status
+   GET_STATUS: 'app:status',
+ } as const;
+diff --git a/tests/format.test.ts b/tests/format.test.ts
+new file mode 100644
+index 0000000..c6b5596
+--- /dev/null
++++ b/tests/format.test.ts
+@@ -0,0 +1,23 @@
++import { describe, expect, it } from 'vitest';
++import { describeError, formatTimestamp } from '../src/renderer/utils/format';
++
++describe('formatTimestamp', () => {
++  const now = new Date(2026, 10, 15, 18, 0);
++  it('labels today, yesterday, this year and older dates', () => {
++    expect(formatTimestamp(new Date(2026, 10, 15, 9, 5).toISOString(), now)).toMatch(/^Today, /);
++    expect(formatTimestamp(new Date(2026, 10, 14, 9, 5).toISOString(), now)).toMatch(/^Yesterday, /);
++    expect(formatTimestamp(new Date(2026, 2, 3, 9, 5).toISOString(), now)).not.toMatch(/2026/);
++    expect(formatTimestamp(new Date(2024, 2, 3, 9, 5).toISOString(), now)).toMatch(/2024/);
++  });
++  it('handles invalid input', () => {
++    expect(formatTimestamp('nope', now)).toBe('Unknown time');
++  });
++});
++
++describe('describeError', () => {
++  it('strips the Electron IPC prefix', () => {
++    expect(describeError(new Error("Error invoking remote method 'qa:ask': Error: Question must not be empty"))).toBe(
++      'Question must not be empty',
++    );
++  });
++});
+diff --git a/tests/qa-conversation.test.ts b/tests/qa-conversation.test.ts
+new file mode 100644
+index 0000000..d10e85f
+--- /dev/null
++++ b/tests/qa-conversation.test.ts
+@@ -0,0 +1,119 @@
++import { afterEach, beforeEach, describe, expect, it } from 'vitest';
++import * as fs from 'fs';
++import * as os from 'os';
++import * as path from 'path';
++import { PersistenceService } from '../src/services/persistence-service';
++import { DocumentService } from '../src/services/document-service';
++import { IndexingService } from '../src/services/indexing-service';
++import { QaService } from '../src/services/qa-service';
++
++const SAMPLES = path.resolve(__dirname, '../data/sample-documents');
++
++describe('QaService conversation history', () => {
++  let dir: string;
++  let persistence: PersistenceService;
++  let qa: QaService;
++
++  beforeEach(() => {
++    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-test-'));
++    persistence = new PersistenceService(dir);
++    qa = new QaService(persistence, new IndexingService(persistence));
++  });
++
++  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
++
++  it('returns an empty conversation when there is no history', () => {
++    expect(qa.getConversation()).toEqual([]);
++  });
++
++  it('keeps every exchange, in order, as user/assistant message pairs', async () => {
++    const questions = ['How are documents imported?', 'What is the architecture?', 'Tell me about meeting notes'];
++    for (const q of questions) await qa.ask(q);
++
++    const conversation = qa.getConversation();
++    expect(conversation).toHaveLength(6);
++    expect(conversation.filter(m => m.role === 'user').map(m => m.content)).toEqual(questions);
++    for (let i = 0; i < 6; i += 2) {
++      const [q, a] = [conversation[i], conversation[i + 1]];
++      expect(q.role).toBe('user');
++      expect(a.role).toBe('assistant');
++      expect(q.turnId).toBe(a.turnId);
++      expect(new Date(q.timestamp).getTime()).toBeLessThanOrEqual(new Date(a.timestamp).getTime());
++      expect(a.citations).toEqual([]);
++    }
++    expect(new Set(conversation.map(m => m.id)).size).toBe(6);
++  });
++
++  it('does not truncate long answers or questions', async () => {
++    const long = 'architecture '.repeat(300).trim();
++    await qa.ask(long);
++    const [q, a] = qa.getConversation();
++    expect(q.content).toBe(long);
++    expect(a.content.length).toBeGreaterThan(100);
++    expect(a.content).toBe(qa.getHistory()[0].response.answer);
++  });
++
++  it('includes citations with document title and excerpt', async () => {
++    const docs = new DocumentService(persistence);
++    for (const f of fs.readdirSync(SAMPLES)) docs.importDocument(path.join(SAMPLES, f));
++    await new IndexingService(persistence).startIndexing();
++
++    await qa.ask('How does the indexing pipeline split chunks?');
++    const answer = qa.getConversation()[1];
++    expect(answer.citations!.length).toBeGreaterThan(0);
++    for (const c of answer.citations!) {
++      expect(c.documentTitle).not.toBe('Unknown Document');
++      expect(c.excerpt.length).toBeGreaterThan(0);
++    }
++  });
++
++  it('uses the previous question as context for a follow-up that matches nothing alone', async () => {
++    const docs = new DocumentService(persistence);
++    for (const f of fs.readdirSync(SAMPLES)) docs.importDocument(path.join(SAMPLES, f));
++    await new IndexingService(persistence).startIndexing();
++
++    await qa.ask('How does retrieval work?');
++    const followUp = await qa.ask('What about that?');
++    expect(followUp.usedConversationContext).toBe(true);
++    expect(followUp.citations.length).toBeGreaterThan(0);
++    expect(qa.getConversation()[3].usedConversationContext).toBe(true);
++  });
++
++  it('does not use context when the question matches on its own', async () => {
++    const docs = new DocumentService(persistence);
++    for (const f of fs.readdirSync(SAMPLES)) docs.importDocument(path.join(SAMPLES, f));
++    await new IndexingService(persistence).startIndexing();
++
++    await qa.ask('How does retrieval work?');
++    const second = await qa.ask('What was decided in the meeting?');
++    expect(second.usedConversationContext).toBe(false);
++  });
++
++  it('reads legacy history entries without id/askedAt', () => {
++    persistence.writeJson('qa-history.json', [
++      { question: 'old?', response: { answer: 'old answer', citations: [], confidence: 0.3, timestamp: '2026-01-01T10:00:00.000Z' } },
++    ]);
++    const [q, a] = qa.getConversation();
++    expect(q.turnId).toBe('legacy-0');
++    expect(q.timestamp).toBe('2026-01-01T10:00:00.000Z');
++    expect(a.content).toBe('old answer');
++  });
++
++  it('treats a corrupted history file as empty instead of throwing', () => {
++    fs.writeFileSync(path.join(dir, 'qa-history.json'), '{not json');
++    expect(qa.getConversation()).toEqual([]);
++  });
++
++  it('rejects empty questions and clears history', async () => {
++    await expect(qa.ask('   ')).rejects.toThrow('Question must not be empty');
++    await qa.ask('architecture?');
++    qa.clearHistory();
++    expect(qa.getConversation()).toEqual([]);
++  });
++
++  it('persists history across service instances (restart)', async () => {
++    await qa.ask('architecture?');
++    const restarted = new QaService(persistence, new IndexingService(persistence));
++    expect(restarted.getConversation()).toHaveLength(2);
++  });
++});
+diff --git a/vitest.config.ts b/vitest.config.ts
+new file mode 100644
+index 0000000..392df3f
+--- /dev/null
++++ b/vitest.config.ts
+@@ -0,0 +1,9 @@
++import { defineConfig } from 'vitest/config';
++
++// Separate from vite.config.ts, whose root is src/renderer.
++export default defineConfig({
++  test: {
++    include: ['tests/**/*.test.ts'],
++    environment: 'node',
++  },
++});

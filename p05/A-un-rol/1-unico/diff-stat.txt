@@ -1,0 +1,25 @@
+354abe0 Add multi-turn Q&A conversation history
+
+ docs/ARCHITECTURE.md                            |  25 +-
+ docs/evidence/01-empty.png                      | Bin 0 -> 96019 bytes
+ docs/evidence/02-conversation.png               | Bin 0 -> 244313 bytes
+ docs/evidence/03-citation-open.png              | Bin 0 -> 244270 bytes
+ docs/evidence/04-error.png                      | Bin 0 -> 266319 bytes
+ evaluator-rubric.md                             |  45 +++
+ package.json                                    |   1 +
+ scripts/smoke-conversation.js                   | 179 +++++++++++
+ src/main/ipc-handlers.ts                        |  11 +-
+ src/preload/preload.ts                          |  27 +-
+ src/renderer/App.tsx                            | 141 +++++---
+ src/renderer/components/CitationList.tsx        |  76 +++++
+ src/renderer/components/ConversationHistory.tsx |  74 +++--
+ src/renderer/components/QuestionPanel.tsx       | 407 +++++++++++++++++++++---
+ src/renderer/index.html                         |   8 +
+ src/renderer/types.d.ts                         |   5 +-
+ src/renderer/utils/format.ts                    |  36 +++
+ src/services/qa-service.ts                      | 163 +++++++---
+ src/shared/types.ts                             |  14 +-
+ tests/format.test.ts                            |  23 ++
+ tests/qa-conversation.test.ts                   | 119 +++++++
+ vitest.config.ts                                |   9 +
+ 22 files changed, 1202 insertions(+), 161 deletions(-)

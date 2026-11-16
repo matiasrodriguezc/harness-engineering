@@ -1,0 +1,9 @@
+9c06b72 fin de sesión: 2-evaluador
+
+ evaluation/p10-malformed.png      | Bin 0 -> 220784 bytes
+ evaluation/p11-corrupt.png        | Bin 0 -> 217751 bytes
+ evaluation/p6-citation.png        | Bin 0 -> 207503 bytes
+ evaluation/p8-clear-pending.png   | Bin 0 -> 241322 bytes
+ evaluation/probe-conversation.mjs | 234 ++++++++++++++++++++++++++++++++++++++
+ evaluator-rubric.md               | 182 +++++++++++++++++++++++++++++
+ 6 files changed, 416 insertions(+)

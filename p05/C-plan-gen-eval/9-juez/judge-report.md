@@ -1,0 +1,111 @@
+# Judge report: multi-turn Q&A conversation history
+
+Independent review against `rubric-template.md`. I did not read or use `evaluator-rubric.md`, `sprint-contract.md` or `docs/evidence/`. Reviewed at commit `68dff5e`.
+
+## How I verified
+
+- Baseline: `npm run check` passed, `bash scripts/check-architecture.sh` passed (all three checks), `npm run build` passed, `npm test` passed (9/9 in `conversation-format.test.ts`).
+- I ran the built app in the real Electron runtime: `npx electron . --remote-debugging-port=9333 --user-data-dir=<scratch>/ud`. `NODE_OPTIONS` was unset because `--openssl-legacy-provider` stops Electron from starting. The separate user-data dir kept the user's real data untouched; logs confirmed `dataDir` was under the scratch dir.
+- I drove the UI over the Chrome DevTools Protocol with a small Node script. It sent real key events (`Input.insertText`, `Input.dispatchKeyEvent` for Enter/Tab/Escape/Alt+ArrowUp), clicked elements, read the DOM and took screenshots. Questions were typed into `#question-input` and submitted with Enter, as a user would.
+- The UI's **+ Import** button does nothing (`App.tsx:57-59`, an older stub outside this feature). So I imported the three `data/sample-documents/*` files with `window.knowledgeBase.documents.import()` and indexed them with `indexing.start()`, both called from the page.
+- The screenshots are in the session scratchpad (`01-empty.png` … `07-restart-focus.png`). They are temporary and not committed, because only this file may be changed.
+
+## Scores
+
+| # | Criterion | Score |
+|---|---|---|
+| 1 | Functional completeness | 5 |
+| 2 | Visual design | 4 |
+| 3 | Timestamps | 4 |
+| 4 | Citation display | 4 |
+| 5 | Interactivity | 3 |
+| 6 | Edge cases | 4 |
+| 7 | Accessibility | 4 |
+| 8 | Code quality | 4 |
+
+**Overall: 32 / 8 = 4.0**
+
+## Evidence per criterion
+
+### 1. Functional completeness: 5
+- I asked 1 question with no documents, then 4 more after indexing, one after another by keyboard. The DOM showed `Exchange 1 of 5` … `Exchange 5 of 5`, in order, each with the question and the full answer. The heading read `Conversation (5 exchanges)`.
+- Reloading the renderer kept the history: `Conversation (1 exchange)` after the first question. After fully quitting and relaunching Electron, all 3 exchanges were back in order (`index question again`, `follow up: what about meeting notes?`, `retrieval question to retry`). Log: `GET_CONVERSATION` on startup.
+- Answers and questions are not cut short by the UI. A question of about 1,100 characters, with a 350-character unbroken word, was shown in full and wrapped (`overflowWrap: anywhere`). Page `scrollWidth == clientWidth == 1200`, so nothing overflowed sideways.
+- While an answer was pending, the turn showed `Answering…` and the button read `Answering…`. A second Enter during that time was ignored: still 1 article, and the typed text stayed in the input. The guard is `askInFlight` in `App.tsx:66-68`.
+- After each answer the view reloads the persisted history (`App.tsx:76-87`), so the screen matches what is on disk.
+
+### 2. Visual design: 4
+- "You" bubbles sit on the right in the border blue; "Assistant" cards stretch full width in the card colour with a different corner radius. Each has an uppercase label (`ConversationTurns.tsx:48-62, 163-211`). They are easy to tell apart (screenshot 02).
+- It reuses the app's colours (`#16213e`, `#0f3460`, `#533483`) and the button styles from the header and document panel, so it matches the rest of the app.
+- Why not 5: with two sources, each excerpt is a large multi-line block, so one exchange can fill most of the viewport (screenshots 02, 05). Opening a citation pushes the conversation into the lower ~60% (screenshot 03). Auto-scroll goes to the bottom, so after a long exchange the user's own question is above the fold. The confidence bar is 40×6 px and adds little.
+
+### 3. Timestamps: 4
+- Each answer shows a readable local time, e.g. `Nov 15, 2026, 11:16 PM`, in a semantic `<time dateTime="2026-11-16T02:16:14.150Z">` element. I checked this for all 5 exchanges. Invalid dates fall back to `Unknown time` (`conversation-format.ts:7-11`, unit tested).
+- Why not 5: only the assistant turn has a time. The user's question and failed turns have none. Times are to the minute, so all five exchanges read `11:16 PM` and cannot be told apart. There is no date grouping or relative time for older history.
+
+### 4. Citation display: 4
+- Each citation shows the document title, `chunk N` and the excerpt in quotation marks, under `Sources (N)` (`ConversationTurns.tsx:85-131`). Answers without citations show `No sources cited.` I checked this for the no-document question and for the `zzz qqq` question.
+- Citations are buttons. Clicking one opened the `meeting-summary` detail panel, highlighted it in the document list and marked the citation `· open` (screenshot 03).
+- I deleted the cited document through the API and clicked the citation again. It showed `This document is no longer available.`, and the document count refreshed to `Documents (2)`.
+- Why not 5: opening a citation shows the document's metadata panel, not the cited chunk. Nothing scrolls to or highlights chunk N, so the user must click `Show Chunks` and find it. Excerpts are cut at 200 characters in the middle of a word (`…(RAG) pi"`, `…imported do"`) with no ellipsis, so they look complete when they are not. After a document is deleted, new answers still cite its stale chunks as `Unknown Document` (the root cause is in the service/index, but users see it in this view).
+
+### 5. Interactivity: 3
+Works:
+- Clear with an in-page confirmation. Enter on Clear moved focus to Cancel. Escape cancelled and returned focus to Clear. Confirming emptied the view and focused the heading.
+- Retry and Dismiss on failed turns. Retry succeeded after I fixed the history file: 3 exchanges, no error turn left.
+- Clicking a citation opens the document.
+- `Alt+ArrowUp` from the input focused `Exchange 5 of 5`. The "Jump to latest answer" control appears when focused (Tab past Ask) and works with Enter.
+- The "Technical details" disclosure expands.
+
+Missing or broken:
+- There is no copy action for answers or excerpts: no copy button anywhere in the DOM.
+- There is no real follow-up. `qa.ask(question)` sends only the new question (`App.tsx:72`, `qa-service.ts:53`), so a question like "follow up: what about meeting notes?" is answered with no knowledge of earlier turns. The history is shown, but the conversation is not actually multi-turn.
+- Long answers and excerpts cannot be expanded or collapsed.
+- After Retry is pressed by keyboard, focus fell to `<body>`: `document.activeElement` was BODY. Dismiss unmounts its button the same way (`ConversationTurns.tsx:261-272`; I checked Dismiss by reading the code, not by running it).
+
+### 6. Edge cases: 4
+- Empty history: a "No questions yet" message, plus a tip when there are no documents (screenshot 01). Clear is disabled.
+- Long content wraps with no horizontal scroll (see criterion 1).
+- No citations: `No sources cited.`, confidence `Low (30%)`.
+- Unreadable history (`qa-history.json` set to `{broken`): the panel showed `Could not load the conversation history. [Try again]` and suggested using Clear. Clear's confirmation changed to `Replace the unreadable conversation history with an empty one?`, and confirming recovered the panel (screenshot 06).
+- Failed asks: two questions asked while the file was corrupt each became their own `Not answered` turn with Retry and Dismiss. Earlier failures were kept, not overwritten. Technical details showed the real cause (`SyntaxError: Expected property name…`).
+- Double submit while busy is ignored.
+- Why not 5: failed questions exist only in memory. They disappear on reload or restart, and Clear also deletes them silently (`App.tsx:122`). Clear's message counts only saved exchanges, e.g. "Delete all 0 exchanges", while two failed questions are on screen. The error text for a corrupt-history failure ("Something went wrong") does not tell the user that Clear will fix it.
+
+### 7. Accessibility: 4
+- Semantic structure: `<section aria-labelledby>`, `<h2>`, `role="log" aria-live="polite"`, `<ol>/<li>`, `<article aria-label="Exchange i of n">`, `<time>`, real `<button>` elements, `<details>/<summary>`, and a form with `aria-label` (`ConversationView.tsx:108-235`).
+- The input has a visually hidden `<label for>`. The Ask button uses `aria-disabled` so it keeps focus while busy. The pending turn has `aria-busy`. Confidence is shown as text, not only colour.
+- Focus is visible: a citation button with focus had `outline: solid 2px rgb(136,136,187)` (`index.html:17-22`). The confirmation, Escape and focus-return all work by keyboard (see criterion 5).
+- Why not 5:
+  - Focus is lost after Retry, and by inspection after Dismiss.
+  - Each failed turn has `role="alert"` inside an `aria-live` log, so it is likely announced twice. I inferred this from the code and did not test it with a screen reader.
+  - The Ask button, while busy, is `aria-disabled` but its accessible name changes to "Answering…". That is acceptable, but no live message announces that an answer arrived beyond the log update.
+  - The "Jump to latest answer" control is hidden with a clip but has no `clip-path`/`margin:-1px`. It works, but it is a fragile pattern.
+
+### 8. Code quality: 4
+- `npm run check`, `scripts/check-architecture.sh`, `npm run build` and `npm test` all pass.
+- The feature diff (`96007e7..HEAD`) touches only `src/renderer/**`: 8 files, +848/−143. It talks to main only through `window.knowledgeBase`, with no Node imports. Formatting logic sits in pure, unit-tested helpers (`conversation-format.ts`). The old lossy `ConversationHistory.tsx` was removed.
+- Why not 5:
+  - The feature depends on `conversation:get` and `qa:clear-history`. Neither is listed in the IPC table in `docs/ARCHITECTURE.md`, so the docs no longer match the code.
+  - `conversation:get` and `qa:history` both return `qaService.getHistory()` (`ipc-handlers.ts:84-98`). The renderer uses only the first, so `qa.history()` is unused but still exposed in preload and `types.d.ts`.
+  - `ConversationMessage` (with `followUpSuggestions`) in `shared/types.ts` is unused. It and the duplicate channel existed before this feature, but the feature left them in place.
+  - `ConversationTurns.tsx` exports `palette`, `smallButton` and the colour constants for other components, which hard-code the same hex values again (e.g. `QuestionPanel.tsx:53-75`, `App.tsx:135-187`). There is no single shared theme.
+
+## Remaining defects (most important first)
+
+1. **Follow-up questions do not get the conversation as context.** `qa.ask` receives only the latest question (`App.tsx:72` → `qa-service.ts:53`). The UI shows a conversation, but each answer ignores earlier turns.
+2. **Opening a citation does not show the cited chunk.** It opens the document's metadata panel with no scroll to or highlight of `chunk N` (screenshot 03). The user has to open "Show Chunks" and search by hand.
+3. **Focus is lost after Retry** (verified: `document.activeElement === BODY`), and by inspection after Dismiss. Keyboard and screen-reader users lose their place.
+4. **Excerpts are cut mid-word with no truncation marker** (`…(RAG) pi"`). The 200-character cut is in `qa-service.ts:96`, but the view presents it as a complete quotation.
+5. **Failed questions are not saved and are cleared silently.** They vanish on reload or restart, and Clear deletes them while its confirmation counts only saved exchanges (`App.tsx:122`, `ConversationView.tsx:102-104`).
+6. **Timestamps only on assistant turns, to the minute.** Questions and failed turns have no time. Exchanges in the same minute are indistinguishable, and there is no date grouping for older history.
+7. **There is no copy action** for answers or citation excerpts.
+8. **Deleted documents still appear as `Unknown Document` citations in new answers.** Their chunks stay in the index (service bug, but visible in this view). Clicking one then shows "no longer available".
+9. **Docs and dead code drift.** `docs/ARCHITECTURE.md` omits `conversation:get` and `qa:clear-history`. `qa:history` duplicates `conversation:get` and is unused by the renderer. `ConversationMessage` is unused. Colour constants are repeated across components instead of shared.
+10. **Each failed turn is likely announced twice.** It has `role="alert"` inside the `aria-live` log (by inspection; not tested with a screen reader).
+
+## Outside the feature (not scored)
+- The **+ Import** button is a stub (`App.tsx:57-59`), so the full feature cannot be reached from the UI without importing through the API.
+- The status bar shows empty `Index:` / `Documents:` values, and the document detail shows `Status: imported` for indexed documents.
+- With no documents, "What is in my notes?" got a canned answer about a meeting summary at `Low (30%)`, with no sources. This comes from the mock Q&A service.
+- Electron will not start while `NODE_OPTIONS=--openssl-legacy-provider` is set in this shell.

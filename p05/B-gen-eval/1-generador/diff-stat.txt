@@ -1,0 +1,26 @@
+8c65398 Add multi-turn Q&A conversation history
+
+ AGENTS.md                                        |   2 +
+ docs/ARCHITECTURE.md                             |  24 +-
+ docs/verification/01-empty.png                   | Bin 0 -> 85608 bytes
+ docs/verification/02-conversation.png            | Bin 0 -> 234903 bytes
+ docs/verification/03-citation-opens-document.png | Bin 0 -> 216585 bytes
+ docs/verification/04-error.png                   | Bin 0 -> 235825 bytes
+ docs/verification/05-long-answer.png             | Bin 0 -> 449763 bytes
+ docs/verification/06-history-select.png          | Bin 0 -> 314311 bytes
+ docs/verification/README.md                      |  67 +++++
+ scripts/verify-conversation.mjs                  | 264 +++++++++++++++++++
+ src/main/ipc-handlers.ts                         |  11 +-
+ src/preload/preload.ts                           |   3 +-
+ src/renderer/App.tsx                             | 214 +++++++++-------
+ src/renderer/components/ConversationHistory.tsx  |  74 ++++--
+ src/renderer/components/ExchangeItem.tsx         | 253 ++++++++++++++++++
+ src/renderer/components/QuestionPanel.tsx        | 310 +++++++++++++++++++----
+ src/renderer/format.ts                           |  35 +++
+ src/renderer/index.html                          |   7 +
+ src/renderer/types.d.ts                          |   4 +-
+ src/services/qa-service.ts                       |  62 ++++-
+ src/shared/types.ts                              |  22 +-
+ tests/qa-conversation.test.ts                    | 112 ++++++++
+ vitest.config.ts                                 |  10 +
+ 23 files changed, 1295 insertions(+), 179 deletions(-)

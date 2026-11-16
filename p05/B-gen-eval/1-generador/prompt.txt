@@ -1,0 +1,1 @@
+Add multi-turn Q&A conversation history to this knowledge base app: the question panel should show the previous questions and answers as a conversation, with each answer's citations. You are the generator: implement the feature. An independent evaluator will review your work afterwards against rubric-template.md.

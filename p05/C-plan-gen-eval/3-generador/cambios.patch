@@ -1,0 +1,1720 @@
+commit 33b3ff4709a003355fafc2895c44cb8266052c41
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 23:08:58 2026 -0300
+
+    Fix evaluator defects 1-6 and 8 in conversation history
+    
+    - Keep every failed question until retried or dismissed (no overwrite)
+    - Confirm cited documents via documents.get to avoid ghost details
+    - Move focus to the conversation heading after Clear; Escape cancels confirm
+    - Allow Clear to recover from an unreadable history at startup
+    - Add 'Jump to latest answer' skip control and Alt+ArrowUp shortcut
+    - Show plain error wording with technical details in a disclosure
+    - Split turn components into ConversationTurns.tsx
+    
+    Evidence: docs/evidence/conversation-history/generator/fixes/ (18/18 runtime checks)
+
+diff --git a/docs/evidence/conversation-history/generator/fixes/01-two-failures-kept.png b/docs/evidence/conversation-history/generator/fixes/01-two-failures-kept.png
+new file mode 100644
+index 0000000..b855d2c
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/fixes/01-two-failures-kept.png differ
+diff --git a/docs/evidence/conversation-history/generator/fixes/02-error-details-open.png b/docs/evidence/conversation-history/generator/fixes/02-error-details-open.png
+new file mode 100644
+index 0000000..041703a
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/fixes/02-error-details-open.png differ
+diff --git a/docs/evidence/conversation-history/generator/fixes/03-after-retry-and-dismiss.png b/docs/evidence/conversation-history/generator/fixes/03-after-retry-and-dismiss.png
+new file mode 100644
+index 0000000..77109ca
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/fixes/03-after-retry-and-dismiss.png differ
+diff --git a/docs/evidence/conversation-history/generator/fixes/04-stale-citation-no-ghost.png b/docs/evidence/conversation-history/generator/fixes/04-stale-citation-no-ghost.png
+new file mode 100644
+index 0000000..85f968e
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/fixes/04-stale-citation-no-ghost.png differ
+diff --git a/docs/evidence/conversation-history/generator/fixes/05-jump-to-latest-focused.png b/docs/evidence/conversation-history/generator/fixes/05-jump-to-latest-focused.png
+new file mode 100644
+index 0000000..dced9b5
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/fixes/05-jump-to-latest-focused.png differ
+diff --git a/docs/evidence/conversation-history/generator/fixes/06-after-clear-focus.png b/docs/evidence/conversation-history/generator/fixes/06-after-clear-focus.png
+new file mode 100644
+index 0000000..617739f
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/fixes/06-after-clear-focus.png differ
+diff --git a/docs/evidence/conversation-history/generator/fixes/07-startup-corrupt-clear-enabled.png b/docs/evidence/conversation-history/generator/fixes/07-startup-corrupt-clear-enabled.png
+new file mode 100644
+index 0000000..b7a6de1
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/fixes/07-startup-corrupt-clear-enabled.png differ
+diff --git a/docs/evidence/conversation-history/generator/fixes/08-startup-corrupt-confirm.png b/docs/evidence/conversation-history/generator/fixes/08-startup-corrupt-confirm.png
+new file mode 100644
+index 0000000..afc9f59
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/fixes/08-startup-corrupt-confirm.png differ
+diff --git a/docs/evidence/conversation-history/generator/fixes/09-after-recovery-ask.png b/docs/evidence/conversation-history/generator/fixes/09-after-recovery-ask.png
+new file mode 100644
+index 0000000..5ea788e
+Binary files /dev/null and b/docs/evidence/conversation-history/generator/fixes/09-after-recovery-ask.png differ
+diff --git a/docs/evidence/conversation-history/generator/fixes/fixes-report.md b/docs/evidence/conversation-history/generator/fixes/fixes-report.md
+new file mode 100644
+index 0000000..d3485d6
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/fixes/fixes-report.md
+@@ -0,0 +1,35 @@
++# Generator fix report: evaluator-rubric.md defects
++
++Base: `759b007` (evaluated feature `f53fa54`). `evaluator-rubric.md` and `rubric-template.md` were not edited.
++
++## What changed
++
++| # | Defect | Fix | Where |
++|---|---|---|---|
++| 1 | Failed question silently lost | `askError` (one entry) is now `askErrors: AskError[]`. A new ask no longer clears failures. Each failure keeps its question until **that** entry is retried (it then becomes the pending turn) or dismissed. Clear still empties the list. | `App.tsx`, `conversation-format.ts` (`addAskError`/`removeAskError`, unit-tested), `ConversationView.tsx` |
++| 2 | Ghost `DocumentDetail` for a deleted cited document | `handleOpenCitation` now always confirms through `documents.get(id)` and does not trust the cached list. If the document is missing it returns false (so the "no longer available" notice shows), closes the detail if that document was open, and refreshes the stale list. | `App.tsx` |
++| 3 | Focus falls to `<body>` after confirming Clear | On success, focus moves to the conversation heading (`h2`, `tabIndex=-1`). On failure, it moves back to the Clear button. | `ConversationView.tsx` |
++| 4 | No recovery from an unreadable history at startup | Clear is enabled in the `error` load state. The confirmation reads "Replace the unreadable conversation history with an empty one?", and the error panel points to Clear. Confirming writes `[]` through the existing `qa:clear-history` and reloads. | `ConversationView.tsx` |
++| 5 | Escape doesn't cancel the Clear confirmation | `onKeyDown` on the confirm group: Escape calls `cancelClear` (focus goes back to Clear). | `ConversationView.tsx` |
++| 6 | 18 forward Tabs to reach the newest citations | A "Jump to latest answer" skip button sits right after Ask. It is visually hidden until focused and moves focus to the newest exchange (`#latest-exchange`, `tabIndex=-1`). There is also an Alt+ArrowUp shortcut in the input, exposed via `aria-keyshortcuts`. Input → Tab, Tab, Enter, Tab reaches the newest citation (4 presses). | `QuestionPanel.tsx`, `ConversationTurns.tsx` |
++| 7 | D-1 recorded outside `sprint-contract.md` | **Not done. Needs the user's decision.** In the earlier session the user told the Generator to leave `sprint-contract.md` unedited, and the rubric makes this edit conditional on the user's permission. D-1 is still documented in `generator/generator-report.md`. | — |
++| 8 | Raw technical error text | Plain wording ("Something went wrong and this question could not be answered. Your question is kept here so you can try it again.") with the raw message inside a closed `<details>` "Technical details" disclosure. | `ConversationTurns.tsx` |
++
++Refactor that came with the fixes: the turn components (`UserTurn`, `CitationList`, `Exchange`, `PendingTurn`, `FailedTurn`) moved from `ConversationView.tsx` (454 → 237 lines) into `ConversationTurns.tsx`. There is no service, main, preload or IPC change, and the `qa-history.json` schema is unchanged.
++
++## Verification
++
++- `npm run check`: exit 0. `npm run build`: OK. `bash scripts/check-architecture.sh`: PASS. `npx vitest run`: 9/9 (2 new tests for the failure list).
++- Runtime, built app, isolated `--user-data-dir`, real CDP input events (`scripts/fixes.mjs`, `scripts/cdp.mjs`):
++  - Phase A (fresh data dir), `results-a.json`: **14/14 PASS**, covering defects 1, 8, 2, 6, 5 and 3.
++  - Phase B (app started on a corrupted `qa-history.json`), `results-b.json`: **4/4 PASS**, covering defect 4: Clear enabled → confirm → file is `[]` → empty state → a new ask persists.
++  - No exceptions or console errors in either phase (only Electron's pre-existing dev CSP warning).
++  - Logs: `run-a.log`, `run-b.log`. Screenshots: `01`–`09`.
++- Driver note: the first phase-B run timed out because the driver typed into the input in the same frame that the defect-3 fix moved focus to the heading. The driver now waits for that focus move. This was a test race, not an app bug.
++
++## Remaining risks
++
++- Defect 7 is open until the user decides (see above).
++- Failed questions are kept only in renderer memory, as before. They don't survive a restart, by design, because the history schema is unchanged.
++- Out of scope, seen during the run: after a document is deleted, new answers can still cite its chunks as "Unknown Document" (the index isn't purged on delete; service behaviour, pre-existing).
++- Screen-reader announcement is still unverified (DOM roles only).
+diff --git a/docs/evidence/conversation-history/generator/fixes/results-a.json b/docs/evidence/conversation-history/generator/fixes/results-a.json
+new file mode 100644
+index 0000000..81f8486
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/fixes/results-a.json
+@@ -0,0 +1,164 @@
++[
++  {
++    "id": "D1",
++    "name": "both failed questions remain visible after a second failure",
++    "ok": true,
++    "detail": {
++      "errs": [
++        "YOU\nHow does retrieval work?",
++        "YOU\nSecond failing question"
++      ],
++      "askDelta": 2
++    }
++  },
++  {
++    "id": "D8",
++    "name": "error turn shows plain wording; raw error only inside a closed <details>",
++    "ok": true,
++    "detail": {
++      "visible": "YOU\nHow does retrieval work?\nNOT ANSWERED\nSomething went wrong and this question could not be answered. Your question is kept here so you can try it again.\nTechnical details\nRetry\nDismiss",
++      "open": false,
++      "detailText": "SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)"
++    }
++  },
++  {
++    "id": "D8",
++    "name": "details disclosure opens on click",
++    "ok": true,
++    "detail": {}
++  },
++  {
++    "id": "D1",
++    "name": "a new successful ask keeps both failed questions",
++    "ok": true,
++    "detail": {
++      "afterNewAsk": [
++        "YOU\nHow does retrieval work?",
++        "YOU\nSecond failing question"
++      ]
++    }
++  },
++  {
++    "id": "D1",
++    "name": "retry answers only the retried question; other failure kept",
++    "ok": true,
++    "detail": {
++      "errs": [
++        "YOU\nSecond failing question"
++      ],
++      "lastQ": "YOU\nHow does retrieval work?"
++    }
++  },
++  {
++    "id": "D1",
++    "name": "dismiss removes the remaining failure",
++    "ok": true,
++    "detail": {}
++  },
++  {
++    "id": "D2",
++    "name": "deleted cited document shows notice, no ghost detail, list auto-refreshed (no manual Refresh)",
++    "ok": true,
++    "detail": {
++      "detailOpen": false,
++      "docsHeader": "Documents (2)",
++      "listedBefore": "3",
++      "deleted": "meeting-summary"
++    }
++  },
++  {
++    "id": "D2",
++    "name": "citation to an existing document still opens DocumentDetail",
++    "ok": true,
++    "detail": {}
++  },
++  {
++    "id": "D6",
++    "name": "from the input, newest citation is reached in <= 4 key presses (was 18 forward Tabs)",
++    "ok": true,
++    "detail": {
++      "presses": 4,
++      "path": [
++        "Tab",
++        "Tab",
++        "Enter",
++        "Tab"
++      ]
++    }
++  },
++  {
++    "id": "D6",
++    "name": "skip control becomes visible when focused",
++    "ok": true,
++    "detail": {
++      "skipShown": {
++        "text": "Jump to latest answer",
++        "width": 156.4453125
++      },
++      "widthWhenUnfocused": 4
++    }
++  },
++  {
++    "id": "D6",
++    "name": "Alt+ArrowUp in the input focuses the newest exchange",
++    "ok": true,
++    "detail": {
++      "tag": "ARTICLE",
++      "id": "latest-exchange",
++      "text": "YOU\nWhat did the meeting decide about retrieval?\nASSISTANT\nN",
++      "label": "Exchange 5 of 5"
++    }
++  },
++  {
++    "id": "D5",
++    "name": "Escape closes confirmation, keeps history, returns focus to Clear",
++    "ok": true,
++    "detail": {
++      "focusInConfirm": {
++        "tag": "BUTTON",
++        "id": "",
++        "text": "Cancel",
++        "label": null
++      },
++      "confirmOpen": false,
++      "count": 5,
++      "focus": {
++        "tag": "BUTTON",
++        "id": "",
++        "text": "Clear",
++        "label": null
++      }
++    }
++  },
++  {
++    "id": "D3",
++    "name": "after confirming Clear, focus is on the conversation heading (not BODY)",
++    "ok": true,
++    "detail": {
++      "onConfirm": {
++        "tag": "BUTTON",
++        "id": "",
++        "text": "Clear conversation",
++        "label": null
++      },
++      "after": {
++        "tag": "H2",
++        "id": "conversation-heading",
++        "text": "Conversation (0 exchanges)",
++        "label": null
++      },
++      "fileLength": 0
++    }
++  },
++  {
++    "id": "console",
++    "name": "no exceptions or console errors",
++    "ok": true,
++    "detail": [
++      {
++        "kind": "console.warning",
++        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged."
++      }
++    ]
++  }
++]
+\ No newline at end of file
+diff --git a/docs/evidence/conversation-history/generator/fixes/results-b.json b/docs/evidence/conversation-history/generator/fixes/results-b.json
+new file mode 100644
+index 0000000..8476f1f
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/fixes/results-b.json
+@@ -0,0 +1,36 @@
++[
++  {
++    "id": "D4",
++    "name": "Clear is enabled in the load-error state",
++    "ok": true,
++    "detail": {
++      "disabled": false
++    }
++  },
++  {
++    "id": "D4",
++    "name": "confirming Clear replaces the unreadable file and shows the empty state",
++    "ok": true,
++    "detail": {
++      "msg": "Replace the unreadable conversation history with an empty one? This cannot be undone.",
++      "file": "[]"
++    }
++  },
++  {
++    "id": "D4",
++    "name": "asking works again after recovery",
++    "ok": true,
++    "detail": {}
++  },
++  {
++    "id": "console",
++    "name": "no exceptions or console errors",
++    "ok": true,
++    "detail": [
++      {
++        "kind": "console.warning",
++        "text": "%cElectron Security Warning (Insecure Content-Security-Policy) font-weight: bold; This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged."
++      }
++    ]
++  }
++]
+\ No newline at end of file
+diff --git a/docs/evidence/conversation-history/generator/fixes/run-a.log b/docs/evidence/conversation-history/generator/fixes/run-a.log
+new file mode 100644
+index 0000000..39eb45d
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/fixes/run-a.log
+@@ -0,0 +1,119 @@
++
++DevTools listening on ws://127.0.0.1:9555/devtools/browser/7dda0075-8c68-4832-a431-75972fe7864e
++{"timestamp":"2026-11-16T02:08:14.798Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T02:08:14.804Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T02:08:14.804Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/e873e995-ac70-4d36-afb5-61a87db40fb5/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T02:08:14.805Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T02:08:14.805Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T02:08:14.805Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T02:08:14.805Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T02:08:14.805Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:08:14.805Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:08:14.805Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T02:08:14.953Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T02:08:15.295Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:08:15.295Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:08:16.131Z","level":"INFO","service":"IPC","message":"IMPORT_DOCUMENT","data":{"filePath":"/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/data/sample-documents/design-notes.md"}}
++{"timestamp":"2026-11-16T02:08:16.133Z","level":"INFO","service":"IPC","message":"Document imported","data":{"id":"0059e506-3043-4852-a7fb-c24c4a1be299","title":"design-notes","size":1940}}
++{"timestamp":"2026-11-16T02:08:16.133Z","level":"INFO","service":"IPC","message":"IMPORT_DOCUMENT","data":{"filePath":"/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/data/sample-documents/meeting-summary.txt"}}
++{"timestamp":"2026-11-16T02:08:16.133Z","level":"INFO","service":"IPC","message":"Document imported","data":{"id":"299306b7-5499-4971-95d4-a0c74b8f5866","title":"meeting-summary","size":1160}}
++{"timestamp":"2026-11-16T02:08:16.134Z","level":"INFO","service":"IPC","message":"IMPORT_DOCUMENT","data":{"filePath":"/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/data/sample-documents/retrieval-plan.md"}}
++{"timestamp":"2026-11-16T02:08:16.134Z","level":"INFO","service":"IPC","message":"Document imported","data":{"id":"0aa684e3-78fa-4b46-b8cf-060feeca0c60","title":"retrieval-plan","size":1639}}
++{"timestamp":"2026-11-16T02:08:16.134Z","level":"INFO","service":"IPC","message":"START_INDEXING","data":{"documentId":"all"}}
++{"timestamp":"2026-11-16T02:08:16.134Z","level":"INFO","service":"IndexingService","message":"startIndexing called","data":{"documentId":"all"}}
++{"timestamp":"2026-11-16T02:08:16.135Z","level":"INFO","service":"IndexingService","message":"Batch indexing starting","data":{"totalDocs":3,"alreadyIndexed":0}}
++{"timestamp":"2026-11-16T02:08:16.135Z","level":"INFO","service":"IndexingService","message":"Indexing document","data":{"docId":"0059e506-3043-4852-a7fb-c24c4a1be299","title":"design-notes","contentLength":1940}}
++{"timestamp":"2026-11-16T02:08:16.135Z","level":"INFO","service":"IndexingService","message":"chunkDocument","data":{"documentId":"0059e506-3043-4852-a7fb-c24c4a1be299","contentLength":1940,"paragraphCount":15}}
++{"timestamp":"2026-11-16T02:08:16.135Z","level":"INFO","service":"IndexingService","message":"chunkDocument complete","data":{"documentId":"0059e506-3043-4852-a7fb-c24c4a1be299","totalChunks":6,"totalChars":1929}}
++{"timestamp":"2026-11-16T02:08:16.135Z","level":"INFO","service":"IndexingService","message":"Document indexed","data":{"docId":"0059e506-3043-4852-a7fb-c24c4a1be299","chunkCount":6}}
++{"timestamp":"2026-11-16T02:08:16.135Z","level":"INFO","service":"IndexingService","message":"Indexing document","data":{"docId":"299306b7-5499-4971-95d4-a0c74b8f5866","title":"meeting-summary","contentLength":1160}}
++{"timestamp":"2026-11-16T02:08:16.135Z","level":"INFO","service":"IndexingService","message":"chunkDocument","data":{"documentId":"299306b7-5499-4971-95d4-a0c74b8f5866","contentLength":1160,"paragraphCount":7}}
++{"timestamp":"2026-11-16T02:08:16.135Z","level":"INFO","service":"IndexingService","message":"chunkDocument complete","data":{"documentId":"299306b7-5499-4971-95d4-a0c74b8f5866","totalChunks":3,"totalChars":1155}}
++{"timestamp":"2026-11-16T02:08:16.135Z","level":"INFO","service":"IndexingService","message":"Document indexed","data":{"docId":"299306b7-5499-4971-95d4-a0c74b8f5866","chunkCount":3}}
++{"timestamp":"2026-11-16T02:08:16.136Z","level":"INFO","service":"IndexingService","message":"Indexing document","data":{"docId":"0aa684e3-78fa-4b46-b8cf-060feeca0c60","title":"retrieval-plan","contentLength":1639}}
++{"timestamp":"2026-11-16T02:08:16.136Z","level":"INFO","service":"IndexingService","message":"chunkDocument","data":{"documentId":"0aa684e3-78fa-4b46-b8cf-060feeca0c60","contentLength":1639,"paragraphCount":15}}
++{"timestamp":"2026-11-16T02:08:16.136Z","level":"INFO","service":"IndexingService","message":"chunkDocument complete","data":{"documentId":"0aa684e3-78fa-4b46-b8cf-060feeca0c60","totalChunks":5,"totalChars":1630}}
++{"timestamp":"2026-11-16T02:08:16.136Z","level":"INFO","service":"IndexingService","message":"Document indexed","data":{"docId":"0aa684e3-78fa-4b46-b8cf-060feeca0c60","chunkCount":5}}
++{"timestamp":"2026-11-16T02:08:16.136Z","level":"INFO","service":"IndexingService","message":"Batch indexing complete"}
++{"timestamp":"2026-11-16T02:08:16.136Z","level":"INFO","service":"IPC","message":"Indexing complete","data":{"status":"ready","indexed":3,"total":3}}
++{"timestamp":"2026-11-16T02:08:16.143Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:08:16.168Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does the indexing pipeline chunk documents?"}}
++{"timestamp":"2026-11-16T02:08:16.168Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does the indexing pipeline chunk documents?"}}
++{"timestamp":"2026-11-16T02:08:16.665Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:08:16.665Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":7,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:08:16.665Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":381}}
++{"timestamp":"2026-11-16T02:08:16.666Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":1}}
++{"timestamp":"2026-11-16T02:08:16.666Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T02:08:16.666Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:08:16.712Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What did the meeting decide about retrieval?"}}
++{"timestamp":"2026-11-16T02:08:16.712Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What did the meeting decide about retrieval?"}}
++{"timestamp":"2026-11-16T02:08:16.894Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:08:16.894Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":7,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:08:16.894Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":336}}
++{"timestamp":"2026-11-16T02:08:16.895Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":2}}
++{"timestamp":"2026-11-16T02:08:16.895Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T02:08:16.895Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:08:16.940Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T02:08:16.940Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T02:08:17.048Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:08:17.049Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:08:17.049Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":335}}
++{"timestamp":"2026-11-16T02:08:17.049Z","level":"ERROR","service":"IPC","message":"Q&A failed","data":{"question":"How does retrieval work?","error":"SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)"}}
++Error occurred in handler for 'qa:ask': SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
++    at JSON.parse (<anonymous>)
++    at PersistenceService.readJson (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/persistence-service.js:56:21)
++    at QaService.getHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:98:33)
++    at QaService.saveToHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:123:30)
++    at QaService.ask (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:93:14)
++    at async /Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/main/ipc-handlers.js:58:30
++    at async WebContents.<anonymous> (node:electron/js2c/browser_init:2:87023)
++{"timestamp":"2026-11-16T02:08:17.121Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"Second failing question"}}
++{"timestamp":"2026-11-16T02:08:17.121Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"Second failing question"}}
++{"timestamp":"2026-11-16T02:08:17.472Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:08:17.472Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":3,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:08:17.472Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":308}}
++{"timestamp":"2026-11-16T02:08:17.472Z","level":"ERROR","service":"IPC","message":"Q&A failed","data":{"question":"Second failing question","error":"SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)"}}
++Error occurred in handler for 'qa:ask': SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
++    at JSON.parse (<anonymous>)
++    at PersistenceService.readJson (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/persistence-service.js:56:21)
++    at QaService.getHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:98:33)
++    at QaService.saveToHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:123:30)
++    at QaService.ask (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:93:14)
++    at async /Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/main/ipc-handlers.js:58:30
++    at async WebContents.<anonymous> (node:electron/js2c/browser_init:2:87023)
++{"timestamp":"2026-11-16T02:08:17.758Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"Third question after failures"}}
++{"timestamp":"2026-11-16T02:08:17.758Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"Third question after failures"}}
++{"timestamp":"2026-11-16T02:08:18.210Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:08:18.211Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:08:18.211Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":308}}
++{"timestamp":"2026-11-16T02:08:18.211Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":3}}
++{"timestamp":"2026-11-16T02:08:18.211Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T02:08:18.212Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:08:18.231Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T02:08:18.231Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does retrieval work?"}}
++{"timestamp":"2026-11-16T02:08:18.343Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:08:18.343Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":4,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:08:18.344Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":335}}
++{"timestamp":"2026-11-16T02:08:18.344Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":4}}
++{"timestamp":"2026-11-16T02:08:18.344Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T02:08:18.344Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:08:18.530Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:08:18.549Z","level":"INFO","service":"IPC","message":"GET_DOCUMENT","data":{"id":"299306b7-5499-4971-95d4-a0c74b8f5866"}}
++{"timestamp":"2026-11-16T02:08:18.550Z","level":"INFO","service":"IPC","message":"GET_CHUNKS","data":{"documentId":"299306b7-5499-4971-95d4-a0c74b8f5866"}}
++{"timestamp":"2026-11-16T02:08:18.551Z","level":"INFO","service":"IPC","message":"DELETE_DOCUMENT","data":{"id":"299306b7-5499-4971-95d4-a0c74b8f5866"}}
++{"timestamp":"2026-11-16T02:08:18.565Z","level":"INFO","service":"IPC","message":"GET_DOCUMENT","data":{"id":"299306b7-5499-4971-95d4-a0c74b8f5866"}}
++{"timestamp":"2026-11-16T02:08:18.565Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:08:18.715Z","level":"INFO","service":"IPC","message":"GET_DOCUMENT","data":{"id":"0aa684e3-78fa-4b46-b8cf-060feeca0c60"}}
++{"timestamp":"2026-11-16T02:08:18.716Z","level":"INFO","service":"IPC","message":"GET_CHUNKS","data":{"documentId":"0aa684e3-78fa-4b46-b8cf-060feeca0c60"}}
++{"timestamp":"2026-11-16T02:08:18.746Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"What did the meeting decide about retrieval?"}}
++{"timestamp":"2026-11-16T02:08:18.746Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"What did the meeting decide about retrieval?"}}
++{"timestamp":"2026-11-16T02:08:19.193Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:08:19.193Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":7,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:08:19.193Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":337}}
++{"timestamp":"2026-11-16T02:08:19.194Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":5}}
++{"timestamp":"2026-11-16T02:08:19.194Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T02:08:19.194Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:08:19.491Z","level":"INFO","service":"IPC","message":"CLEAR_HISTORY"}
++{"timestamp":"2026-11-16T02:08:19.491Z","level":"INFO","service":"QaService","message":"Q&A history cleared"}
++{"timestamp":"2026-11-16T02:08:19.491Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGTERM
+diff --git a/docs/evidence/conversation-history/generator/fixes/run-b.log b/docs/evidence/conversation-history/generator/fixes/run-b.log
+new file mode 100644
+index 0000000..cd81062
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/fixes/run-b.log
+@@ -0,0 +1,34 @@
++
++DevTools listening on ws://127.0.0.1:9555/devtools/browser/896da89d-36c9-48fb-916b-b724e1f2c74b
++{"timestamp":"2026-11-16T02:08:22.170Z","level":"INFO","service":"App","message":"Electron app ready, initializing..."}
++{"timestamp":"2026-11-16T02:08:22.171Z","level":"INFO","service":"App","message":"Starting service initialization"}
++{"timestamp":"2026-11-16T02:08:22.171Z","level":"INFO","service":"App","message":"Data directory resolved","data":{"dataDir":"/private/tmp/claude-501/-Users-matiasrodriguezc-harness-runs-p05-plan-gen-eval/e873e995-ac70-4d36-afb5-61a87db40fb5/scratchpad/ud/knowledge-base-data"}}
++{"timestamp":"2026-11-16T02:08:22.171Z","level":"INFO","service":"App","message":"PersistenceService initialized"}
++{"timestamp":"2026-11-16T02:08:22.171Z","level":"INFO","service":"App","message":"DocumentService initialized"}
++{"timestamp":"2026-11-16T02:08:22.171Z","level":"INFO","service":"IndexingService","message":"IndexingService constructed"}
++{"timestamp":"2026-11-16T02:08:22.171Z","level":"INFO","service":"App","message":"IndexingService initialized"}
++{"timestamp":"2026-11-16T02:08:22.171Z","level":"INFO","service":"QaService","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:08:22.171Z","level":"INFO","service":"App","message":"QaService initialized"}
++{"timestamp":"2026-11-16T02:08:22.172Z","level":"INFO","service":"App","message":"All services initialized and IPC handlers registered"}
++{"timestamp":"2026-11-16T02:08:22.251Z","level":"INFO","service":"App","message":"Application startup complete"}
++{"timestamp":"2026-11-16T02:08:22.409Z","level":"INFO","service":"IPC","message":"LIST_DOCUMENTS"}
++{"timestamp":"2026-11-16T02:08:22.410Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++Error occurred in handler for 'conversation:get': SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
++    at JSON.parse (<anonymous>)
++    at PersistenceService.readJson (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/persistence-service.js:56:21)
++    at QaService.getHistory (/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/services/qa-service.js:98:33)
++    at /Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/dist/main/ipc-handlers.js:81:26
++    at WebContents.<anonymous> (node:electron/js2c/browser_init:2:87039)
++    at WebContents.emit (node:events:518:28)
++{"timestamp":"2026-11-16T02:08:23.650Z","level":"INFO","service":"IPC","message":"CLEAR_HISTORY"}
++{"timestamp":"2026-11-16T02:08:23.650Z","level":"INFO","service":"QaService","message":"Q&A history cleared"}
++{"timestamp":"2026-11-16T02:08:23.651Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++{"timestamp":"2026-11-16T02:08:23.732Z","level":"INFO","service":"IPC","message":"ASK_QUESTION","data":{"question":"How does the indexing pipeline chunk documents?"}}
++{"timestamp":"2026-11-16T02:08:23.732Z","level":"INFO","service":"QaService","message":"Processing question","data":{"question":"How does the indexing pipeline chunk documents?"}}
++{"timestamp":"2026-11-16T02:08:24.059Z","level":"INFO","service":"QaService","message":"Retrieving from chunks","data":{"totalChunks":14}}
++{"timestamp":"2026-11-16T02:08:24.060Z","level":"INFO","service":"QaService","message":"Keyword matching results","data":{"questionWords":7,"relevantChunks":2}}
++{"timestamp":"2026-11-16T02:08:24.060Z","level":"INFO","service":"QaService","message":"Q&A response generated","data":{"confidence":0.85,"citationCount":2,"answerLength":382}}
++{"timestamp":"2026-11-16T02:08:24.061Z","level":"INFO","service":"QaService","message":"Question saved to history","data":{"historyLength":1}}
++{"timestamp":"2026-11-16T02:08:24.061Z","level":"INFO","service":"IPC","message":"Q&A response","data":{"confidence":0.85,"citationCount":2}}
++{"timestamp":"2026-11-16T02:08:24.061Z","level":"INFO","service":"IPC","message":"GET_CONVERSATION"}
++/Users/matiasrodriguezc/harness-runs/p05-plan-gen-eval/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGTERM
+diff --git a/docs/evidence/conversation-history/generator/fixes/scripts/cdp.mjs b/docs/evidence/conversation-history/generator/fixes/scripts/cdp.mjs
+new file mode 100644
+index 0000000..6897632
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/fixes/scripts/cdp.mjs
+@@ -0,0 +1,75 @@
++// Minimal CDP client (Node 20 + --experimental-websocket). No dependencies.
++import fs from 'node:fs';
++
++export async function connect(port = 9555) {
++  const list = await (await fetch(`http://localhost:${port}/json/list`)).json();
++  const page = list.find(t => t.type === 'page');
++  const ws = new WebSocket(page.webSocketDebuggerUrl);
++  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
++  let id = 0;
++  const pending = new Map();
++  const problems = [];
++  ws.onmessage = ev => {
++    const msg = JSON.parse(ev.data);
++    if (msg.id && pending.has(msg.id)) {
++      const { res, rej } = pending.get(msg.id);
++      pending.delete(msg.id);
++      msg.error ? rej(new Error(JSON.stringify(msg.error))) : res(msg.result);
++    } else if (msg.method === 'Runtime.exceptionThrown') {
++      problems.push({ kind: 'exception', text: msg.params.exceptionDetails.exception?.description ?? msg.params.exceptionDetails.text });
++    } else if (msg.method === 'Runtime.consoleAPICalled' && (msg.params.type === 'error' || msg.params.type === 'warning')) {
++      problems.push({ kind: `console.${msg.params.type}`, text: msg.params.args.map(a => a.value ?? a.description).join(' ') });
++    }
++  };
++  const send = (method, params = {}) => new Promise((res, rej) => {
++    const mid = ++id;
++    pending.set(mid, { res, rej });
++    ws.send(JSON.stringify({ id: mid, method, params }));
++  });
++  await send('Runtime.enable');
++  await send('Page.enable');
++
++  const evaluate = async expression => {
++    const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
++    if (r.exceptionDetails) throw new Error('evaluate failed: ' + JSON.stringify(r.exceptionDetails));
++    return r.result.value;
++  };
++  const key = async (keyName, opts = {}) => {
++    const map = {
++      Enter: { code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' },
++      Tab: { code: 'Tab', windowsVirtualKeyCode: 9 },
++      ' ': { code: 'Space', windowsVirtualKeyCode: 32, text: ' ' },
++      Escape: { code: 'Escape', windowsVirtualKeyCode: 27 },
++      ArrowUp: { code: 'ArrowUp', windowsVirtualKeyCode: 38 },
++    };
++    const k = map[keyName];
++    const modifiers = (opts.alt ? 1 : 0) | (opts.shift ? 8 : 0);
++    await send('Input.dispatchKeyEvent', { type: k.text ? 'keyDown' : 'rawKeyDown', key: keyName, modifiers, ...k });
++    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: keyName, modifiers, code: k.code, windowsVirtualKeyCode: k.windowsVirtualKeyCode });
++  };
++  const type = text => send('Input.insertText', { text });
++  const clickAt = async (x, y) => {
++    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
++    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
++    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
++  };
++  /** Clicks the centre of the element returned by a JS expression (scrolling it into view first). */
++  const click = async selectorExpr => {
++    const r = await evaluate(`(() => { const el = ${selectorExpr}; if (!el) return null; el.scrollIntoView({block:'center'}); const b = el.getBoundingClientRect(); return {x: b.x + b.width/2, y: b.y + Math.min(b.height/2, 10)}; })()`);
++    if (!r) throw new Error('click target not found: ' + selectorExpr);
++    await clickAt(r.x, r.y);
++  };
++  const screenshot = async file => {
++    const r = await send('Page.captureScreenshot', { format: 'png' });
++    fs.writeFileSync(file, Buffer.from(r.data, 'base64'));
++  };
++  const waitFor = async (expr, timeout = 5000) => {
++    const t0 = Date.now();
++    while (Date.now() - t0 < timeout) {
++      if (await evaluate(expr)) return true;
++      await new Promise(r => setTimeout(r, 50));
++    }
++    throw new Error('timeout waiting for: ' + expr);
++  };
++  return { send, evaluate, key, type, click, screenshot, waitFor, problems, close: () => ws.close() };
++}
+diff --git a/docs/evidence/conversation-history/generator/fixes/scripts/fixes.mjs b/docs/evidence/conversation-history/generator/fixes/scripts/fixes.mjs
+new file mode 100644
+index 0000000..5d51958
+--- /dev/null
++++ b/docs/evidence/conversation-history/generator/fixes/scripts/fixes.mjs
+@@ -0,0 +1,183 @@
++// Verifies the fixes for evaluator-rubric.md defects 1-6 and 8 against the running app.
++// usage: node --experimental-websocket fixes.mjs <phase:a|b> <repo> <dataDir> <logFile> <outDir>
++//   phase a: fresh data dir -> defects 1, 8, 2, 6, 5, 3
++//   phase b: app launched on a corrupted qa-history.json -> defect 4
++import fs from 'node:fs';
++import { connect } from './cdp.mjs';
++
++const [, , PHASE, REPO, DATA, LOG, OUT] = process.argv;
++const HIST = `${DATA}/qa-history.json`;
++const c = await connect();
++// Keep the page focused during Page.captureScreenshot so focus-only UI shows up in screenshots.
++await c.send('Emulation.setFocusEmulationEnabled', { enabled: true });
++const results = [];
++const check = (id, name, ok, detail) => {
++  results.push({ id, name, ok: !!ok, detail });
++  console.log(`${ok ? 'PASS' : 'FAIL'} [${id}] ${name} :: ${JSON.stringify(detail)}`);
++};
++const asks = () => fs.readFileSync(LOG, 'utf8').split('\n').filter(l => l.includes('"ASK_QUESTION"')).length;
++const exchanges = `document.querySelectorAll('[role=log] article[aria-label^="Exchange"]').length`;
++const failed = `[...document.querySelectorAll('[role=log] article[aria-label="Question that could not be answered"]')]`;
++const settled = `!document.querySelector('[aria-busy=true]')`;
++const active = `(() => { const a = document.activeElement; return { tag: a.tagName, id: a.id, text: (a.innerText || '').slice(0, 60), label: a.getAttribute('aria-label') }; })()`;
++const ask = async q => {
++  await c.evaluate(`document.getElementById('question-input').focus()`);
++  await c.type(q);
++  await c.key('Enter');
++  await c.waitFor(settled);
++};
++const btn = text => `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)})`;
++const sleep = ms => new Promise(r => setTimeout(r, ms));
++
++await c.waitFor(`!!document.querySelector('#conversation-heading') && !document.body.innerText.includes('Loading conversation')`);
++
++if (PHASE === 'a') {
++  // Seed (§6.2)
++  await c.evaluate(`(async () => { for (const f of ['design-notes.md','meeting-summary.txt','retrieval-plan.md']) await window.knowledgeBase.documents.import('${REPO}/data/sample-documents/' + f); await window.knowledgeBase.indexing.start(); })()`);
++  await c.click(`[...document.querySelectorAll('header button')].find(b => b.textContent.trim() === 'Refresh')`);
++  await c.waitFor(`document.body.innerText.includes('Documents (3)')`);
++  await ask('How does the indexing pipeline chunk documents?');
++  await ask('What did the meeting decide about retrieval?');
++  await c.waitFor(`${exchanges} === 2`);
++
++  // ---- Defect 1: two consecutive failures keep both questions ----
++  const good = fs.readFileSync(HIST, 'utf8');
++  fs.writeFileSync(HIST, '{oops');
++  const a0 = asks();
++  await ask('How does retrieval work?');
++  await ask('Second failing question');
++  await c.waitFor(`${failed}.length === 2`);
++  const errs = await c.evaluate(`${failed}.map(a => a.querySelector('div').innerText)`);
++  check('D1', 'both failed questions remain visible after a second failure', errs.length === 2 && errs[0].includes('How does retrieval work?') && errs[1].includes('Second failing question'), { errs, askDelta: asks() - a0 });
++  await c.screenshot(`${OUT}/01-two-failures-kept.png`);
++
++  // ---- Defect 8: plain wording, technical details collapsed ----
++  const d8 = await c.evaluate(`(() => { const a = ${failed}[0]; const d = a.querySelector('details'); return { visible: a.innerText, open: d?.open, detailText: d?.querySelector('div')?.textContent }; })()`);
++  check('D8', 'error turn shows plain wording; raw error only inside a closed <details>', d8.open === false && !d8.visible.includes('SyntaxError') && d8.visible.includes('Technical details') && /SyntaxError/.test(d8.detailText || ''), d8);
++  await c.click(`${failed}[0].querySelector('summary')`);
++  const d8open = await c.evaluate(`${failed}[0].querySelector('details').open`);
++  check('D8', 'details disclosure opens on click', d8open === true, {});
++  await c.screenshot(`${OUT}/02-error-details-open.png`);
++
++  // A new successful ask after failures must not discard them either.
++  fs.writeFileSync(HIST, good);
++  await ask('Third question after failures');
++  await c.waitFor(`${exchanges} === 3`);
++  const afterNewAsk = await c.evaluate(`${failed}.map(a => a.querySelector('div').innerText)`);
++  check('D1', 'a new successful ask keeps both failed questions', afterNewAsk.length === 2, { afterNewAsk });
++
++  // Retry the first failure: it becomes an exchange; the second failure stays.
++  await c.click(`${failed}[0].querySelector('button')`); // Retry
++  await c.waitFor(settled);
++  await c.waitFor(`${exchanges} === 4`);
++  const afterRetry = await c.evaluate(`({ errs: ${failed}.map(a => a.querySelector('div').innerText), lastQ: [...document.querySelectorAll('[role=log] article[aria-label^="Exchange"]')].pop().querySelector('div').innerText })`);
++  check('D1', 'retry answers only the retried question; other failure kept', afterRetry.errs.length === 1 && afterRetry.errs[0].includes('Second failing question') && afterRetry.lastQ.includes('How does retrieval work?'), afterRetry);
++  await c.click(`${failed}[0].querySelectorAll('button')[1]`); // Dismiss
++  await c.waitFor(`${failed}.length === 0`);
++  check('D1', 'dismiss removes the remaining failure', true, {});
++  await c.screenshot(`${OUT}/03-after-retry-and-dismiss.png`);
++
++  // ---- Defect 2: citation to a document deleted without Refresh ----
++  const target = await c.evaluate(`(async () => {
++    const btn = [...document.querySelectorAll('[role=log] article[aria-label^="Exchange"] li button')][0];
++    const title = btn.querySelector('span').textContent;
++    const docs = await window.knowledgeBase.documents.list();
++    return { title, id: docs.find(d => d.title === title)?.id };
++  })()`);
++  // Open it first so it is the selected document, then delete it behind the UI's back.
++  await c.click(`[...document.querySelectorAll('[role=log] article[aria-label^="Exchange"] li button')][0]`);
++  await c.waitFor(`!!document.querySelector('section[aria-label="Selected document"]')`);
++  await c.evaluate(`window.knowledgeBase.documents.delete(${JSON.stringify(target.id)})`);
++  const listedBefore = await c.evaluate(`document.body.innerText.match(/Documents \\((\\d+)\\)/)[1]`);
++  await c.click(`[...document.querySelectorAll('[role=log] article[aria-label^="Exchange"] li button')][0]`);
++  await c.waitFor(`document.body.innerText.includes('This document is no longer available.')`);
++  await c.waitFor(`document.body.innerText.includes('Documents (2)')`);
++  const d2 = await c.evaluate(`({ detailOpen: !!document.querySelector('section[aria-label="Selected document"]'), docsHeader: document.body.innerText.match(/Documents \\(\\d+\\)/)[0] })`);
++  check('D2', 'deleted cited document shows notice, no ghost detail, list auto-refreshed (no manual Refresh)', !d2.detailOpen && listedBefore === '3', { ...d2, listedBefore, deleted: target.title });
++  await c.screenshot(`${OUT}/04-stale-citation-no-ghost.png`);
++
++  // A citation to a still-existing document still opens it.
++  const live = await c.evaluate(`[...document.querySelectorAll('[role=log] article[aria-label^="Exchange"] li button')].findIndex(b => b.querySelector('span').textContent !== ${JSON.stringify(target.title)})`);
++  if (live >= 0) {
++    await c.click(`[...document.querySelectorAll('[role=log] article[aria-label^="Exchange"] li button')][${live}]`);
++    await c.waitFor(`!!document.querySelector('section[aria-label="Selected document"]')`);
++    check('D2', 'citation to an existing document still opens DocumentDetail', true, {});
++    await c.click(btn('Close'));
++  }
++
++  // ---- Defect 6: keyboard reach to the newest answer's citations ----
++  // Make sure the newest exchange has citations.
++  await ask('What did the meeting decide about retrieval?');
++  const newestHasCitations = await c.evaluate(`document.getElementById('latest-exchange').querySelectorAll('li button').length > 0`);
++  await c.evaluate(`document.getElementById('question-input').focus()`);
++  let presses = 0;
++  const inNewestCitation = `(() => { const a = document.activeElement; const l = document.getElementById('latest-exchange'); return !!(l && a.tagName === 'BUTTON' && l.contains(a)); })()`;
++  const path = [];
++  for (; presses < 40; ) {
++    const a = await c.evaluate(active);
++    if (a.text.trim() === 'Jump to latest answer') { await c.key('Enter'); presses++; path.push('Enter'); }
++    else { await c.key('Tab'); presses++; path.push('Tab'); }
++    if (await c.evaluate(inNewestCitation)) break;
++  }
++  const jumpVisible = await c.evaluate(`(() => { const b = ${btn('Jump to latest answer')}; return b ? b.getBoundingClientRect().width : -1; })()`);
++  check('D6', 'from the input, newest citation is reached in <= 4 key presses (was 18 forward Tabs)', newestHasCitations && presses <= 4, { presses, path });
++  await c.evaluate(`document.getElementById('question-input').focus()`);
++  await c.key('Tab'); await c.key('Tab');
++  const skipShown = await c.evaluate(`(() => { const a = document.activeElement; return { text: a.textContent, width: a.getBoundingClientRect().width }; })()`);
++  check('D6', 'skip control becomes visible when focused', skipShown.text === 'Jump to latest answer' && skipShown.width > 50, { skipShown, widthWhenUnfocused: jumpVisible });
++  await c.screenshot(`${OUT}/05-jump-to-latest-focused.png`);
++  await c.evaluate(`document.getElementById('question-input').focus()`);
++  await c.key('ArrowUp', { alt: true });
++  const afterShortcut = await c.evaluate(active);
++  check('D6', 'Alt+ArrowUp in the input focuses the newest exchange', afterShortcut.id === 'latest-exchange', afterShortcut);
++
++  // ---- Defect 5: Escape cancels the Clear confirmation ----
++  const n = await c.evaluate(exchanges);
++  await c.click(btn('Clear'));
++  await c.waitFor(`!!document.querySelector('[aria-label="Confirm clearing the conversation"]')`);
++  const focusInConfirm = await c.evaluate(active);
++  await c.key('Escape');
++  await sleep(100);
++  const d5 = await c.evaluate(`({ confirmOpen: !!document.querySelector('[aria-label="Confirm clearing the conversation"]'), count: ${exchanges}, focus: ${active} })`);
++  check('D5', 'Escape closes confirmation, keeps history, returns focus to Clear', !d5.confirmOpen && d5.count === n && d5.focus.text === 'Clear', { focusInConfirm, ...d5 });
++
++  // ---- Defect 3: focus after confirming Clear ----
++  await c.key('Enter'); // reopen via keyboard on the focused Clear button
++  await c.waitFor(`!!document.querySelector('[aria-label="Confirm clearing the conversation"]')`);
++  await c.key('Tab'); // Cancel -> Clear conversation
++  const onConfirm = await c.evaluate(active);
++  await c.key('Enter');
++  await c.waitFor(`${exchanges} === 0`);
++  await sleep(100);
++  const d3 = await c.evaluate(active);
++  const file = JSON.parse(fs.readFileSync(HIST, 'utf8'));
++  check('D3', 'after confirming Clear, focus is on the conversation heading (not BODY)', d3.id === 'conversation-heading', { onConfirm, after: d3, fileLength: file.length });
++  await c.screenshot(`${OUT}/06-after-clear-focus.png`);
++}
++
++if (PHASE === 'b') {
++  // ---- Defect 4: recovery from an unreadable history at startup ----
++  await c.waitFor(`document.body.innerText.includes('Could not load the conversation history')`);
++  const clearState = await c.evaluate(`(() => { const b = ${btn('Clear')}; return { disabled: b.disabled }; })()`);
++  check('D4', 'Clear is enabled in the load-error state', clearState.disabled === false, clearState);
++  await c.screenshot(`${OUT}/07-startup-corrupt-clear-enabled.png`);
++  await c.click(btn('Clear'));
++  await c.waitFor(`!!document.querySelector('[aria-label="Confirm clearing the conversation"]')`);
++  const msg = await c.evaluate(`document.querySelector('[aria-label="Confirm clearing the conversation"] span').textContent`);
++  await c.screenshot(`${OUT}/08-startup-corrupt-confirm.png`);
++  await c.click(btn('Clear conversation'));
++  await c.waitFor(`document.body.innerText.includes('No questions yet')`);
++  // Focus moves to the heading on the next frame (defect 3 fix); wait so typing isn't lost to the race.
++  await c.waitFor(`document.activeElement.id === 'conversation-heading'`);
++  const file = fs.readFileSync(HIST, 'utf8').trim();
++  check('D4', 'confirming Clear replaces the unreadable file and shows the empty state', file === '[]', { msg, file });
++  await ask('How does the indexing pipeline chunk documents?');
++  await c.waitFor(`${exchanges} === 1`);
++  check('D4', 'asking works again after recovery', JSON.parse(fs.readFileSync(HIST, 'utf8')).length === 1, {});
++  await c.screenshot(`${OUT}/09-after-recovery-ask.png`);
++}
++
++check('console', 'no exceptions or console errors', c.problems.filter(p => !/Content-Security-Policy/.test(p.text)).length === 0, c.problems);
++fs.writeFileSync(`${OUT}/results-${PHASE}.json`, JSON.stringify(results, null, 2));
++c.close();
++process.exit(results.every(r => r.ok) ? 0 : 1);
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index 871a385..da1eb1d 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -2,9 +2,9 @@ import { useState, useCallback, useEffect, useRef } from 'react';
+ import { DocumentList } from './components/DocumentList';
+ import { QuestionPanel } from './components/QuestionPanel';
+ import { DocumentDetail } from './components/DocumentDetail';
+-import { ConversationView, AskError, HistoryLoadState } from './components/ConversationView';
++import { ConversationView, HistoryLoadState } from './components/ConversationView';
+ import { StatusBar } from './components/StatusBar';
+-import { describeAskError } from './components/conversation-format';
++import { AskError, addAskError, describeAskError, removeAskError } from './components/conversation-format';
+ import { Document, AppStatus, Citation, QAHistory } from '../shared/types';
+ 
+ export function App() {
+@@ -18,7 +18,9 @@ export function App() {
+   const [conversationHistory, setConversationHistory] = useState<QAHistory[]>([]);
+   const [historyLoadState, setHistoryLoadState] = useState<HistoryLoadState>('loading');
+   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+-  const [askError, setAskError] = useState<AskError | null>(null);
++  // Every failed question stays visible until it is retried or dismissed; a new ask never discards one.
++  const [askErrors, setAskErrors] = useState<AskError[]>([]);
++  const nextErrorId = useRef(1);
+   // Synchronous guard: state updates are async, so two rapid submits could both see pendingQuestion === null.
+   const askInFlight = useRef(false);
+ 
+@@ -60,10 +62,11 @@ export function App() {
+     setSelectedDoc(doc);
+   }, []);
+ 
+-  const handleAskQuestion = useCallback(async (question: string) => {
++  /** Asks a question. `retryOf` is the failed entry being retried; it becomes the pending turn. */
++  const handleAskQuestion = useCallback(async (question: string, retryOf?: AskError) => {
+     if (askInFlight.current) return;
+     askInFlight.current = true;
+-    setAskError(null);
++    if (retryOf) setAskErrors(prev => removeAskError(prev, retryOf.id));
+     setPendingQuestion(question);
+     try {
+       const response = await window.knowledgeBase.qa.ask(question);
+@@ -84,7 +87,8 @@ export function App() {
+       }
+       setPendingQuestion(null);
+     } catch (err) {
+-      setAskError({ question, message: describeAskError(err) });
++      const failure: AskError = { id: nextErrorId.current++, question, message: describeAskError(err) };
++      setAskErrors(prev => addAskError(prev, failure));
+       setPendingQuestion(null);
+     } finally {
+       askInFlight.current = false;
+@@ -92,27 +96,30 @@ export function App() {
+   }, []);
+ 
+   const handleOpenCitation = useCallback(async (citation: Citation): Promise<boolean> => {
+-    const known = documents.find(d => d.id === citation.documentId);
+-    if (known) {
+-      setSelectedDoc(known);
+-      return true;
+-    }
+-    // The list may be stale (e.g. documents seeded since the last refresh); ask main directly.
++    // Always ask main: the cached document list may be stale in either direction (a cited document
++    // may have been deleted or added since the last refresh), and trusting it opens a "ghost" detail.
++    let doc: Document | null = null;
+     try {
+-      const doc = await window.knowledgeBase.documents.get(citation.documentId);
+-      if (!doc) return false;
+-      setSelectedDoc(doc);
+-      refreshDocuments();
+-      return true;
++      doc = await window.knowledgeBase.documents.get(citation.documentId);
+     } catch {
++      doc = null;
++    }
++    const isStale = doc
++      ? !documents.some(d => d.id === citation.documentId)
++      : documents.some(d => d.id === citation.documentId);
++    if (isStale) refreshDocuments();
++    if (!doc) {
++      setSelectedDoc(prev => (prev?.id === citation.documentId ? null : prev));
+       return false;
+     }
++    setSelectedDoc(doc);
++    return true;
+   }, [documents, refreshDocuments]);
+ 
+   const handleClearConversation = useCallback(async (): Promise<boolean> => {
+     try {
+       await window.knowledgeBase.qa.clearHistory();
+-      setAskError(null);
++      setAskErrors([]);
+       const reloaded = await loadHistory();
+       if (reloaded === null) setConversationHistory([]);
+       return true;
+@@ -229,17 +236,21 @@ export function App() {
+             history={conversationHistory}
+             loadState={historyLoadState}
+             pendingQuestion={pendingQuestion}
+-            askError={askError}
++            askErrors={askErrors}
+             documentCount={documents.length}
+             selectedDocId={selectedDoc?.id ?? null}
+             onOpenCitation={handleOpenCitation}
+-            onRetry={handleAskQuestion}
+-            onDismissError={() => setAskError(null)}
++            onRetry={error => handleAskQuestion(error.question, error)}
++            onDismissError={error => setAskErrors(prev => removeAskError(prev, error.id))}
+             onReloadHistory={loadHistory}
+             onClear={handleClearConversation}
+           />
+ 
+-          <QuestionPanel onAsk={handleAskQuestion} busy={pendingQuestion !== null} />
++          <QuestionPanel
++            onAsk={handleAskQuestion}
++            busy={pendingQuestion !== null}
++            canJumpToLatest={conversationHistory.length > 0}
++          />
+         </main>
+       </div>
+ 
+diff --git a/src/renderer/components/ConversationTurns.tsx b/src/renderer/components/ConversationTurns.tsx
+new file mode 100644
+index 0000000..ea322d1
+--- /dev/null
++++ b/src/renderer/components/ConversationTurns.tsx
+@@ -0,0 +1,277 @@
++import type { CSSProperties } from 'react';
++import { Citation, QAHistory } from '../../shared/types';
++import { AskError, describeConfidence, formatTimestamp } from './conversation-format';
++
++/** DOM id of the newest exchange; focused by the "Jump to latest answer" control. */
++export const LATEST_EXCHANGE_ID = 'latest-exchange';
++
++export const palette = {
++  panel: '#16213e',
++  card: '#1a1a3e',
++  border: '#0f3460',
++  accent: '#533483',
++  text: '#e0e0e0',
++  muted: '#8888bb',
++  error: '#d9534f',
++};
++
++export const smallButton: CSSProperties = {
++  padding: '4px 10px',
++  background: palette.border,
++  color: palette.text,
++  border: '1px solid #1a1a4e',
++  borderRadius: '4px',
++  cursor: 'pointer',
++  fontSize: '12px',
++};
++
++export const turnLabel: CSSProperties = {
++  fontSize: '11px',
++  fontWeight: 600,
++  textTransform: 'uppercase',
++  letterSpacing: '0.05em',
++  color: palette.muted,
++  marginBottom: '4px',
++};
++
++export const textBlock: CSSProperties = {
++  fontSize: '14px',
++  lineHeight: 1.6,
++  whiteSpace: 'pre-wrap',
++  overflowWrap: 'anywhere',
++};
++
++function citationKey(exchangeIndex: number, citationIndex: number): string {
++  return `${exchangeIndex}:${citationIndex}`;
++}
++
++export function UserTurn({ question }: { question: string }) {
++  return (
++    <div style={{
++      alignSelf: 'flex-end',
++      maxWidth: '85%',
++      minWidth: 0,
++      padding: '10px 14px',
++      background: palette.border,
++      borderRadius: '8px 8px 2px 8px',
++    }}>
++      <div style={turnLabel}>You</div>
++      <div style={textBlock}>{question}</div>
++    </div>
++  );
++}
++
++function CitationList({
++  citations,
++  exchangeIndex,
++  selectedDocId,
++  unavailable,
++  onActivate,
++}: {
++  citations: Citation[];
++  exchangeIndex: number;
++  selectedDocId: string | null;
++  unavailable: Set<string>;
++  onActivate: (citation: Citation, key: string) => void;
++}) {
++  if (citations.length === 0) {
++    return (
++      <div style={{ marginTop: '10px', fontSize: '12px', color: palette.muted, fontStyle: 'italic' }}>
++        No sources cited.
++      </div>
++    );
++  }
++
++  return (
++    <div style={{ marginTop: '12px' }}>
++      <div style={{ ...turnLabel, marginBottom: '6px' }}>Sources ({citations.length})</div>
++      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
++        {citations.map((c, i) => {
++          const key = citationKey(exchangeIndex, i);
++          const isMissing = unavailable.has(key);
++          const isSelected = selectedDocId === c.documentId;
++          return (
++            <li key={key}>
++              <button
++                type="button"
++                onClick={() => onActivate(c, key)}
++                title={`Open "${c.documentTitle}"`}
++                style={{
++                  display: 'block',
++                  width: '100%',
++                  textAlign: 'left',
++                  padding: '8px 10px',
++                  background: isSelected ? palette.border : palette.panel,
++                  color: palette.text,
++                  border: `1px solid ${palette.border}`,
++                  borderLeft: `3px solid ${palette.accent}`,
++                  borderRadius: '4px',
++                  cursor: 'pointer',
++                  fontSize: '12px',
++                  lineHeight: 1.5,
++                  overflowWrap: 'anywhere',
++                }}
++              >
++                <span style={{ fontWeight: 600 }}>{c.documentTitle}</span>
++                <span style={{ color: palette.muted }}> · chunk {c.chunkIndex}</span>
++                {isSelected && <span style={{ color: palette.muted }}> · open</span>}
++                <span style={{ display: 'block', marginTop: '2px', color: '#c0c0e0', whiteSpace: 'pre-wrap' }}>
++                  “{c.excerpt}”
++                </span>
++                {isMissing && (
++                  <span style={{ display: 'block', marginTop: '4px', color: palette.error }}>
++                    This document is no longer available.
++                  </span>
++                )}
++              </button>
++            </li>
++          );
++        })}
++      </ul>
++    </div>
++  );
++}
++
++export function Exchange({
++  item,
++  index,
++  total,
++  isLatest,
++  selectedDocId,
++  unavailable,
++  onActivate,
++}: {
++  item: QAHistory;
++  index: number;
++  total: number;
++  /** The newest exchange is the target of the "Jump to latest answer" control. */
++  isLatest: boolean;
++  selectedDocId: string | null;
++  unavailable: Set<string>;
++  onActivate: (citation: Citation, key: string) => void;
++}) {
++  const { response } = item;
++  const confidence = describeConfidence(response.confidence);
++  return (
++    <article
++      id={isLatest ? LATEST_EXCHANGE_ID : undefined}
++      tabIndex={isLatest ? -1 : undefined}
++      aria-label={`Exchange ${index + 1} of ${total}`}
++      style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
++    >
++      <UserTurn question={item.question} />
++      <div style={{
++        alignSelf: 'stretch',
++        minWidth: 0,
++        padding: '12px 14px',
++        background: palette.card,
++        border: `1px solid ${palette.border}`,
++        borderRadius: '8px 8px 8px 2px',
++      }}>
++        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'baseline', ...turnLabel }}>
++          <span>Assistant</span>
++          <time
++            dateTime={response.timestamp}
++            style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}
++          >
++            {formatTimestamp(response.timestamp)}
++          </time>
++          <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
++            <span
++              aria-hidden="true"
++              style={{
++                display: 'inline-block',
++                width: '40px',
++                height: '6px',
++                marginRight: '6px',
++                background: palette.border,
++                borderRadius: '3px',
++                overflow: 'hidden',
++                verticalAlign: 'middle',
++              }}
++            >
++              <span style={{
++                display: 'block',
++                width: `${confidence.percent}%`,
++                height: '100%',
++                background: palette.accent,
++              }} />
++            </span>
++            Confidence: {confidence.level} ({confidence.percent}%)
++          </span>
++        </div>
++        <div style={textBlock}>{response.answer}</div>
++        <CitationList
++          citations={response.citations}
++          exchangeIndex={index}
++          selectedDocId={selectedDocId}
++          unavailable={unavailable}
++          onActivate={onActivate}
++        />
++      </div>
++    </article>
++  );
++}
++
++export function PendingTurn({ question }: { question: string }) {
++  return (
++    <article aria-label="Question awaiting an answer" aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
++      <UserTurn question={question} />
++      <div style={{
++        padding: '12px 14px',
++        background: palette.card,
++        border: `1px dashed ${palette.border}`,
++        borderRadius: '8px 8px 8px 2px',
++      }}>
++        <div style={turnLabel}>Assistant</div>
++        <div style={{ ...textBlock, color: palette.muted, fontStyle: 'italic' }}>Answering…</div>
++      </div>
++    </article>
++  );
++}
++
++export function FailedTurn({
++  error,
++  busy,
++  onRetry,
++  onDismiss,
++}: {
++  error: AskError;
++  busy: boolean;
++  onRetry: (error: AskError) => void;
++  onDismiss: (error: AskError) => void;
++}) {
++  return (
++    <article aria-label="Question that could not be answered" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
++      <UserTurn question={error.question} />
++      <div role="alert" style={{
++        padding: '12px 14px',
++        background: palette.card,
++        border: `1px solid ${palette.error}`,
++        borderRadius: '8px 8px 8px 2px',
++      }}>
++        <div style={{ ...turnLabel, color: palette.error }}>Not answered</div>
++        <div style={{ fontSize: '13px', lineHeight: 1.5 }}>
++          Something went wrong and this question could not be answered. Your question is kept here so you can try it again.
++        </div>
++        <details style={{ fontSize: '12px', color: palette.muted, marginTop: '6px' }}>
++          <summary style={{ cursor: 'pointer' }}>Technical details</summary>
++          <div style={{ marginTop: '4px', overflowWrap: 'anywhere' }}>{error.message}</div>
++        </details>
++        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
++          <button
++            type="button"
++            onClick={() => onRetry(error)}
++            disabled={busy}
++            style={{ ...smallButton, background: palette.accent, border: 'none', color: '#fff', opacity: busy ? 0.5 : 1 }}
++          >
++            Retry
++          </button>
++          <button type="button" onClick={() => onDismiss(error)} style={smallButton}>
++            Dismiss
++          </button>
++        </div>
++      </div>
++    </article>
++  );
++}
+diff --git a/src/renderer/components/ConversationView.tsx b/src/renderer/components/ConversationView.tsx
+index 78a42f7..deecc2c 100644
+--- a/src/renderer/components/ConversationView.tsx
++++ b/src/renderer/components/ConversationView.tsx
+@@ -1,239 +1,33 @@
+ import { useEffect, useRef, useState } from 'react';
+-import type { CSSProperties } from 'react';
++import type { KeyboardEvent } from 'react';
+ import { Citation, QAHistory } from '../../shared/types';
+-import { describeConfidence, formatTimestamp } from './conversation-format';
++import { AskError } from './conversation-format';
++import { Exchange, FailedTurn, PendingTurn, palette, smallButton } from './ConversationTurns';
+ 
+ export type HistoryLoadState = 'loading' | 'loaded' | 'error';
+ 
+-export interface AskError {
+-  question: string;
+-  message: string;
+-}
+-
+ interface Props {
+   history: QAHistory[];
+   loadState: HistoryLoadState;
+   pendingQuestion: string | null;
+-  askError: AskError | null;
++  /** Failed questions, oldest first. Each stays until it is retried or dismissed. */
++  askErrors: AskError[];
+   documentCount: number;
+   selectedDocId: string | null;
+   /** Resolves to false when the cited document no longer exists. */
+   onOpenCitation: (citation: Citation) => Promise<boolean>;
+-  onRetry: (question: string) => void;
+-  onDismissError: () => void;
++  onRetry: (error: AskError) => void;
++  onDismissError: (error: AskError) => void;
+   onReloadHistory: () => void;
+   /** Resolves to false when clearing failed. */
+   onClear: () => Promise<boolean>;
+ }
+ 
+-const palette = {
+-  panel: '#16213e',
+-  card: '#1a1a3e',
+-  border: '#0f3460',
+-  accent: '#533483',
+-  text: '#e0e0e0',
+-  muted: '#8888bb',
+-  error: '#d9534f',
+-};
+-
+-const smallButton: CSSProperties = {
+-  padding: '4px 10px',
+-  background: palette.border,
+-  color: palette.text,
+-  border: '1px solid #1a1a4e',
+-  borderRadius: '4px',
+-  cursor: 'pointer',
+-  fontSize: '12px',
+-};
+-
+-const turnLabel: CSSProperties = {
+-  fontSize: '11px',
+-  fontWeight: 600,
+-  textTransform: 'uppercase',
+-  letterSpacing: '0.05em',
+-  color: palette.muted,
+-  marginBottom: '4px',
+-};
+-
+-const textBlock: CSSProperties = {
+-  fontSize: '14px',
+-  lineHeight: 1.6,
+-  whiteSpace: 'pre-wrap',
+-  overflowWrap: 'anywhere',
+-};
+-
+-function citationKey(exchangeIndex: number, citationIndex: number): string {
+-  return `${exchangeIndex}:${citationIndex}`;
+-}
+-
+-function UserTurn({ question }: { question: string }) {
+-  return (
+-    <div style={{
+-      alignSelf: 'flex-end',
+-      maxWidth: '85%',
+-      minWidth: 0,
+-      padding: '10px 14px',
+-      background: palette.border,
+-      borderRadius: '8px 8px 2px 8px',
+-    }}>
+-      <div style={turnLabel}>You</div>
+-      <div style={textBlock}>{question}</div>
+-    </div>
+-  );
+-}
+-
+-function CitationList({
+-  citations,
+-  exchangeIndex,
+-  selectedDocId,
+-  unavailable,
+-  onActivate,
+-}: {
+-  citations: Citation[];
+-  exchangeIndex: number;
+-  selectedDocId: string | null;
+-  unavailable: Set<string>;
+-  onActivate: (citation: Citation, key: string) => void;
+-}) {
+-  if (citations.length === 0) {
+-    return (
+-      <div style={{ marginTop: '10px', fontSize: '12px', color: palette.muted, fontStyle: 'italic' }}>
+-        No sources cited.
+-      </div>
+-    );
+-  }
+-
+-  return (
+-    <div style={{ marginTop: '12px' }}>
+-      <div style={{ ...turnLabel, marginBottom: '6px' }}>Sources ({citations.length})</div>
+-      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+-        {citations.map((c, i) => {
+-          const key = citationKey(exchangeIndex, i);
+-          const isMissing = unavailable.has(key);
+-          const isSelected = selectedDocId === c.documentId;
+-          return (
+-            <li key={key}>
+-              <button
+-                type="button"
+-                onClick={() => onActivate(c, key)}
+-                title={`Open "${c.documentTitle}"`}
+-                style={{
+-                  display: 'block',
+-                  width: '100%',
+-                  textAlign: 'left',
+-                  padding: '8px 10px',
+-                  background: isSelected ? palette.border : palette.panel,
+-                  color: palette.text,
+-                  border: `1px solid ${palette.border}`,
+-                  borderLeft: `3px solid ${palette.accent}`,
+-                  borderRadius: '4px',
+-                  cursor: 'pointer',
+-                  fontSize: '12px',
+-                  lineHeight: 1.5,
+-                  overflowWrap: 'anywhere',
+-                }}
+-              >
+-                <span style={{ fontWeight: 600 }}>{c.documentTitle}</span>
+-                <span style={{ color: palette.muted }}> · chunk {c.chunkIndex}</span>
+-                {isSelected && <span style={{ color: palette.muted }}> · open</span>}
+-                <span style={{ display: 'block', marginTop: '2px', color: '#c0c0e0', whiteSpace: 'pre-wrap' }}>
+-                  “{c.excerpt}”
+-                </span>
+-                {isMissing && (
+-                  <span style={{ display: 'block', marginTop: '4px', color: palette.error }}>
+-                    This document is no longer available.
+-                  </span>
+-                )}
+-              </button>
+-            </li>
+-          );
+-        })}
+-      </ul>
+-    </div>
+-  );
+-}
+-
+-function Exchange({
+-  item,
+-  index,
+-  total,
+-  selectedDocId,
+-  unavailable,
+-  onActivate,
+-}: {
+-  item: QAHistory;
+-  index: number;
+-  total: number;
+-  selectedDocId: string | null;
+-  unavailable: Set<string>;
+-  onActivate: (citation: Citation, key: string) => void;
+-}) {
+-  const { response } = item;
+-  const confidence = describeConfidence(response.confidence);
+-  return (
+-    <article
+-      aria-label={`Exchange ${index + 1} of ${total}`}
+-      style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+-    >
+-      <UserTurn question={item.question} />
+-      <div style={{
+-        alignSelf: 'stretch',
+-        minWidth: 0,
+-        padding: '12px 14px',
+-        background: palette.card,
+-        border: `1px solid ${palette.border}`,
+-        borderRadius: '8px 8px 8px 2px',
+-      }}>
+-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 12px', alignItems: 'baseline', ...turnLabel }}>
+-          <span>Assistant</span>
+-          <time
+-            dateTime={response.timestamp}
+-            style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}
+-          >
+-            {formatTimestamp(response.timestamp)}
+-          </time>
+-          <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>
+-            <span
+-              aria-hidden="true"
+-              style={{
+-                display: 'inline-block',
+-                width: '40px',
+-                height: '6px',
+-                marginRight: '6px',
+-                background: palette.border,
+-                borderRadius: '3px',
+-                overflow: 'hidden',
+-                verticalAlign: 'middle',
+-              }}
+-            >
+-              <span style={{
+-                display: 'block',
+-                width: `${confidence.percent}%`,
+-                height: '100%',
+-                background: palette.accent,
+-              }} />
+-            </span>
+-            Confidence: {confidence.level} ({confidence.percent}%)
+-          </span>
+-        </div>
+-        <div style={textBlock}>{response.answer}</div>
+-        <CitationList
+-          citations={response.citations}
+-          exchangeIndex={index}
+-          selectedDocId={selectedDocId}
+-          unavailable={unavailable}
+-          onActivate={onActivate}
+-        />
+-      </div>
+-    </article>
+-  );
+-}
+-
+ export function ConversationView({
+   history,
+   loadState,
+   pendingQuestion,
+-  askError,
++  askErrors,
+   documentCount,
+   selectedDocId,
+   onOpenCitation,
+@@ -245,6 +39,7 @@ export function ConversationView({
+   const scrollRef = useRef<HTMLDivElement>(null);
+   const clearButtonRef = useRef<HTMLButtonElement>(null);
+   const cancelButtonRef = useRef<HTMLButtonElement>(null);
++  const headingRef = useRef<HTMLHeadingElement>(null);
+   const [confirmingClear, setConfirmingClear] = useState(false);
+   const [clearFailed, setClearFailed] = useState(false);
+   const [unavailable, setUnavailable] = useState<Set<string>>(() => new Set());
+@@ -255,7 +50,7 @@ export function ConversationView({
+   useEffect(() => {
+     const el = scrollRef.current;
+     if (el) el.scrollTop = el.scrollHeight;
+-  }, [history.length, pendingQuestion, askError, loadState]);
++  }, [history.length, pendingQuestion, askErrors.length, loadState]);
+ 
+   // Citation indices shift when history is cleared; drop stale "unavailable" marks.
+   useEffect(() => {
+@@ -287,9 +82,28 @@ export function ConversationView({
+     const ok = await onClear();
+     setClearFailed(!ok);
+     setConfirmingClear(false);
++    // The focused button is about to unmount; move focus somewhere meaningful instead of <body>.
++    requestAnimationFrame(() => {
++      if (ok) headingRef.current?.focus();
++      else clearButtonRef.current?.focus();
++    });
++  };
++
++  const handleConfirmKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
++    if (e.key === 'Escape') {
++      e.preventDefault();
++      e.stopPropagation();
++      cancelClear();
++    }
+   };
+ 
+-  const showEmpty = loadState === 'loaded' && history.length === 0 && !busy && !askError;
++  // In the load-error state Clear is the in-app way to recover from an unreadable history file.
++  const canClear = (history.length > 0 || loadState === 'error') && !busy;
++  const confirmMessage = loadState === 'error'
++    ? 'Replace the unreadable conversation history with an empty one? This cannot be undone.'
++    : `Delete all ${history.length} ${history.length === 1 ? 'exchange' : 'exchanges'}? This cannot be undone.`;
++
++  const showEmpty = loadState === 'loaded' && history.length === 0 && !busy && askErrors.length === 0;
+ 
+   return (
+     <section
+@@ -306,15 +120,20 @@ export function ConversationView({
+         background: palette.panel,
+         borderBottom: `1px solid ${palette.border}`,
+       }}>
+-        <h2 id="conversation-heading" style={{ fontSize: '13px', fontWeight: 600 }}>
++        <h2 id="conversation-heading" ref={headingRef} tabIndex={-1} style={{ fontSize: '13px', fontWeight: 600 }}>
+           Conversation
+           <span style={{ color: palette.muted, fontWeight: 400 }}>
+             {' '}({history.length} {history.length === 1 ? 'exchange' : 'exchanges'})
+           </span>
+         </h2>
+         {confirmingClear ? (
+-          <div role="group" aria-label="Confirm clearing the conversation" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+-            <span>Delete all {history.length} exchanges? This cannot be undone.</span>
++          <div
++            role="group"
++            aria-label="Confirm clearing the conversation"
++            onKeyDown={handleConfirmKeyDown}
++            style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}
++          >
++            <span>{confirmMessage}</span>
+             <button ref={cancelButtonRef} type="button" onClick={cancelClear} style={smallButton}>
+               Cancel
+             </button>
+@@ -331,11 +150,11 @@ export function ConversationView({
+             ref={clearButtonRef}
+             type="button"
+             onClick={() => setConfirmingClear(true)}
+-            disabled={history.length === 0 || busy}
++            disabled={!canClear}
+             style={{
+               ...smallButton,
+-              opacity: history.length === 0 || busy ? 0.5 : 1,
+-              cursor: history.length === 0 || busy ? 'default' : 'pointer',
++              opacity: canClear ? 1 : 0.5,
++              cursor: canClear ? 'pointer' : 'default',
+             }}
+           >
+             Clear
+@@ -363,6 +182,9 @@ export function ConversationView({
+           <div role="alert" style={{ color: palette.error, textAlign: 'center', paddingTop: '24px', fontSize: '13px' }}>
+             Could not load the conversation history.{' '}
+             <button type="button" onClick={onReloadHistory} style={smallButton}>Try again</button>
++            <div style={{ marginTop: '8px', color: palette.muted }}>
++              If this keeps failing, the saved history may be damaged. Use Clear above to start a new, empty conversation.
++            </div>
+           </div>
+         )}
+ 
+@@ -388,6 +210,7 @@ export function ConversationView({
+                   item={item}
+                   index={i}
+                   total={history.length}
++                  isLatest={i === history.length - 1}
+                   selectedDocId={selectedDocId}
+                   unavailable={unavailable}
+                   onActivate={handleActivate}
+@@ -395,55 +218,15 @@ export function ConversationView({
+               </li>
+             ))}
+ 
+-            {pendingQuestion !== null && (
+-              <li key="pending">
+-                <article aria-label="Question awaiting an answer" aria-busy="true" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+-                  <UserTurn question={pendingQuestion} />
+-                  <div style={{
+-                    padding: '12px 14px',
+-                    background: palette.card,
+-                    border: `1px dashed ${palette.border}`,
+-                    borderRadius: '8px 8px 8px 2px',
+-                  }}>
+-                    <div style={turnLabel}>Assistant</div>
+-                    <div style={{ ...textBlock, color: palette.muted, fontStyle: 'italic' }}>Answering…</div>
+-                  </div>
+-                </article>
++            {askErrors.map(error => (
++              <li key={`error-${error.id}`}>
++                <FailedTurn error={error} busy={busy} onRetry={onRetry} onDismiss={onDismissError} />
+               </li>
+-            )}
++            ))}
+ 
+-            {askError !== null && (
+-              <li key="error">
+-                <article aria-label="Question that could not be answered" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+-                  <UserTurn question={askError.question} />
+-                  <div role="alert" style={{
+-                    padding: '12px 14px',
+-                    background: palette.card,
+-                    border: `1px solid ${palette.error}`,
+-                    borderRadius: '8px 8px 8px 2px',
+-                  }}>
+-                    <div style={{ ...turnLabel, color: palette.error }}>Not answered</div>
+-                    <div style={{ fontSize: '13px', lineHeight: 1.5 }}>
+-                      The question could not be answered.
+-                    </div>
+-                    <div style={{ fontSize: '12px', color: palette.muted, marginTop: '4px', overflowWrap: 'anywhere' }}>
+-                      Details: {askError.message}
+-                    </div>
+-                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+-                      <button
+-                        type="button"
+-                        onClick={() => onRetry(askError.question)}
+-                        disabled={busy}
+-                        style={{ ...smallButton, background: palette.accent, border: 'none', color: '#fff' }}
+-                      >
+-                        Retry
+-                      </button>
+-                      <button type="button" onClick={onDismissError} style={smallButton}>
+-                        Dismiss
+-                      </button>
+-                    </div>
+-                  </div>
+-                </article>
++            {pendingQuestion !== null && (
++              <li key="pending">
++                <PendingTurn question={pendingQuestion} />
+               </li>
+             )}
+           </ol>
+diff --git a/src/renderer/components/QuestionPanel.tsx b/src/renderer/components/QuestionPanel.tsx
+index 6dca646..1110cd8 100644
+--- a/src/renderer/components/QuestionPanel.tsx
++++ b/src/renderer/components/QuestionPanel.tsx
+@@ -1,13 +1,40 @@
+ import React, { useState } from 'react';
++import { LATEST_EXCHANGE_ID } from './ConversationTurns';
+ 
+ interface Props {
+   onAsk: (question: string) => void;
+   /** True while an answer is pending; submissions are ignored until it settles. */
+   busy: boolean;
++  /** True when there is at least one answered exchange to jump to. */
++  canJumpToLatest: boolean;
+ }
+ 
+-export function QuestionPanel({ onAsk, busy }: Props) {
++const visuallyHidden: React.CSSProperties = {
++  position: 'absolute',
++  width: '1px',
++  height: '1px',
++  overflow: 'hidden',
++  clip: 'rect(0 0 0 0)',
++  whiteSpace: 'nowrap',
++};
++
++export function QuestionPanel({ onAsk, busy, canJumpToLatest }: Props) {
+   const [question, setQuestion] = useState('');
++  const [jumpFocused, setJumpFocused] = useState(false);
++
++  // Moves focus to the newest exchange, so the next Tab reaches its citations
++  // without walking through every earlier exchange.
++  const jumpToLatest = () => {
++    document.getElementById(LATEST_EXCHANGE_ID)?.focus();
++  };
++
++  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
++    // Alt+ArrowUp from the input is a shortcut for the same jump.
++    if (e.altKey && e.key === 'ArrowUp' && canJumpToLatest) {
++      e.preventDefault();
++      jumpToLatest();
++    }
++  };
+ 
+   const handleSubmit = (e: React.FormEvent) => {
+     e.preventDefault();
+@@ -27,14 +54,7 @@ export function QuestionPanel({ onAsk, busy }: Props) {
+         background: '#16213e',
+       }}
+     >
+-      <label htmlFor="question-input" style={{
+-        position: 'absolute',
+-        width: '1px',
+-        height: '1px',
+-        overflow: 'hidden',
+-        clip: 'rect(0 0 0 0)',
+-        whiteSpace: 'nowrap',
+-      }}>
++      <label htmlFor="question-input" style={visuallyHidden}>
+         Question about your documents
+       </label>
+       <input
+@@ -44,6 +64,8 @@ export function QuestionPanel({ onAsk, busy }: Props) {
+         onChange={e => setQuestion(e.target.value)}
+         placeholder="Ask a question about your documents..."
+         autoComplete="off"
++        onKeyDown={handleKeyDown}
++        aria-keyshortcuts={canJumpToLatest ? 'Alt+ArrowUp' : undefined}
+         style={{
+           flex: 1,
+           minWidth: 0,
+@@ -74,6 +96,28 @@ export function QuestionPanel({ onAsk, busy }: Props) {
+       >
+         {busy ? 'Answering…' : 'Ask'}
+       </button>
++      {/* Skip control: hidden until focused (Tab once past Ask). */}
++      {canJumpToLatest && (
++        <button
++          type="button"
++          onClick={jumpToLatest}
++          onFocus={() => setJumpFocused(true)}
++          onBlur={() => setJumpFocused(false)}
++          style={jumpFocused ? {
++            marginLeft: '10px',
++            padding: '10px 14px',
++            background: '#0f3460',
++            color: '#e0e0e0',
++            border: '1px solid #8888bb',
++            borderRadius: '6px',
++            cursor: 'pointer',
++            fontSize: '13px',
++            whiteSpace: 'nowrap',
++          } : visuallyHidden}
++        >
++          Jump to latest answer
++        </button>
++      )}
+     </form>
+   );
+ }
+diff --git a/src/renderer/components/conversation-format.test.ts b/src/renderer/components/conversation-format.test.ts
+index 50b0023..cbc3eb1 100644
+--- a/src/renderer/components/conversation-format.test.ts
++++ b/src/renderer/components/conversation-format.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from 'vitest';
+-import { describeAskError, describeConfidence, formatTimestamp } from './conversation-format';
++import { addAskError, describeAskError, describeConfidence, formatTimestamp, removeAskError } from './conversation-format';
+ 
+ describe('formatTimestamp', () => {
+   it('formats an ISO timestamp as a readable local date and time', () => {
+@@ -44,3 +44,19 @@ describe('describeAskError', () => {
+     expect(describeAskError('')).toBe('Unknown error');
+   });
+ });
++
++describe('ask error list', () => {
++  const first = { id: 1, question: 'How does retrieval work?', message: 'boom' };
++  const second = { id: 2, question: 'Second failing question', message: 'boom' };
++
++  it('keeps an earlier failure when a later one is added', () => {
++    const errors = addAskError(addAskError([], first), second);
++    expect(errors.map(e => e.question)).toEqual([first.question, second.question]);
++  });
++
++  it('removes only the retried or dismissed failure', () => {
++    const errors = addAskError(addAskError([], first), second);
++    expect(removeAskError(errors, 1)).toEqual([second]);
++    expect(removeAskError(errors, 99)).toBe(errors);
++  });
++});
+diff --git a/src/renderer/components/conversation-format.ts b/src/renderer/components/conversation-format.ts
+index 2541be1..bb98a32 100644
+--- a/src/renderer/components/conversation-format.ts
++++ b/src/renderer/components/conversation-format.ts
+@@ -27,3 +27,20 @@ export function describeAskError(err: unknown): string {
+   const cleaned = raw.replace(/^Error invoking remote method '[^']+':\s*/, '').trim();
+   return cleaned || 'Unknown error';
+ }
++
++/** A question whose answer failed. Kept until the user retries or dismisses it. */
++export interface AskError {
++  id: number;
++  question: string;
++  message: string;
++}
++
++/** Appends a failure. Earlier failures are never overwritten. */
++export function addAskError(errors: AskError[], error: AskError): AskError[] {
++  return [...errors, error];
++}
++
++/** Removes one failure (on retry or dismiss); other failures are kept. */
++export function removeAskError(errors: AskError[], id: number): AskError[] {
++  return errors.some(e => e.id === id) ? errors.filter(e => e.id !== id) : errors;
++}

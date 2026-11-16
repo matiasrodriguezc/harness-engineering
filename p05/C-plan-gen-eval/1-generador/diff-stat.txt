@@ -1,0 +1,36 @@
+f53fa54 Show Q&A history as a multi-turn conversation in the question panel
+
+ .../conversation-history/generator/01-empty.png    | Bin 0 -> 102405 bytes
+ .../conversation-history/generator/02-pending.png  | Bin 0 -> 96504 bytes
+ .../generator/03-first-answer.png                  | Bin 0 -> 239349 bytes
+ .../generator/04-two-exchanges.png                 | Bin 0 -> 210064 bytes
+ .../generator/05-no-citations.png                  | Bin 0 -> 208805 bytes
+ .../generator/06-autoscroll.png                    | Bin 0 -> 266754 bytes
+ .../generator/07-citation-click.png                | Bin 0 -> 275129 bytes
+ .../generator/08-keyboard-focus-citation.png       | Bin 0 -> 247857 bytes
+ .../generator/09-keyboard-opened.png               | Bin 0 -> 277002 bytes
+ .../generator/10-stale-citation.png                | Bin 0 -> 283309 bytes
+ .../conversation-history/generator/11-error.png    | Bin 0 -> 209869 bytes
+ .../generator/12-after-retry.png                   | Bin 0 -> 244198 bytes
+ .../generator/13-restart-long-fixture.png          | Bin 0 -> 340998 bytes
+ .../generator/14-clear-confirm.png                 | Bin 0 -> 353739 bytes
+ .../generator/15-after-clear.png                   | Bin 0 -> 96716 bytes
+ .../generator/16-restart-after-clear.png           | Bin 0 -> 96716 bytes
+ .../generator/generator-report.md                  |  78 ++++
+ .../generator/phase1-results.json                  | 223 ++++++++++
+ .../generator/phase2-after-clear-results.json      |  20 +
+ .../generator/phase2-restart-results.json          |  61 +++
+ .../conversation-history/generator/run1.log        | 133 ++++++
+ .../conversation-history/generator/run2.log        |  18 +
+ .../conversation-history/generator/run3.log        |  15 +
+ .../conversation-history/generator/scripts/cdp.mjs |  73 ++++
+ .../generator/scripts/phase1.mjs                   | 177 ++++++++
+ .../generator/scripts/phase2.mjs                   |  49 +++
+ src/renderer/App.tsx                               | 243 ++++++-----
+ src/renderer/components/ConversationHistory.tsx    |  35 --
+ src/renderer/components/ConversationView.tsx       | 454 +++++++++++++++++++++
+ src/renderer/components/QuestionPanel.tsx          |  28 +-
+ .../components/conversation-format.test.ts         |  46 +++
+ src/renderer/components/conversation-format.ts     |  29 ++
+ src/renderer/index.html                            |   6 +
+ 33 files changed, 1546 insertions(+), 142 deletions(-)

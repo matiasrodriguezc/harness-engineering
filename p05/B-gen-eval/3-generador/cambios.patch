@@ -1,0 +1,1593 @@
+commit cbe074c11c244140af9d82d505821cbbb60ad37c
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 22:32:01 2026 -0300
+
+    Fix evaluator defects in conversation history
+    
+    - Load failure clears stale conversation/counts; error shown above composer
+    - Malformed history entries skipped per entry (WARN), kept on disk
+    - Corrupt/non-list history and write failures give user-facing messages with file path
+    - Citations reveal, scroll to, focus and highlight the cited chunk; 1-based chunk numbers
+    - Answers to questions pending during a clear are discarded (service + renderer)
+    - role=log moved to a wrapper so the <ol> keeps list semantics
+    - Cancel/Esc on Clear confirmation returns focus to 'Clear conversation'
+    - Follow-ups use the ancestor chain; retrieval ignores stop words/punctuation
+    - Excerpts plain-text and clamped; long answers cut on word boundary
+    - Remove dead qa:history API; shared styles module; midnight timestamp refresh
+    - Tests 20/20, E2E 34/34, evaluator probe 12/13 (P9b known false positive)
+
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index a2cb3ed..bdd90c7 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -91,7 +91,6 @@ All IPC communication uses named channels defined in `src/shared/types.ts`:
+ | `indexing:status` | Renderer -> Main | Get indexing status |
+ | `indexing:chunks` | Renderer -> Main | Get chunks for document |
+ | `qa:ask` | Renderer -> Main | Ask a question, optionally as a follow-up to an earlier exchange id |
+-| `qa:history` | Renderer -> Main | Get raw persisted Q&A history |
+ | `qa:clear-history` | Renderer -> Main | Delete the Q&A history |
+ | `conversation:get` | Renderer -> Main | Get the history as normalized `ConversationExchange[]` (ids, timestamps, follow-up links) |
+ | `app:status` | — | Declared in `IPC_CHANNELS` but no handler is registered |
+@@ -108,9 +107,19 @@ All IPC communication uses named channels defined in `src/shared/types.ts`:
+ 
+ `QaService` persists every exchange to `qa-history.json` with an `id`,
+ `askedAt` timestamp and optional `followUpOf` link. `getConversation()`
+-normalizes it (including older entries without those fields) into
+-`ConversationExchange[]`; the renderer only displays it. Follow-up questions
+-add the parent question to the retrieval context in the service.
++normalizes it entry by entry (including older entries without those fields)
++into `ConversationExchange[]`; the renderer only displays it.
++
++- Malformed entries (no question or no answer) are skipped with a WARN log and
++  left in the file. A file that is not valid JSON or not a list raises a
++  user-facing "history file is unreadable (<path>)" error and is never
++  overwritten. Write failures are translated the same way.
++- Follow-up questions add the questions of the whole ancestor chain (up to 5
++  turns) to the retrieval context; retrieval ignores punctuation and stop words.
++- `clearHistory()` bumps a generation counter: an answer to a question that was
++  pending during a clear is returned but not saved. The renderer also ignores it.
++- Citation excerpts are stored as plain one-line text (`src/shared/text.ts`,
++  shared by services and renderer).
+ 
+ ## Architecture Verification
+ 
+diff --git a/docs/verification/02-conversation.png b/docs/verification/02-conversation.png
+index 5b2b136..a67d370 100644
+Binary files a/docs/verification/02-conversation.png and b/docs/verification/02-conversation.png differ
+diff --git a/docs/verification/03-citation-opens-document.png b/docs/verification/03-citation-opens-document.png
+index 8241dd6..5730589 100644
+Binary files a/docs/verification/03-citation-opens-document.png and b/docs/verification/03-citation-opens-document.png differ
+diff --git a/docs/verification/04-error.png b/docs/verification/04-error.png
+index 7834ebc..58414d4 100644
+Binary files a/docs/verification/04-error.png and b/docs/verification/04-error.png differ
+diff --git a/docs/verification/05-long-answer.png b/docs/verification/05-long-answer.png
+index cec0655..3e80e24 100644
+Binary files a/docs/verification/05-long-answer.png and b/docs/verification/05-long-answer.png differ
+diff --git a/docs/verification/06-history-select.png b/docs/verification/06-history-select.png
+index cf6a960..bcf161e 100644
+Binary files a/docs/verification/06-history-select.png and b/docs/verification/06-history-select.png differ
+diff --git a/docs/verification/07-clear-while-pending.png b/docs/verification/07-clear-while-pending.png
+new file mode 100644
+index 0000000..a2d5f41
+Binary files /dev/null and b/docs/verification/07-clear-while-pending.png differ
+diff --git a/docs/verification/08-malformed-entry.png b/docs/verification/08-malformed-entry.png
+new file mode 100644
+index 0000000..be49e0f
+Binary files /dev/null and b/docs/verification/08-malformed-entry.png differ
+diff --git a/docs/verification/09-corrupt-history.png b/docs/verification/09-corrupt-history.png
+new file mode 100644
+index 0000000..bd05e7c
+Binary files /dev/null and b/docs/verification/09-corrupt-history.png differ
+diff --git a/docs/verification/README.md b/docs/verification/README.md
+index b23bf99..92d29fa 100644
+--- a/docs/verification/README.md
++++ b/docs/verification/README.md
+@@ -18,33 +18,54 @@ process; for manual runs use `NODE_OPTIONS= npm run dev`.
+ 
+ ## End-to-end results (`scripts/verify-conversation.mjs`, real Electron app)
+ 
++Re-run after fixing the defects listed in `evaluator-rubric.md`.
++
+ ```
+ PASS  empty state shown when there is no history
+ PASS  pending indicator while asking #1
+ PASS  pending indicator while asking #2
+ PASS  pending indicator while asking #3
+-PASS  all questions shown in order — ["How is the architecture designed?","What does the meeting summary say?","qwxz flurb?"]
++PASS  all questions shown in order
+ PASS  answers shown in full (match persisted text)
+-PASS  each exchange shows question + answer timestamps — ["Today, 10:21 PM","2026-11-16T01:21:59.601Z"]
+-PASS  answer citations show document and excerpt — "[1]\ndesign-notes · chunk 0\n# Software Design Notes\n\n## Architecture Overview\n\nTh"
++PASS  each exchange shows question + answer timestamps — ["Today, 10:31 PM", …]
++PASS  answer citations show document and excerpt — "[1] design-notes · chunk 1 Software Design Notes Architecture Overview …"
++PASS  citation excerpts are clamped and do not dominate the answer — {"maxQuoteLines":2,…}
++PASS  thread keeps list semantics (role=log on a wrapper, not on the <ol>)
+ PASS  answer without citations is labelled
+ PASS  clicking a citation opens the cited document
++PASS  citation reveals, scrolls to, focuses and highlights the cited chunk (1-based)
+ PASS  follow-up context chip appears and input is focused
+ PASS  follow-up is linked to its parent and answered in context — sources=2
+ PASS  copy answer gives feedback — Copied
+ PASS  IPC error shown with retry
+ PASS  retry succeeds and error clears
+ PASS  long answer collapses and expands to full text — 1200 -> 3190
+-PASS  legacy entry gets a readable older-date timestamp — Mar 4, 2025, 07:00 AM
++PASS  legacy entry gets a readable older-date timestamp — Mar 4, 2025, 7:00 AM
+ PASS  page does not scroll horizontally
+ PASS  selecting a past question focuses that exchange
+ PASS  selected exchange is scrolled into view
+ PASS  conversation persists across app restart
++PASS  focus returns to "Clear conversation" after Cancel
++PASS  Esc cancels the Clear confirmation and restores focus
++PASS  clearing while a question is pending leaves an empty conversation (UI and file)
+ PASS  clear conversation returns to empty state
++PASS  one malformed history entry is skipped, valid ones still shown
++PASS  load failure clears the stale conversation and counts
++PASS  load failure shows a user-facing message near the composer, with the file location
++PASS  asking with a corrupt history gives an actionable error
++PASS  corrupt history file is left untouched
+ PASS  structured ASK_QUESTION / GET_CONVERSATION logs emitted
+-23/23 checks passed
++34/34 checks passed
+ ```
+ 
++`npm test`: 20/20 (adds malformed entries, corrupt/non-list file, write-error
++translation, a 4-turn follow-up chain, clear-while-pending, excerpt helpers).
++
++The evaluator's probe (`evaluation/probe-conversation.mjs`), run from a copy
++whose only change is the selector `ol[role=log]` → `[role=log] ol` (the role
++moved to a wrapper, defect #6): **12/13**. The one FAIL is P9b, which the
++evaluator already classified as a false positive (the 12px thread padding).
++
+ Sample documents are seeded through the preload API because the starter's
+ "+ Import" button is a no-op (see known issues).
+ 
+@@ -54,14 +75,18 @@ Sample documents are seeded through the preload API because the starter's
+ |---|---|
+ | `01-empty.png` | Empty history state |
+ | `02-conversation.png` | Several exchanges: question/answer bubbles, timestamps, confidence, sources, answer with no sources |
+-| `03-citation-opens-document.png` | Clicking a citation opens the cited document above the conversation |
++| `03-citation-opens-document.png` | Clicking a citation opens the document with the cited chunk revealed, scrolled to and highlighted |
+ | `04-error.png` | Failed question shown in the thread with Retry / Dismiss |
+ | `05-long-answer.png` | Long answer collapsed with "Show full answer"; older timestamp with the year |
+ | `06-history-select.png` | Sidebar History index; the selected exchange is scrolled into view and focused |
++| `07-clear-while-pending.png` | Clearing while a question was pending leaves an empty conversation |
++| `08-malformed-entry.png` | A malformed entry is skipped; the valid exchanges remain visible |
++| `09-corrupt-history.png` | Corrupt history file: no stale exchanges, readable error with file path above the composer |
+ 
+ ## Known issues outside this feature (not fixed)
+ 
+ 1. "+ Import" button only logs to the console. There is no way to import from the UI.
+ 2. "Index Document" (single document) writes chunks but not `index-meta.json`, so those chunks are never used by Q&A. Only batch `indexing.start()` feeds Q&A.
+ 3. The status bar shows empty `Index:` / `Documents:` values because `indexing.status()` returns `IndexStatus` and not `AppStatus`.
+-4. Mock answers include a raw 100-character slice of the excerpt (e.g. "follows a layered ."). This comes from the starter's answer generator.
++4. The no-match fallback answer says "No relevant documents have been indexed yet" even when documents are indexed (`generateAnswer`).
++5. Mock answers include a raw 100-character slice of the excerpt (e.g. "follows a layered ."). This comes from the starter's answer generator.
+diff --git a/scripts/verify-conversation.mjs b/scripts/verify-conversation.mjs
+index 1b6b62a..4992bd2 100644
+--- a/scripts/verify-conversation.mjs
++++ b/scripts/verify-conversation.mjs
+@@ -120,7 +120,7 @@ const ask = q => `(() => {
+   document.querySelector('form button[type=submit]').click();
+   return true;
+ })()`;
+-const count = `document.querySelectorAll('ol[role=log] article').length`;
++const count = `document.querySelectorAll('[role=log] ol article').length`;
+ const clickButton = (text, scope = 'document') => `(() => {
+   const b = [...${scope}.querySelectorAll('button')].find(b => b.textContent.trim().startsWith(${JSON.stringify(text)}));
+   if (!b) return false; b.click(); return true;
+@@ -156,56 +156,80 @@ async function main() {
+       await page.waitFor(`document.body.innerText.includes('searching your documents')`, 2000));
+     await page.waitFor(`${count} === ${i + 1}`);
+   }
+-  const shown = await page.evaluate(`[...document.querySelectorAll('ol[role=log] article h3')].map(h => h.textContent)`);
++  const shown = await page.evaluate(`[...document.querySelectorAll('[role=log] ol article h3')].map(h => h.textContent)`);
+   check('all questions shown in order', JSON.stringify(shown) === JSON.stringify(questions), JSON.stringify(shown));
+ 
+   const persisted = JSON.parse(readFileSync(join(dataDir, 'qa-history.json'), 'utf-8'));
+-  const answersFull = await page.evaluate(`[...document.querySelectorAll('ol[role=log] article [id^=answer-]')].map(a => a.textContent)`);
++  const answersFull = await page.evaluate(`[...document.querySelectorAll('[role=log] ol article [id^=answer-]')].map(a => a.textContent)`);
+   check('answers shown in full (match persisted text)',
+     JSON.stringify(answersFull) === JSON.stringify(persisted.map(p => p.response.answer)));
+ 
+   // 3. Timestamps
+-  const times = await page.evaluate(`[...document.querySelectorAll('ol[role=log] article time')].map(t => [t.textContent, t.getAttribute('datetime')])`);
++  const times = await page.evaluate(`[...document.querySelectorAll('[role=log] ol article time')].map(t => [t.textContent, t.getAttribute('datetime')])`);
+   check('each exchange shows question + answer timestamps', times.length === questions.length * 2 && times.every(([t, d]) => /^Today, /.test(t) && !isNaN(Date.parse(d))), JSON.stringify(times[0]));
+ 
+   // 4. Citations
+-  const firstSources = await page.evaluate(`[...document.querySelectorAll('ol[role=log] article')[0].querySelectorAll('[id^=sources-] li')].map(li => li.innerText)`);
+-  check('answer citations show document and excerpt', firstSources.length > 0 && firstSources.every(s => /chunk \d+/.test(s) && s.split('\n').length >= 2), JSON.stringify(firstSources[0]?.slice(0, 80)));
++  const firstSources = await page.evaluate(`[...document.querySelectorAll('[role=log] ol article')[0].querySelectorAll('[id^=sources-] li')].map(li => li.innerText)`);
++  check('answer citations show document and excerpt', firstSources.length > 0 && firstSources.every(s => /chunk [1-9]\d*/.test(s) && !/chunk 0\b/.test(s) && !s.includes('#') && s.split('\n').length >= 2), JSON.stringify(firstSources[0]?.slice(0, 80)));
++  const sourcesLayout = await page.evaluate(`(() => {
++    const a = document.querySelectorAll('[role=log] article')[0];
++    const quotes = [...a.querySelectorAll('[id^=sources-] blockquote')];
++    const lineHeight = parseFloat(getComputedStyle(quotes[0]).lineHeight);
++    return { maxQuoteLines: Math.max(...quotes.map(q => Math.round(q.getBoundingClientRect().height / lineHeight))),
++      sources: a.querySelector('[id^=sources-]').getBoundingClientRect().height,
++      answer: a.querySelector('[id^=answer-]').getBoundingClientRect().height };
++  })()`);
++  check('citation excerpts are clamped and do not dominate the answer', sourcesLayout.maxQuoteLines <= 3 && sourcesLayout.sources <= sourcesLayout.answer * 2.5, JSON.stringify(sourcesLayout));
++  check('thread keeps list semantics (role=log on a wrapper, not on the <ol>)',
++    await page.evaluate(`(() => { const ol = document.querySelector('[role=log] > ol'); return !!ol && !ol.hasAttribute('role') && [...ol.children].every(c => c.tagName === 'LI'); })()`));
+   check('answer without citations is labelled',
+-    await page.evaluate(`document.querySelectorAll('ol[role=log] article')[2].innerText.includes('No sources cited')`));
++    await page.evaluate(`document.querySelectorAll('[role=log] ol article')[2].innerText.includes('No sources cited')`));
+   await page.screenshot('02-conversation');
+ 
+-  await page.evaluate(clickButton('design-notes', `document.querySelectorAll('ol[role=log] article')[0]`)) ||
+-    await page.evaluate(`document.querySelectorAll('ol[role=log] article')[0].querySelector('[id^=sources-] button').click() || true`);
++  await page.evaluate(clickButton('design-notes', `document.querySelectorAll('[role=log] ol article')[0]`)) ||
++    await page.evaluate(`document.querySelectorAll('[role=log] ol article')[0].querySelector('[id^=sources-] button').click() || true`);
+   check('clicking a citation opens the cited document',
+     await page.waitFor(`!!document.querySelector('section[aria-label="Document detail"] h2')`));
++  const citedChunk = await page.evaluate(`(() => {
++    const label = document.querySelectorAll('[role=log] article')[0].querySelector('[id^=sources-] button').textContent;
++    const n = Number(label.match(/chunk (\\d+)/)[1]);
++    const detail = document.querySelector('section[aria-label="Document detail"]');
++    const cited = detail.querySelector('[aria-current=true]');
++    if (!cited) return { n, ok: false };
++    const box = detail.getBoundingClientRect(), r = cited.getBoundingClientRect();
++    return { n, ok: true, header: cited.innerText.split('\\n')[0], focused: document.activeElement === cited,
++      visible: r.top >= box.top - 1 && r.top < box.bottom, onlyOne: detail.querySelectorAll('[aria-current=true]').length === 1 };
++  })()`);
++  check('citation reveals, scrolls to, focuses and highlights the cited chunk (1-based)',
++    citedChunk.ok && citedChunk.header.startsWith(`Chunk ${citedChunk.n} (`) && citedChunk.focused && citedChunk.visible && citedChunk.onlyOne,
++    JSON.stringify(citedChunk));
+   await page.screenshot('03-citation-opens-document');
+   await page.evaluate(clickButton('Close'));
+ 
+   // 5. Follow-up
+-  await page.evaluate(clickButton('Follow up', `document.querySelectorAll('ol[role=log] article')[0]`));
++  await page.evaluate(clickButton('Follow up', `document.querySelectorAll('[role=log] ol article')[0]`));
+   check('follow-up context chip appears and input is focused',
+     await page.evaluate(`document.body.innerText.includes('Following up on') && document.activeElement.id === 'question-input'`));
+   await page.evaluate(ask('Why?'));
+   await page.waitFor(`${count} === 4`);
+-  const fu = await page.evaluate(`(() => { const a = document.querySelectorAll('ol[role=log] article')[3]; return { text: a.innerText, sources: a.querySelectorAll('[id^=sources-] li').length }; })()`);
++  const fu = await page.evaluate(`(() => { const a = document.querySelectorAll('[role=log] ol article')[3]; return { text: a.innerText, sources: a.querySelectorAll('[id^=sources-] li').length }; })()`);
+   check('follow-up is linked to its parent and answered in context', fu.text.includes('Follow-up to') && fu.sources > 0, `sources=${fu.sources}`);
+ 
+   // 6. Copy
+-  await page.evaluate(clickButton('Copy answer', `document.querySelectorAll('ol[role=log] article')[0]`));
++  await page.evaluate(clickButton('Copy answer', `document.querySelectorAll('[role=log] ol article')[0]`));
+   await sleep(200);
+-  const copyStatus = await page.evaluate(`document.querySelectorAll('ol[role=log] article')[0].querySelector('[role=status]').textContent`);
++  const copyStatus = await page.evaluate(`document.querySelectorAll('[role=log] ol article')[0].querySelector('[role=status]').textContent`);
+   check('copy answer gives feedback', copyStatus === 'Copied', copyStatus);
+ 
+   // 7. Error + retry (make history file read-only so the service write fails)
+   const historyFile = join(dataDir, 'qa-history.json');
+   chmodSync(historyFile, 0o444);
+   await page.evaluate(ask('This one should fail'));
+-  check('IPC error shown with retry', await page.waitFor(`!!document.querySelector('ol[role=log] [role=alert]') && document.body.innerText.includes('could not be answered')`));
++  check('IPC error shown with retry', await page.waitFor(`!!document.querySelector('[role=log] ol [role=alert]') && document.body.innerText.includes('could not be answered')`));
+   await page.screenshot('04-error');
+   chmodSync(historyFile, 0o644);
+   await page.evaluate(clickButton('Retry'));
+-  check('retry succeeds and error clears', await page.waitFor(`${count} === 5 && !document.querySelector('ol[role=log] [role=alert]')`));
++  check('retry succeeds and error clears', await page.waitFor(`${count} === 5 && !document.querySelector('[role=log] ol [role=alert]')`));
+ 
+   // 8. Long answer (legacy-format entry written directly into history)
+   const history = JSON.parse(readFileSync(historyFile, 'utf-8'));
+@@ -214,11 +238,11 @@ async function main() {
+   writeFileSync(historyFile, JSON.stringify(history));
+   await page.evaluate(clickButton('Refresh'));
+   await page.waitFor(`${count} === 6`);
+-  const longCollapsed = await page.evaluate(`document.querySelectorAll('ol[role=log] article')[5].querySelector('[id^=answer-]').textContent.length`);
+-  await page.evaluate(clickButton('Show full answer', `document.querySelectorAll('ol[role=log] article')[5]`));
+-  const longExpanded = await page.evaluate(`document.querySelectorAll('ol[role=log] article')[5].querySelector('[id^=answer-]').textContent`);
++  const longCollapsed = await page.evaluate(`document.querySelectorAll('[role=log] ol article')[5].querySelector('[id^=answer-]').textContent.length`);
++  await page.evaluate(clickButton('Show full answer', `document.querySelectorAll('[role=log] ol article')[5]`));
++  const longExpanded = await page.evaluate(`document.querySelectorAll('[role=log] ol article')[5].querySelector('[id^=answer-]').textContent`);
+   check('long answer collapses and expands to full text', longCollapsed < longAnswer.length && longExpanded === longAnswer, `${longCollapsed} -> ${longExpanded.length}`);
+-  const legacyTime = await page.evaluate(`document.querySelectorAll('ol[role=log] article')[5].querySelector('time').textContent`);
++  const legacyTime = await page.evaluate(`document.querySelectorAll('[role=log] ol article')[5].querySelector('time').textContent`);
+   check('legacy entry gets a readable older-date timestamp', /2025/.test(legacyTime), legacyTime);
+   check('page does not scroll horizontally', await page.evaluate(`document.documentElement.scrollWidth <= document.documentElement.clientWidth`));
+   await page.screenshot('05-long-answer');
+@@ -229,7 +253,7 @@ async function main() {
+   check('selecting a past question focuses that exchange',
+     await page.waitFor(`document.activeElement?.id?.startsWith('exchange-') && document.activeElement.querySelector('h3').textContent === ${JSON.stringify(questions[0])}`));
+   check('selected exchange is scrolled into view', await page.waitFor(`(() => {
+-    const el = document.activeElement, box = el.closest('ol').parentElement.getBoundingClientRect(), r = el.getBoundingClientRect();
++    const el = document.activeElement, box = el.closest('[role=log]').parentElement.getBoundingClientRect(), r = el.getBoundingClientRect();
+     return r.top >= box.top - 1 && r.top < box.bottom;
+   })()`));
+   await page.screenshot('06-history-select');
+@@ -240,11 +264,65 @@ async function main() {
+   page = await launch();
+   check('conversation persists across app restart', await page.waitFor(`${count} === 6`));
+ 
++  // 10b. Clear confirmation: Cancel and Esc return focus to "Clear conversation"
++  await page.evaluate(clickButton('Clear conversation'));
++  await page.evaluate(clickButton('Cancel', `document.querySelector('[role=group]')`));
++  check('focus returns to "Clear conversation" after Cancel',
++    await page.waitFor(`document.activeElement?.textContent === 'Clear conversation'`, 2000));
++  await page.evaluate(clickButton('Clear conversation'));
++  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
++  check('Esc cancels the Clear confirmation and restores focus',
++    await page.waitFor(`!document.querySelector('[role=group]') && document.activeElement?.textContent === 'Clear conversation' && ${count} === 6`, 2000));
++
++  // 10c. Clearing while a question is pending discards it
++  await page.evaluate(ask('What does the meeting summary say?'));
++  await page.waitFor(`document.body.innerText.includes('searching your documents')`, 2000);
++  await page.evaluate(clickButton('Clear conversation'));
++  const pendingConfirm = await page.evaluate(`document.querySelector('[role=group]').innerText`);
++  await page.evaluate(clickButton('Clear', `document.querySelector('[role=group]')`));
++  await sleep(1200);
++  const afterPendingClear = await page.evaluate(`({ n: ${count}, pending: document.body.innerText.includes('searching your documents'),
++    error: !!document.querySelector('[role=alert]') })`);
++  const persistedAfterClear = JSON.parse(readFileSync(join(dataDir, 'qa-history.json'), 'utf-8'));
++  check('clearing while a question is pending leaves an empty conversation (UI and file)',
++    afterPendingClear.n === 0 && !afterPendingClear.pending && !afterPendingClear.error && persistedAfterClear.length === 0 && /discard/.test(pendingConfirm),
++    JSON.stringify({ ...afterPendingClear, onDisk: persistedAfterClear.length, pendingConfirm }));
++  await page.screenshot('07-clear-while-pending');
++  await page.evaluate(ask('How is the architecture designed?'));
++  await page.waitFor(`${count} === 1`);
++
+   // 11. Clear with inline confirmation
+   await page.evaluate(clickButton('Clear conversation'));
+   await page.evaluate(clickButton('Clear', `document.querySelector('[role=group]')`));
+   check('clear conversation returns to empty state', await page.waitFor(`${count} === 0 && document.body.innerText.includes('No questions yet')`));
+ 
++  // 12. One malformed entry does not hide the rest
++  const now = new Date().toISOString();
++  const good = (id, q) => ({ id, question: q, askedAt: now, response: { answer: `Answer to ${q}`, citations: [], confidence: 0.3, timestamp: now } });
++  writeFileSync(historyFile, JSON.stringify([good('a', 'good one'), { question: 'broken, no response' }, good('b', 'good two')]));
++  await page.evaluate(clickButton('Refresh'));
++  check('one malformed history entry is skipped, valid ones still shown',
++    await page.waitFor(`${count} === 2 && !document.querySelector('[role=alert]')`),
++    JSON.stringify(await page.evaluate(`[...document.querySelectorAll('[role=log] article h3')].map(h => h.textContent)`)));
++  await page.screenshot('08-malformed-entry');
++
++  // 13. Corrupt file: no stale conversation, readable error near the composer, file untouched
++  writeFileSync(historyFile, '{not json');
++  await page.evaluate(clickButton('Refresh'));
++  await page.waitFor(`!!document.querySelector('form [role=alert]')`);
++  const corrupt = await page.evaluate(`({ n: ${count}, header: document.querySelector('#conversation-heading').innerText,
++    tab: [...document.querySelectorAll('aside button')].find(b => b.textContent.startsWith('History')).textContent,
++    alert: document.querySelector('form [role=alert]')?.innerText ?? '' })`);
++  check('load failure clears the stale conversation and counts', corrupt.n === 0 && /\(0 exchanges\)/.test(corrupt.header) && corrupt.tab === 'History (0)', JSON.stringify(corrupt));
++  check('load failure shows a user-facing message near the composer, with the file location',
++    /unreadable/.test(corrupt.alert) && /qa-history\.json/.test(corrupt.alert) && !/SyntaxError|TypeError|position \d/.test(corrupt.alert), corrupt.alert);
++  await page.evaluate(ask('How is the architecture designed?'));
++  await page.waitFor(`!!document.querySelector('[role=log] [role=alert]')`);
++  const askError = await page.evaluate(`document.querySelector('[role=log] [role=alert]').innerText`);
++  check('asking with a corrupt history gives an actionable error', /unreadable/.test(askError) && !/SyntaxError|TypeError|JSON at/.test(askError), askError.split('\n')[0]);
++  check('corrupt history file is left untouched', readFileSync(historyFile, 'utf-8') === '{not json');
++  await page.screenshot('09-corrupt-history');
++
+   page.close();
+   await quit();
+ 
+diff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts
+index 17f0c52..4fc0e98 100644
+--- a/src/main/ipc-handlers.ts
++++ b/src/main/ipc-handlers.ts
+@@ -81,11 +81,6 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+     }
+   });
+ 
+-  ipcMain.handle(IPC_CHANNELS.GET_HISTORY, async () => {
+-    log.info('GET_HISTORY');
+-    return qaService.getHistory();
+-  });
+-
+   ipcMain.handle(IPC_CHANNELS.CLEAR_HISTORY, async () => {
+     log.info('CLEAR_HISTORY');
+     qaService.clearHistory();
+@@ -93,8 +88,13 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+ 
+   // Conversation
+   ipcMain.handle(IPC_CHANNELS.GET_CONVERSATION, async () => {
+-    const conversation = qaService.getConversation();
+-    log.info('GET_CONVERSATION', { exchanges: conversation.length });
+-    return conversation;
++    try {
++      const conversation = qaService.getConversation();
++      log.info('GET_CONVERSATION', { exchanges: conversation.length });
++      return conversation;
++    } catch (err) {
++      log.error('GET_CONVERSATION failed', { error: String(err) });
++      throw err;
++    }
+   });
+ }
+diff --git a/src/preload/preload.ts b/src/preload/preload.ts
+index 30003bb..9ae5e90 100644
+--- a/src/preload/preload.ts
++++ b/src/preload/preload.ts
+@@ -16,7 +16,6 @@ const api = {
+   qa: {
+     ask: (question: string, followUpOf?: string) =>
+       ipcRenderer.invoke(IPC_CHANNELS.ASK_QUESTION, question, followUpOf),
+-    history: () => ipcRenderer.invoke(IPC_CHANNELS.GET_HISTORY),
+     clearHistory: () => ipcRenderer.invoke(IPC_CHANNELS.CLEAR_HISTORY),
+   },
+   conversation: {
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index 457d87b..21cbae5 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -1,7 +1,7 @@
+-import { useState, useCallback, useEffect, useMemo } from 'react';
++import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+ import { DocumentList } from './components/DocumentList';
+ import { QuestionPanel, PendingQuestion, FailedQuestion, ExchangeSelection } from './components/QuestionPanel';
+-import { DocumentDetail } from './components/DocumentDetail';
++import { DocumentDetail, ChunkFocus } from './components/DocumentDetail';
+ import { ConversationHistory } from './components/ConversationHistory';
+ import { StatusBar } from './components/StatusBar';
+ import { Document, AppStatus, ConversationExchange } from '../shared/types';
+@@ -33,6 +33,18 @@ export function App() {
+   const [failed, setFailed] = useState<FailedQuestion | null>(null);
+   const [selection, setSelection] = useState<ExchangeSelection | null>(null);
+   const [activeTab, setActiveTab] = useState<'documents' | 'conversation'>('documents');
++  const [chunkFocus, setChunkFocus] = useState<ChunkFocus | null>(null);
++  const [now, setNow] = useState(() => new Date());
++  /** Bumped on every clear so answers/errors for questions asked before it are ignored. */
++  const clearEpoch = useRef(0);
++
++  // Re-render relative timestamps ("Today", "Yesterday") just after each midnight.
++  useEffect(() => {
++    const nextMidnight = new Date(now);
++    nextMidnight.setHours(24, 0, 1, 0);
++    const timer = window.setTimeout(() => setNow(new Date()), nextMidnight.getTime() - Date.now());
++    return () => window.clearTimeout(timer);
++  }, [now]);
+ 
+   const refreshDocuments = useCallback(async () => {
+     try {
+@@ -50,6 +62,9 @@ export function App() {
+       setConversation(await window.knowledgeBase.conversation.get());
+       setHistoryError(null);
+     } catch (err) {
++      // Never keep showing an old conversation as if it were current.
++      setConversation([]);
++      setSelection(null);
+       setHistoryError(formatIpcError(err));
+     }
+   }, []);
+@@ -66,15 +81,17 @@ export function App() {
+   }, []);
+ 
+   const handleAskQuestion = useCallback(async (question: string, followUpOf: string | null) => {
++    const epoch = clearEpoch.current;
+     setFailed(null);
+     setPending({ question, followUpOf });
+     try {
+       await window.knowledgeBase.qa.ask(question, followUpOf ?? undefined);
+-      await refreshConversation();
++      if (epoch === clearEpoch.current) await refreshConversation();
+     } catch (err) {
+-      setFailed({ question, followUpOf, message: formatIpcError(err) });
++      if (epoch === clearEpoch.current) setFailed({ question, followUpOf, message: formatIpcError(err) });
+     } finally {
+-      setPending(null);
++      // A clear discards the pending question (the service does not save its answer).
++      if (epoch === clearEpoch.current) setPending(null);
+     }
+   }, [refreshConversation]);
+ 
+@@ -83,6 +100,8 @@ export function App() {
+   }, [failed, handleAskQuestion]);
+ 
+   const handleClearConversation = useCallback(async () => {
++    clearEpoch.current++;
++    setPending(null);
+     try {
+       await window.knowledgeBase.qa.clearHistory();
+       setFailed(null);
+@@ -96,11 +115,18 @@ export function App() {
+   const documentIds = useMemo(() => new Set(documents.map(d => d.id)), [documents]);
+   const isDocumentAvailable = useCallback((id: string) => documentIds.has(id), [documentIds]);
+ 
+-  const handleOpenDocument = useCallback((documentId: string) => {
++  const handleOpenCitation = useCallback((documentId: string, chunkIndex: number) => {
+     const doc = documents.find(d => d.id === documentId);
+-    if (doc) setSelectedDoc(doc);
++    if (!doc) return;
++    setSelectedDoc(doc);
++    setChunkFocus(prev => ({ documentId, index: chunkIndex, seq: (prev?.seq ?? 0) + 1 }));
+   }, [documents]);
+ 
++  const handleSelectDocument = useCallback((doc: Document) => {
++    setSelectedDoc(doc);
++    setChunkFocus(null);
++  }, []);
++
+   const handleSelectExchange = useCallback((exchangeId: string) => {
+     setSelection(prev => ({ id: exchangeId, seq: (prev?.seq ?? 0) + 1 }));
+   }, []);
+@@ -185,7 +211,7 @@ export function App() {
+               </div>
+               <DocumentList
+                 documents={documents}
+-                onSelect={setSelectedDoc}
++                onSelect={handleSelectDocument}
+                 selectedId={selectedDoc?.id ?? null}
+               />
+             </>
+@@ -193,6 +219,7 @@ export function App() {
+             <ConversationHistory
+               conversation={conversation}
+               selectedId={selection?.id ?? null}
++              now={now}
+               onSelect={handleSelectExchange}
+             />
+           )}
+@@ -224,7 +251,10 @@ export function App() {
+               >
+                 Close
+               </button>
+-              <DocumentDetail document={selectedDoc} />
++              <DocumentDetail
++                document={selectedDoc}
++                focus={chunkFocus?.documentId === selectedDoc.id ? chunkFocus : null}
++              />
+             </section>
+           )}
+ 
+@@ -234,12 +264,13 @@ export function App() {
+             pending={pending}
+             failed={failed}
+             selection={selection}
++            now={now}
+             isDocumentAvailable={isDocumentAvailable}
+             onAsk={handleAskQuestion}
+             onRetry={handleRetry}
+             onDismissError={() => setFailed(null)}
+             onClear={handleClearConversation}
+-            onOpenDocument={handleOpenDocument}
++            onOpenCitation={handleOpenCitation}
+             onSelectExchange={handleSelectExchange}
+           />
+         </main>
+diff --git a/src/renderer/components/ConversationHistory.tsx b/src/renderer/components/ConversationHistory.tsx
+index 4accc1f..990ce28 100644
+--- a/src/renderer/components/ConversationHistory.tsx
++++ b/src/renderer/components/ConversationHistory.tsx
+@@ -4,11 +4,12 @@ import { formatFullTimestamp, formatTimestamp } from '../format';
+ interface Props {
+   conversation: ConversationExchange[];
+   selectedId: string | null;
++  now: Date;
+   onSelect: (exchangeId: string) => void;
+ }
+ 
+ /** Sidebar index of past questions; selecting one jumps to it in the conversation. */
+-export function ConversationHistory({ conversation, selectedId, onSelect }: Props) {
++export function ConversationHistory({ conversation, selectedId, now, onSelect }: Props) {
+   if (conversation.length === 0) {
+     return (
+       <div style={{ padding: '20px', color: '#888', textAlign: 'center', fontSize: '13px' }}>
+@@ -49,7 +50,7 @@ export function ConversationHistory({ conversation, selectedId, onSelect }: Prop
+                 </div>
+                 <div style={{ fontSize: '11px', color: '#9a9ac0', marginTop: '2px' }}>
+                   <time dateTime={exchange.askedAt} title={formatFullTimestamp(exchange.askedAt)}>
+-                    {formatTimestamp(exchange.askedAt)}
++                    {formatTimestamp(exchange.askedAt, now)}
+                   </time>
+                   {' · '}
+                   {citationCount === 0 ? 'no sources' : `${citationCount} ${citationCount === 1 ? 'source' : 'sources'}`}
+diff --git a/src/renderer/components/DocumentDetail.tsx b/src/renderer/components/DocumentDetail.tsx
+index cb90602..3b80700 100644
+--- a/src/renderer/components/DocumentDetail.tsx
++++ b/src/renderer/components/DocumentDetail.tsx
+@@ -1,18 +1,59 @@
+ import { useEffect, useState } from 'react';
+ import { Document, Chunk } from '../../shared/types';
+ 
++/** A request to reveal one chunk; `seq` lets the same chunk be requested twice. */
++export interface ChunkFocus {
++  documentId: string;
++  /** 0-based chunk index, as stored in citations. */
++  index: number;
++  seq: number;
++}
++
+ interface Props {
+   document: Document;
++  /** When set, chunks are shown and this chunk is scrolled to, focused and highlighted. */
++  focus?: ChunkFocus | null;
+ }
+ 
+-export function DocumentDetail({ document }: Props) {
+-  const [chunks, setChunks] = useState<Chunk[]>([]);
++const chunkElementId = (documentId: string, index: number) => `chunk-${documentId}-${index}`;
++
++export function DocumentDetail({ document, focus = null }: Props) {
++  const [loaded, setLoaded] = useState<{ documentId: string; chunks: Chunk[] } | null>(null);
+   const [showChunks, setShowChunks] = useState(false);
++  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
+ 
+   useEffect(() => {
+-    window.knowledgeBase.indexing.chunks(document.id).then(setChunks);
++    let cancelled = false;
++    window.knowledgeBase.indexing.chunks(document.id).then(chunks => {
++      if (!cancelled) setLoaded({ documentId: document.id, chunks });
++    });
++    return () => { cancelled = true; };
+   }, [document.id]);
+ 
++  const chunks = loaded?.documentId === document.id ? loaded.chunks : [];
++  const chunksReady = loaded?.documentId === document.id;
++
++  // A citation was opened: reveal the chunk list and mark the cited chunk.
++  useEffect(() => {
++    if (!focus) {
++      setHighlightedIndex(null);
++      return;
++    }
++    setShowChunks(true);
++    setHighlightedIndex(focus.index);
++  }, [focus]);
++
++  // Once the chunk is rendered, bring it into view and move focus to it.
++  useEffect(() => {
++    if (!focus || !chunksReady || !showChunks) return;
++    const el = window.document.getElementById(chunkElementId(document.id, focus.index));
++    if (!el) return;
++    el.scrollIntoView({ block: 'start' });
++    el.focus({ preventScroll: true });
++  }, [focus, chunksReady, showChunks, document.id]);
++
++  const focusMissing = focus !== null && chunksReady && !chunks.some(c => c.index === focus.index);
++
+   return (
+     <div>
+       <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px' }}>
+@@ -28,6 +69,8 @@ export function DocumentDetail({ document }: Props) {
+ 
+       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+         <button
++          type="button"
++          aria-expanded={showChunks}
+           onClick={() => setShowChunks(!showChunks)}
+           style={{
+             padding: '6px 12px',
+@@ -43,6 +86,7 @@ export function DocumentDetail({ document }: Props) {
+         </button>
+         {document.status !== 'indexed' && (
+           <button
++            type="button"
+             onClick={() => window.knowledgeBase.indexing.start(document.id)}
+             style={{
+               padding: '6px 12px',
+@@ -59,27 +103,42 @@ export function DocumentDetail({ document }: Props) {
+         )}
+       </div>
+ 
++      {focusMissing && focus && (
++        <p role="status" style={{ fontSize: '12px', color: '#f0ad4e', marginBottom: '8px' }}>
++          The cited chunk {focus.index + 1} is no longer in this document's index (it may have been re-indexed).
++        </p>
++      )}
++
+       {showChunks && (
+         <div>
+-          {chunks.map(chunk => (
+-            <div
+-              key={chunk.id}
+-              style={{
+-                padding: '10px',
+-                marginBottom: '8px',
+-                background: '#1a1a3e',
+-                borderRadius: '4px',
+-                borderLeft: '3px solid #533483',
+-                fontSize: '13px',
+-                lineHeight: 1.5,
+-              }}
+-            >
+-              <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>
+-                Chunk {chunk.index} ({chunk.metadata.charCount} chars)
++          {chunks.map(chunk => {
++            const cited = chunk.index === highlightedIndex;
++            return (
++              <div
++                key={chunk.id}
++                id={chunkElementId(document.id, chunk.index)}
++                tabIndex={-1}
++                aria-current={cited ? 'true' : undefined}
++                style={{
++                  padding: '10px',
++                  marginBottom: '8px',
++                  background: cited ? 'rgba(83, 52, 131, 0.35)' : '#1a1a3e',
++                  borderRadius: '4px',
++                  borderLeft: cited ? '3px solid #c9b6ef' : '3px solid #533483',
++                  outline: cited ? '1px solid #533483' : undefined,
++                  fontSize: '13px',
++                  lineHeight: 1.5,
++                  whiteSpace: 'pre-wrap',
++                  overflowWrap: 'anywhere',
++                }}
++              >
++                <div style={{ fontSize: '11px', color: cited ? '#c9b6ef' : '#888', marginBottom: '4px' }}>
++                  Chunk {chunk.index + 1} ({chunk.metadata.charCount} chars){cited ? ' · cited in the answer' : ''}
++                </div>
++                {chunk.content}
+               </div>
+-              {chunk.content}
+-            </div>
+-          ))}
++            );
++          })}
+         </div>
+       )}
+     </div>
+diff --git a/src/renderer/components/ExchangeItem.tsx b/src/renderer/components/ExchangeItem.tsx
+index 1ee869e..1b99ea0 100644
+--- a/src/renderer/components/ExchangeItem.tsx
++++ b/src/renderer/components/ExchangeItem.tsx
+@@ -1,47 +1,21 @@
+-import { useEffect, useRef, useState, type CSSProperties } from 'react';
++import { useEffect, useRef, useState } from 'react';
+ import { Citation, ConversationExchange } from '../../shared/types';
++import { toPlainExcerptText, truncateAtWord } from '../../shared/text';
+ import { formatFullTimestamp, formatTimestamp } from '../format';
++import { bubbleBase, metaText, smallButton, userBubble } from '../styles';
+ 
+ /** Answers longer than this start collapsed behind a "Show full answer" toggle. */
+ const LONG_ANSWER_CHARS = 1200;
+ 
+-export const bubbleBase: CSSProperties = {
+-  padding: '10px 14px',
+-  borderRadius: '10px',
+-  fontSize: '14px',
+-  lineHeight: 1.6,
+-  whiteSpace: 'pre-wrap',
+-  overflowWrap: 'anywhere',
+-};
+-
+-export const userBubble: CSSProperties = {
+-  ...bubbleBase,
+-  alignSelf: 'flex-end',
+-  maxWidth: '80%',
+-  background: '#533483',
+-  color: '#fff',
+-  borderBottomRightRadius: '2px',
+-};
+-
+-export const metaText: CSSProperties = { fontSize: '11px', color: '#9a9ac0' };
+-
+-export const smallButton: CSSProperties = {
+-  padding: '3px 10px',
+-  background: 'transparent',
+-  color: '#c0c0e0',
+-  border: '1px solid #2a3a6e',
+-  borderRadius: '4px',
+-  cursor: 'pointer',
+-  fontSize: '12px',
+-};
+-
+ interface Props {
+   exchange: ConversationExchange;
+   /** The exchange this one follows up on, when it is still in the history. */
+   parent: ConversationExchange | null;
+   highlighted: boolean;
++  /** Reference time for "Today"/"Yesterday" labels; refreshed by the app at midnight. */
++  now: Date;
+   isDocumentAvailable: (documentId: string) => boolean;
+-  onOpenDocument: (documentId: string) => void;
++  onOpenCitation: (documentId: string, chunkIndex: number) => void;
+   onFollowUp: (exchange: ConversationExchange) => void;
+   onJumpTo: (exchangeId: string) => void;
+ }
+@@ -50,8 +24,9 @@ export function ExchangeItem({
+   exchange,
+   parent,
+   highlighted,
++  now,
+   isDocumentAvailable,
+-  onOpenDocument,
++  onOpenCitation,
+   onFollowUp,
+   onJumpTo,
+ }: Props) {
+@@ -101,7 +76,7 @@ export function ExchangeItem({
+           <span style={{ fontWeight: 600, color: '#c9b6ef' }}>You</span>
+           {' · '}
+           <time dateTime={exchange.askedAt} title={formatFullTimestamp(exchange.askedAt)}>
+-            {formatTimestamp(exchange.askedAt)}
++            {formatTimestamp(exchange.askedAt, now)}
+           </time>
+         </div>
+         {exchange.followUpOf && (
+@@ -131,7 +106,7 @@ export function ExchangeItem({
+           <span style={{ fontWeight: 600, color: '#8fb3ff' }}>Assistant</span>
+           {' · '}
+           <time dateTime={response.timestamp} title={formatFullTimestamp(response.timestamp)}>
+-            {formatTimestamp(response.timestamp)}
++            {formatTimestamp(response.timestamp, now)}
+           </time>
+           {' · '}
+           <span
+@@ -150,7 +125,7 @@ export function ExchangeItem({
+           }}
+         >
+           <div id={answerId}>
+-            {isLong && !expanded ? `${response.answer.slice(0, LONG_ANSWER_CHARS).trimEnd()}…` : response.answer}
++            {isLong && !expanded ? truncateAtWord(response.answer, LONG_ANSWER_CHARS) : response.answer}
+           </div>
+           {isLong && (
+             <button
+@@ -183,7 +158,7 @@ export function ExchangeItem({
+                       number={i + 1}
+                       citation={citation}
+                       available={isDocumentAvailable(citation.documentId)}
+-                      onOpen={() => onOpenDocument(citation.documentId)}
++                      onOpen={() => onOpenCitation(citation.documentId, citation.chunkIndex)}
+                     />
+                   ))}
+                 </ol>
+@@ -221,7 +196,10 @@ function CitationItem({
+   available: boolean;
+   onOpen: () => void;
+ }) {
+-  const label = `${citation.documentTitle} · chunk ${citation.chunkIndex}`;
++  // Chunk indexes are 0-based internally; people count from 1.
++  const label = `${citation.documentTitle} · chunk ${citation.chunkIndex + 1}`;
++  // Older history entries stored raw markdown excerpts; show them as one clean line.
++  const excerpt = toPlainExcerptText(citation.excerpt);
+   return (
+     <li style={{ paddingLeft: '8px', borderLeft: '2px solid #533483', fontSize: '12px' }}>
+       <div style={{ display: 'flex', gap: '6px', alignItems: 'baseline', flexWrap: 'wrap' }}>
+@@ -230,7 +208,7 @@ function CitationItem({
+           <button
+             type="button"
+             onClick={onOpen}
+-            title="Open this document"
++            title="Open this document at the cited chunk"
+             style={{ ...smallButton, border: 'none', padding: 0, color: '#8fb3ff', textDecoration: 'underline' }}
+           >
+             {label}
+@@ -241,9 +219,24 @@ function CitationItem({
+           </span>
+         )}
+       </div>
+-      <blockquote style={{ margin: '4px 0 0', color: '#b0b0d0', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+-        {citation.excerpt}
+-      </blockquote>
++      {excerpt && (
++        <blockquote
++          title={excerpt}
++          style={{
++            margin: '4px 0 0',
++            color: '#b0b0d0',
++            whiteSpace: 'normal',
++            overflowWrap: 'anywhere',
++            lineHeight: 1.45,
++            display: '-webkit-box',
++            WebkitLineClamp: 3,
++            WebkitBoxOrient: 'vertical',
++            overflow: 'hidden',
++          }}
++        >
++          {excerpt}
++        </blockquote>
++      )}
+     </li>
+   );
+ }
+diff --git a/src/renderer/components/QuestionPanel.tsx b/src/renderer/components/QuestionPanel.tsx
+index cba662b..33128b7 100644
+--- a/src/renderer/components/QuestionPanel.tsx
++++ b/src/renderer/components/QuestionPanel.tsx
+@@ -1,6 +1,7 @@
+-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
++import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+ import { ConversationExchange } from '../../shared/types';
+-import { ExchangeItem, metaText, smallButton, userBubble } from './ExchangeItem';
++import { ExchangeItem } from './ExchangeItem';
++import { errorBox, metaText, smallButton, userBubble } from '../styles';
+ 
+ export interface PendingQuestion {
+   question: string;
+@@ -23,12 +24,13 @@ interface Props {
+   pending: PendingQuestion | null;
+   failed: FailedQuestion | null;
+   selection: ExchangeSelection | null;
++  now: Date;
+   isDocumentAvailable: (documentId: string) => boolean;
+   onAsk: (question: string, followUpOf: string | null) => void;
+   onRetry: () => void;
+   onDismissError: () => void;
+   onClear: () => Promise<void>;
+-  onOpenDocument: (documentId: string) => void;
++  onOpenCitation: (documentId: string, chunkIndex: number) => void;
+   onSelectExchange: (exchangeId: string) => void;
+ }
+ 
+@@ -38,12 +40,13 @@ export function QuestionPanel({
+   pending,
+   failed,
+   selection,
++  now,
+   isDocumentAvailable,
+   onAsk,
+   onRetry,
+   onDismissError,
+   onClear,
+-  onOpenDocument,
++  onOpenCitation,
+   onSelectExchange,
+ }: Props) {
+   const [question, setQuestion] = useState('');
+@@ -52,6 +55,16 @@ export function QuestionPanel({
+   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+   const inputRef = useRef<HTMLInputElement>(null);
+   const threadEndRef = useRef<HTMLDivElement>(null);
++  const clearButtonRef = useRef<HTMLButtonElement>(null);
++  /** Set when the confirmation is cancelled so focus returns to "Clear conversation" once it is back. */
++  const restoreClearFocus = useRef(false);
++
++  useEffect(() => {
++    if (!confirmingClear && restoreClearFocus.current) {
++      restoreClearFocus.current = false;
++      clearButtonRef.current?.focus();
++    }
++  }, [confirmingClear]);
+ 
+   const byId = useMemo(() => new Map(conversation.map(e => [e.id, e])), [conversation]);
+   // A follow-up target that disappeared (e.g. history cleared) is silently dropped.
+@@ -88,6 +101,19 @@ export function QuestionPanel({
+     inputRef.current?.focus();
+   };
+ 
++  const cancelClear = () => {
++    restoreClearFocus.current = true;
++    setConfirmingClear(false);
++  };
++
++  const handleConfirmKeyDown = (e: KeyboardEvent) => {
++    if (e.key === 'Escape') {
++      e.preventDefault();
++      e.stopPropagation();
++      cancelClear();
++    }
++  };
++
+   const confirmClear = async () => {
+     setConfirmingClear(false);
+     setFollowUpId(null);
+@@ -118,17 +144,25 @@ export function QuestionPanel({
+         </h2>
+         {conversation.length > 0 &&
+           (confirmingClear ? (
+-            <div role="group" aria-label="Confirm clearing the conversation" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+-              <span style={{ fontSize: '12px' }}>Delete all {conversation.length} exchanges?</span>
++            <div
++              role="group"
++              aria-label="Confirm clearing the conversation"
++              onKeyDown={handleConfirmKeyDown}
++              style={{ display: 'flex', gap: '6px', alignItems: 'center' }}
++            >
++              <span style={{ fontSize: '12px' }}>
++                Delete all {conversation.length} {conversation.length === 1 ? 'exchange' : 'exchanges'}
++                {pending ? ' and discard the question still being answered' : ''}?
++              </span>
+               <button type="button" onClick={confirmClear} style={{ ...smallButton, background: '#8b2635', borderColor: '#8b2635', color: '#fff' }}>
+                 Clear
+               </button>
+-              <button type="button" onClick={() => setConfirmingClear(false)} style={smallButton} autoFocus>
++              <button type="button" onClick={cancelClear} style={smallButton} autoFocus>
+                 Cancel
+               </button>
+             </div>
+           ) : (
+-            <button type="button" onClick={() => setConfirmingClear(true)} style={smallButton}>
++            <button type="button" ref={clearButtonRef} onClick={() => setConfirmingClear(true)} style={smallButton}>
+               Clear conversation
+             </button>
+           ))}
+@@ -136,8 +170,8 @@ export function QuestionPanel({
+ 
+       <div style={{ flex: 1, overflow: 'auto', padding: '12px 20px' }}>
+         {historyError && (
+-          <div role="alert" style={errorBox}>
+-            Could not load the conversation history: {historyError}
++          <div style={{ color: '#888', textAlign: 'center', paddingTop: '40px', fontSize: '14px' }}>
++            The conversation could not be loaded. See the message above the question box.
+           </div>
+         )}
+ 
+@@ -151,11 +185,10 @@ export function QuestionPanel({
+           </div>
+         )}
+ 
++        {/* role="log" sits on a wrapper so the <ol>/<li> keep their list semantics. */}
++        <div role="log" aria-label="Questions and answers" aria-live="polite" aria-relevant="additions">
+         <ol
+-          role="log"
+-          aria-label="Questions and answers"
+-          aria-live="polite"
+-          aria-relevant="additions"
++          aria-label="Exchanges"
+           style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}
+         >
+           {conversation.map(exchange => (
+@@ -164,8 +197,9 @@ export function QuestionPanel({
+                 exchange={exchange}
+                 parent={exchange.followUpOf ? byId.get(exchange.followUpOf) ?? null : null}
+                 highlighted={highlightedId === exchange.id}
++                now={now}
+                 isDocumentAvailable={isDocumentAvailable}
+-                onOpenDocument={onOpenDocument}
++                onOpenCitation={onOpenCitation}
+                 onFollowUp={startFollowUp}
+                 onJumpTo={onSelectExchange}
+               />
+@@ -192,6 +226,7 @@ export function QuestionPanel({
+             </li>
+           )}
+         </ol>
++        </div>
+         <div ref={threadEndRef} />
+       </div>
+ 
+@@ -206,6 +241,11 @@ export function QuestionPanel({
+           background: '#16213e',
+         }}
+       >
++        {historyError && (
++          <div role="alert" style={errorBox}>
++            Could not load the conversation history. {historyError}
++          </div>
++        )}
+         {followUpTarget && (
+           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#c0c0e0' }}>
+             <span id="follow-up-context" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+@@ -274,12 +314,3 @@ export function QuestionPanel({
+     </section>
+   );
+ }
+-
+-const errorBox: CSSProperties = {
+-  padding: '10px 14px',
+-  borderRadius: '8px',
+-  background: 'rgba(217, 83, 79, 0.12)',
+-  border: '1px solid #d9534f',
+-  color: '#f2b8b5',
+-  fontSize: '13px',
+-};
+diff --git a/src/renderer/format.ts b/src/renderer/format.ts
+index 5fd0005..f01d5a4 100644
+--- a/src/renderer/format.ts
++++ b/src/renderer/format.ts
+@@ -1,6 +1,6 @@
+ /** Display-only formatting helpers for the renderer. */
+ 
+-const timeFormat = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' });
++const timeFormat = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+ const dateFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+ const dateYearFormat = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+ const fullFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'medium' });
+diff --git a/src/renderer/styles.ts b/src/renderer/styles.ts
+new file mode 100644
+index 0000000..0d01d05
+--- /dev/null
++++ b/src/renderer/styles.ts
+@@ -0,0 +1,43 @@
++import type { CSSProperties } from 'react';
++
++/** Shared inline styles for the conversation UI. */
++
++export const bubbleBase: CSSProperties = {
++  padding: '10px 14px',
++  borderRadius: '10px',
++  fontSize: '14px',
++  lineHeight: 1.6,
++  whiteSpace: 'pre-wrap',
++  overflowWrap: 'anywhere',
++};
++
++export const userBubble: CSSProperties = {
++  ...bubbleBase,
++  alignSelf: 'flex-end',
++  maxWidth: '80%',
++  background: '#533483',
++  color: '#fff',
++  borderBottomRightRadius: '2px',
++};
++
++export const metaText: CSSProperties = { fontSize: '11px', color: '#9a9ac0' };
++
++export const smallButton: CSSProperties = {
++  padding: '3px 10px',
++  background: 'transparent',
++  color: '#c0c0e0',
++  border: '1px solid #2a3a6e',
++  borderRadius: '4px',
++  cursor: 'pointer',
++  fontSize: '12px',
++};
++
++export const errorBox: CSSProperties = {
++  padding: '10px 14px',
++  borderRadius: '8px',
++  background: 'rgba(217, 83, 79, 0.12)',
++  border: '1px solid #d9534f',
++  color: '#f2b8b5',
++  fontSize: '13px',
++  overflowWrap: 'anywhere',
++};
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index 9c7f80f..0df10e5 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -17,7 +17,6 @@ declare global {
+       };
+       qa: {
+         ask: (question: string, followUpOf?: string) => Promise<import('../shared/types').QAResponse>;
+-        history: () => Promise<import('../shared/types').QAHistory[]>;
+         clearHistory: () => Promise<void>;
+       };
+       conversation: {
+diff --git a/src/services/qa-service.ts b/src/services/qa-service.ts
+index 0d4639a..f423c86 100644
+--- a/src/services/qa-service.ts
++++ b/src/services/qa-service.ts
+@@ -1,8 +1,10 @@
++import { join } from 'path';
+ import { v4 as uuidv4 } from 'uuid';
+ import { QAResponse, QAHistory, Citation, ConversationExchange } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ import { IndexingService } from './indexing-service';
+ import { logger } from './logger';
++import { toPlainExcerptText, truncateAtWord } from '../shared/text';
+ 
+ const QA_HISTORY_FILE = 'qa-history.json';
+ 
+@@ -41,18 +43,95 @@ const MOCK_PATTERNS: Array<{
+ 
+ const EXCERPT_CHARS = 200;
+ 
+-/** Shorten chunk text to an excerpt that ends on a word boundary and is marked when cut. */
++/** How many earlier turns of a follow-up chain are added to the retrieval context. */
++const MAX_CONTEXT_TURNS = 5;
++
++/** Common words that must not drive keyword retrieval on their own. */
++const STOP_WORDS = new Set([
++  'the', 'and', 'but', 'for', 'nor', 'not', 'yet', 'are', 'was', 'were', 'has', 'have', 'had',
++  'does', 'did', 'can', 'could', 'should', 'would', 'will', 'what', 'when', 'where', 'which',
++  'who', 'whom', 'why', 'how', 'this', 'that', 'these', 'those', 'then', 'than', 'there', 'their',
++  'they', 'them', 'with', 'from', 'into', 'about', 'more', 'some', 'any', 'all', 'you', 'your',
++  'its', 'our', 'also', 'just', 'say', 'says', 'tell', 'explain', 'please', 'other', 'such',
++]);
++
++/** Shorten chunk text to a plain one-line excerpt that ends on a word boundary and is marked when cut. */
+ export function toExcerpt(content: string, max = EXCERPT_CHARS): string {
+-  if (content.length <= max) return content;
+-  const cut = content.slice(0, max);
+-  const lastSpace = cut.search(/\s\S*$/);
+-  return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
++  return truncateAtWord(toPlainExcerptText(content), max);
++}
++
++/** Lower-cased content words of a query, without punctuation or stop words. */
++export function retrievalTerms(text: string): string[] {
++  return text
++    .toLowerCase()
++    .split(/[^\p{L}\p{N}]+/u)
++    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
++}
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value);
++}
++
++function normalizeCitation(value: unknown): Citation | null {
++  if (!isRecord(value) || typeof value.documentId !== 'string') return null;
++  return {
++    documentId: value.documentId,
++    documentTitle: typeof value.documentTitle === 'string' ? value.documentTitle : 'Unknown Document',
++    chunkIndex: typeof value.chunkIndex === 'number' ? value.chunkIndex : 0,
++    excerpt: typeof value.excerpt === 'string' ? value.excerpt : '',
++  };
++}
++
++/**
++ * Normalize one persisted history entry, or return null when it cannot be
++ * shown (no question text or no answer). Entries saved before conversation
++ * support get a stable index-based id and fall back to the response timestamp
++ * for `askedAt`.
++ */
++function normalizeEntry(entry: unknown, index: number): ConversationExchange | null {
++  if (!isRecord(entry) || typeof entry.question !== 'string') return null;
++  const response = entry.response;
++  if (!isRecord(response) || typeof response.answer !== 'string') return null;
++
++  const timestamp = typeof response.timestamp === 'string' ? response.timestamp
++    : typeof entry.askedAt === 'string' ? entry.askedAt : '';
++  const citations = Array.isArray(response.citations)
++    ? response.citations.map(normalizeCitation).filter((c): c is Citation => c !== null)
++    : [];
++  return {
++    id: typeof entry.id === 'string' && entry.id ? entry.id : `legacy-${index}`,
++    question: entry.question,
++    askedAt: typeof entry.askedAt === 'string' ? entry.askedAt : timestamp,
++    followUpOf: typeof entry.followUpOf === 'string' ? entry.followUpOf : null,
++    response: {
++      answer: response.answer,
++      citations,
++      confidence: typeof response.confidence === 'number' ? response.confidence : 0,
++      timestamp,
++    },
++  };
++}
++
++function describeWriteError(err: unknown): string {
++  const code = (err as NodeJS.ErrnoException | undefined)?.code;
++  switch (code) {
++    case 'EACCES':
++    case 'EPERM':
++    case 'EROFS':
++      return 'the file is not writable (permission denied)';
++    case 'ENOSPC':
++      return 'the disk is full';
++    default:
++      return code ? `system error ${code}` : 'an unexpected error occurred';
++  }
+ }
+ 
+ export class QaService {
+   private persistence: PersistenceService;
+   private indexingService: IndexingService;
+   private log = logger.forService('QaService');
++  /** Bumped by clearHistory(); answers to questions asked before a clear are not saved. */
++  private clearGeneration = 0;
+ 
+   constructor(persistence: PersistenceService, indexingService?: IndexingService) {
+     this.persistence = persistence;
+@@ -63,22 +142,30 @@ export class QaService {
+   /**
+    * Ask a question and get a grounded answer with citations.
+    *
+-   * When `followUpOf` names an earlier exchange, that exchange's question is
+-   * added to the retrieval context so short follow-ups ("what about chunks?")
+-   * are answered in the context of the conversation.
++   * When `followUpOf` names an earlier exchange, the questions of that
++   * exchange and its own ancestors (up to MAX_CONTEXT_TURNS) are added to the
++   * retrieval context, so a chain of short follow-ups ("and then?" → "why?")
++   * keeps the original topic.
++   *
++   * If the history is cleared while the answer is being prepared, the answer
++   * is returned but not saved: the user asked for an empty conversation.
+    */
+   async ask(question: string, followUpOf?: string): Promise<QAResponse> {
+     question = typeof question === 'string' ? question.trim() : '';
+     if (!question) {
+       throw new Error('Question must be a non-empty string');
+     }
++    const generation = this.clearGeneration;
+     const askedAt = new Date().toISOString();
+-    const parent = followUpOf ? this.getConversation().find(e => e.id === followUpOf) : undefined;
++    const conversation = followUpOf ? this.getConversation() : [];
++    const byId = new Map(conversation.map(e => [e.id, e]));
++    const parent = followUpOf ? byId.get(followUpOf) : undefined;
+     if (followUpOf && !parent) {
+       this.log.warn('Follow-up target not found, answering standalone', { followUpOf });
+     }
+-    const context = parent ? `${parent.question} ${question}` : question;
+-    this.log.info('Processing question', { question, followUpOf: parent?.id ?? null });
++    const contextTurns = this.ancestorQuestions(parent, byId);
++    const context = [...contextTurns, question].join(' ');
++    this.log.info('Processing question', { question, followUpOf: parent?.id ?? null, contextTurns: contextTurns.length });
+ 
+     // Simulate processing delay
+     await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 400));
+@@ -89,8 +176,8 @@ export class QaService {
+     this.log.info('Retrieving from chunks', { totalChunks: chunks.length });
+ 
+     if (chunks.length > 0) {
+-      // Find relevant chunks using keyword matching
+-      const questionWords = context.toLowerCase().split(/\s+/).filter(w => w.length > 2);
++      // Find relevant chunks using keyword matching on content words
++      const questionWords = [...new Set(retrievalTerms(context))];
+       const scored = chunks.map(chunk => {
+         const contentLower = chunk.content.toLowerCase();
+         const score = questionWords.reduce(
+@@ -141,38 +228,111 @@ export class QaService {
+       answerLength: answer.length,
+     });
+ 
++    if (generation !== this.clearGeneration) {
++      this.log.warn('History was cleared while the question was pending; answer not saved', { question });
++      return response;
++    }
++
+     // Save to history
+     this.saveToHistory({ id: uuidv4(), question, askedAt, followUpOf: parent?.id, response });
+ 
+     return response;
+   }
+ 
+-  /** Get the Q&A history. */
+-  getHistory(): QAHistory[] {
+-    return this.persistence.readJson<QAHistory[]>(QA_HISTORY_FILE) ?? [];
+-  }
+-
+   /**
+-   * Get the history as a conversation, oldest exchange first. Entries saved
+-   * before conversation support get a stable index-based id and fall back to
+-   * the response timestamp for `askedAt`.
++   * Get the history as a conversation, oldest exchange first. Entries that
++   * cannot be shown (e.g. missing question or answer) are skipped with a WARN
++   * log instead of hiding the whole conversation; they stay in the file.
+    */
+   getConversation(): ConversationExchange[] {
+-    return this.getHistory().map((entry, index) => ({
+-      id: entry.id ?? `legacy-${index}`,
+-      question: entry.question,
+-      askedAt: entry.askedAt ?? entry.response.timestamp,
+-      followUpOf: entry.followUpOf ?? null,
+-      response: entry.response,
+-    }));
++    const raw = this.readHistory();
++    const exchanges: ConversationExchange[] = [];
++    const skipped: number[] = [];
++    raw.forEach((entry, index) => {
++      const exchange = normalizeEntry(entry, index);
++      if (exchange) exchanges.push(exchange);
++      else skipped.push(index);
++    });
++    if (skipped.length > 0) {
++      this.log.warn('Skipped malformed conversation history entries', {
++        skipped: skipped.length,
++        indices: skipped.slice(0, 20),
++      });
++    }
++    return exchanges;
+   }
+ 
+-  /** Clear the Q&A history. */
++  /** Clear the Q&A history. Answers still being prepared will not be saved. */
+   clearHistory(): void {
+-    this.persistence.writeJson(QA_HISTORY_FILE, []);
++    this.clearGeneration++;
++    this.writeHistory([]);
+     this.log.info('Q&A history cleared');
+   }
+ 
++  /** Questions of `parent` and its ancestors, oldest first. */
++  private ancestorQuestions(
++    parent: ConversationExchange | undefined,
++    byId: Map<string, ConversationExchange>
++  ): string[] {
++    const questions: string[] = [];
++    const seen = new Set<string>();
++    let current = parent;
++    while (current && !seen.has(current.id) && questions.length < MAX_CONTEXT_TURNS) {
++      seen.add(current.id);
++      questions.unshift(current.question);
++      current = current.followUpOf ? byId.get(current.followUpOf) : undefined;
++    }
++    return questions;
++  }
++
++  private historyLocation(): string {
++    return join(this.persistence.getDataDir(), QA_HISTORY_FILE);
++  }
++
++  /**
++   * Read the raw persisted entries. A file that is not valid JSON or not a
++   * list is reported with a user-facing message; it is never overwritten.
++   */
++  private readHistory(): unknown[] {
++    let raw: unknown;
++    try {
++      raw = this.persistence.readJson<unknown>(QA_HISTORY_FILE);
++    } catch (err) {
++      this.log.error('Conversation history file could not be parsed', {
++        file: this.historyLocation(),
++        error: String(err),
++      });
++      throw this.unreadableError();
++    }
++    if (raw === null) return [];
++    if (!Array.isArray(raw)) {
++      this.log.error('Conversation history file is not a list', { file: this.historyLocation() });
++      throw this.unreadableError();
++    }
++    return raw;
++  }
++
++  private unreadableError(): Error {
++    return new Error(
++      `The conversation history file is unreadable (${this.historyLocation()}). ` +
++      'It was left unchanged. Repair or move that file, then press Refresh.'
++    );
++  }
++
++  private writeHistory(entries: unknown[]): void {
++    try {
++      this.persistence.writeJson(QA_HISTORY_FILE, entries);
++    } catch (err) {
++      this.log.error('Conversation history could not be saved', {
++        file: this.historyLocation(),
++        error: String(err),
++      });
++      throw new Error(
++        `Could not save to the conversation history file (${this.historyLocation()}): ${describeWriteError(err)}.`
++      );
++    }
++  }
++
+   private generateAnswer(question: string, citations: Citation[]): string {
+     // Match against mock patterns
+     const questionLower = question.toLowerCase();
+@@ -194,9 +354,10 @@ export class QaService {
+   }
+ 
+   private saveToHistory(entry: QAHistory): void {
+-    const history = this.getHistory();
++    // Keep entries we cannot display untouched so nothing is silently lost.
++    const history = this.readHistory();
+     history.push(entry);
+-    this.persistence.writeJson(QA_HISTORY_FILE, history);
++    this.writeHistory(history);
+     this.log.info('Question saved to history', { historyLength: history.length });
+   }
+ }
+diff --git a/src/shared/text.ts b/src/shared/text.ts
+new file mode 100644
+index 0000000..b1ea3d9
+--- /dev/null
++++ b/src/shared/text.ts
+@@ -0,0 +1,21 @@
++/** Pure text helpers shared by services and renderer (no Node or DOM APIs). */
++
++/**
++ * Shorten text to at most `max` characters, ending on a word boundary when one
++ * exists in the second half of the cut, and mark the cut with "…".
++ */
++export function truncateAtWord(text: string, max: number): string {
++  if (text.length <= max) return text;
++  const cut = text.slice(0, max);
++  const lastSpace = cut.search(/\s\S*$/);
++  return `${(lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
++}
++
++/** Turn a markdown-ish chunk into one readable line: drop heading/emphasis markers, collapse whitespace. */
++export function toPlainExcerptText(text: string): string {
++  return text
++    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
++    .replace(/(\*\*|__)(.*?)\1/g, '$2')
++    .replace(/\s+/g, ' ')
++    .trim();
++}
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index c864057..e4dc6e4 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -76,7 +76,6 @@ export const IPC_CHANNELS = {
+ 
+   // Q&A
+   ASK_QUESTION: 'qa:ask',
+-  GET_HISTORY: 'qa:history',
+   CLEAR_HISTORY: 'qa:clear-history',
+ 
+   // Conversation
+diff --git a/tests/qa-conversation.test.ts b/tests/qa-conversation.test.ts
+index 9503aa6..fd13626 100644
+--- a/tests/qa-conversation.test.ts
++++ b/tests/qa-conversation.test.ts
+@@ -1,11 +1,12 @@
+-import { mkdtempSync, rmSync } from 'fs';
++import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+ import { tmpdir } from 'os';
+ import { join } from 'path';
+ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+ import { PersistenceService } from '../src/services/persistence-service';
+ import { IndexingService } from '../src/services/indexing-service';
+ import { DocumentService } from '../src/services/document-service';
+-import { QaService, toExcerpt } from '../src/services/qa-service';
++import { QaService, retrievalTerms, toExcerpt } from '../src/services/qa-service';
++import { truncateAtWord } from '../src/shared/text';
+ 
+ const SAMPLES = join(__dirname, '..', 'data', 'sample-documents');
+ 
+@@ -92,6 +93,84 @@ describe('QaService conversation history', () => {
+     expect(qa.getConversation()[0]).toMatchObject({ id: 'legacy-0', askedAt: '2026-01-02T03:04:05.000Z', followUpOf: null });
+   });
+ 
++  it('skips malformed entries instead of hiding the whole conversation, and keeps them on disk', async () => {
++    const good = { id: 'ok', question: 'good', askedAt: '2026-01-02T03:04:05.000Z', response: { answer: 'fine', citations: [], confidence: 0.3, timestamp: '2026-01-02T03:04:06.000Z' } };
++    persistence.writeJson('qa-history.json', [good, { question: 'no response' }, { response: { answer: 'no question' } }, null, 'junk', { question: 'bad answer', response: { answer: 42 } }]);
++
++    const conversation = qa.getConversation();
++    expect(conversation.map(e => e.id)).toEqual(['ok']);
++
++    await qa.ask('a new question');
++    const onDisk = persistence.readJson<unknown[]>('qa-history.json')!;
++    expect(onDisk).toHaveLength(7); // the 6 original entries are preserved, plus the new one
++    expect(qa.getConversation().map(e => e.question)).toEqual(['good', 'a new question']);
++  });
++
++  it('fills defaults for partially missing response fields', () => {
++    persistence.writeJson('qa-history.json', [{ question: 'q', response: { answer: 'a', citations: [{ documentId: 'd' }, 'bad'] } }]);
++    const [e] = qa.getConversation();
++    expect(e.response.citations).toEqual([{ documentId: 'd', documentTitle: 'Unknown Document', chunkIndex: 0, excerpt: '' }]);
++    expect(e.response.confidence).toBe(0);
++  });
++
++  it('reports a corrupt history file with a user-facing message and does not overwrite it', async () => {
++    const file = join(dir, 'qa-history.json');
++    writeFileSync(file, '{not json');
++    expect(() => qa.getConversation()).toThrow(/conversation history file is unreadable \(.*qa-history\.json\)/);
++    expect(() => qa.getConversation()).not.toThrow(/SyntaxError|JSON|position/);
++    await expect(qa.ask('anything')).rejects.toThrow(/unreadable/);
++    expect(readFileSync(file, 'utf-8')).toBe('{not json');
++  });
++
++  it('treats a history file that is not a list as unreadable', () => {
++    persistence.writeJson('qa-history.json', { not: 'a list' });
++    expect(() => qa.getConversation()).toThrow(/unreadable/);
++  });
++
++  it('translates a failed save into a user-facing message', async () => {
++    await qa.ask('first');
++    const file = join(dir, 'qa-history.json');
++    chmodSync(file, 0o444);
++    try {
++      await expect(qa.ask('second')).rejects.toThrow(/Could not save to the conversation history file .*permission denied/);
++    } finally {
++      chmodSync(file, 0o644);
++    }
++  });
++
++  it('keeps the original topic across a follow-up chain longer than two turns', async () => {
++    const docs = new DocumentService(persistence);
++    docs.importDocument(join(SAMPLES, 'retrieval-plan.md'));
++    docs.importDocument(join(SAMPLES, 'design-notes.md'));
++    await new IndexingService(persistence).startIndexing();
++
++    await qa.ask('Explain the retrieval chunk ranking');
++    const [root] = qa.getConversation();
++    await qa.ask('and then?', root.id);
++    const second = qa.getConversation()[1];
++    const third = await qa.ask('why?', second.id);
++    const fourth = await qa.ask('really?', qa.getConversation()[2].id);
++
++    // Without context these questions are only stop words and match nothing.
++    expect(retrievalTerms('and then? why?')).toEqual([]);
++    expect((await qa.ask('and then? why?')).citations).toHaveLength(0);
++    expect(third.citations.length).toBeGreaterThan(0);
++    expect(fourth.citations.length).toBeGreaterThan(0);
++    expect(fourth.citations[0].excerpt.toLowerCase()).toMatch(/retriev|chunk|rank/);
++  });
++
++  it('does not save an answer whose question was pending when the history was cleared', async () => {
++    await qa.ask('before clear');
++    const pending = qa.ask('asked just before clear');
++    qa.clearHistory();
++    const response = await pending;
++    expect(response.answer).toBeTruthy();
++    expect(qa.getConversation()).toEqual([]);
++
++    await qa.ask('after clear');
++    expect(qa.getConversation().map(e => e.question)).toEqual(['after clear']);
++  });
++
+   it('clears the conversation', async () => {
+     await qa.ask('to be cleared');
+     qa.clearHistory();
+@@ -110,3 +189,16 @@ describe('toExcerpt', () => {
+     expect(excerpt).toBe('word word word word…');
+   });
+ });
++
++describe('excerpt and truncation helpers', () => {
++  it('turns markdown chunks into one plain line', () => {
++    expect(toExcerpt('# Software Design Notes\n\n## Architecture\n\nThe **system** uses layers.'))
++      .toBe('Software Design Notes Architecture The system uses layers.');
++  });
++
++  it('truncateAtWord never cuts mid-word when a boundary exists', () => {
++    const text = 'alpha beta gamma delta epsilon';
++    expect(truncateAtWord(text, 14)).toBe('alpha beta…');
++    expect(truncateAtWord(text, 100)).toBe(text);
++  });
++});
