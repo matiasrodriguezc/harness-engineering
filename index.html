@@ -7,139 +7,187 @@
 <meta name="description" content="Ocho experimentos medidos con Claude Code sobre cómo las instrucciones, la verificación y el estado alrededor de un agente cambian lo que entrega el mismo modelo.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: una columna de lectura de 1080px; el hero en dos columnas (tesis + lectura de instrumento) que se apilan en el teléfono. */
+/* Layout: un plano de mazo de cables. Papel de dibujo con cuadrícula, una columna de 1080px,
+   etiquetas de conector (J1, J2…) en cada sección y un código de color por subsistema que se repite en toda la página. */
 :root {
-  --bg: #f2f4f7; --surface: #ffffff; --ink: #12202d; --muted: #566676; --line: #d5dce4;
-  --accent: #b05a14; --accent-soft: #f5e6d6; --weak: #8996a5; --pass: #1d7348; --fail: #ad2b22;
-  --code-bg: #0f1a24; --code-ink: #dbe4ec; --code-dim: #8494a4;
-  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --step--1: 0.86rem; --step-0: 1rem; --step-1: 1.2rem; --step-2: 1.55rem; --step-3: 2.1rem; --step-4: clamp(2.3rem, 5.2vw, 3.6rem);
+  --bg: #e9edf1; --paper: #f5f7f9; --ink: #142233; --muted: #536375; --line: #c9d2dc; --grid: rgba(20, 34, 51, 0.05);
+  --copper: #a8642a; --sheath: #2a3542; --tie: #10161d; --pass: #1d7348; --fail: #ad2b22;
+  --w-ins: #2f6fd1; --w-her: #23915b; --w-ent: #c9a20f; --w-est: #7c4fc4; --w-ver: #c7372c;
+  --code-bg: #10161d; --code-ink: #d9e2ea; --code-dim: #7f90a1;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --step--1: 0.86rem; --step-0: 1rem; --step-1: 1.2rem; --step-2: 1.6rem; --step-3: 2.3rem; --step-4: clamp(2.6rem, 6vw, 4.2rem);
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0d141b; --surface: #141f29; --ink: #e4ebf1; --muted: #93a3b2; --line: #26333f;
-  --accent: #e3994d; --accent-soft: #33261a; --weak: #5f6d7b; --pass: #4cc38a; --fail: #f07a6f;
-  --code-bg: #091017; --code-ink: #dbe4ec; --code-dim: #7d8d9c; color-scheme: dark } }
+  --bg: #0e141a; --paper: #141c24; --ink: #e1e8ef; --muted: #91a1b1; --line: #263240; --grid: rgba(225, 232, 239, 0.035);
+  --copper: #df9658; --sheath: #3a4756; --tie: #05080b; --pass: #4cc38a; --fail: #f07a6f;
+  --w-ins: #5d97f0; --w-her: #4cc38a; --w-ent: #e8c53a; --w-est: #a57ff0; --w-ver: #f06a5e;
+  --code-bg: #070b0f; --code-ink: #d9e2ea; --code-dim: #758697; color-scheme: dark } }
 :root[data-theme="dark"] {
-  --bg: #0d141b; --surface: #141f29; --ink: #e4ebf1; --muted: #93a3b2; --line: #26333f;
-  --accent: #e3994d; --accent-soft: #33261a; --weak: #5f6d7b; --pass: #4cc38a; --fail: #f07a6f;
-  --code-bg: #091017; --code-ink: #dbe4ec; --code-dim: #7d8d9c; color-scheme: dark }
+  --bg: #0e141a; --paper: #141c24; --ink: #e1e8ef; --muted: #91a1b1; --line: #263240; --grid: rgba(225, 232, 239, 0.035);
+  --copper: #df9658; --sheath: #3a4756; --tie: #05080b; --pass: #4cc38a; --fail: #f07a6f;
+  --w-ins: #5d97f0; --w-her: #4cc38a; --w-ent: #e8c53a; --w-est: #a57ff0; --w-ver: #f06a5e;
+  --code-bg: #070b0f; --code-ink: #d9e2ea; --code-dim: #758697; color-scheme: dark }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 400 var(--step-0)/1.6 var(--body); }
-a { color: var(--accent); text-underline-offset: 3px; }
-a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+body {
+  margin: 0; color: var(--ink); font: 400 var(--step-0)/1.6 var(--body);
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+a { color: var(--copper); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--copper); outline-offset: 3px; border-radius: 3px; }
+code { font-family: var(--mono); font-size: 0.92em; }
 .wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-section { padding-block: 56px; border-top: 1px solid var(--line); }
-h1, h2, h3 { font-family: var(--display); line-height: 1.12; text-wrap: balance; margin: 0; }
-h2 { font-size: var(--step-3); font-weight: 700; letter-spacing: -0.01em; }
-h3 { font-size: var(--step-1); font-weight: 700; }
+section { padding-block: 56px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.05; text-wrap: balance; margin: 0; }
+h1 { font-size: var(--step-4); font-weight: 700; text-transform: uppercase; letter-spacing: 0.01em; }
+h2 { font-size: var(--step-3); font-weight: 700; text-transform: uppercase; letter-spacing: 0.01em; }
+h3 { font-size: var(--step-1); font-weight: 600; letter-spacing: 0.01em; }
 p { margin: 0; max-width: 65ch; }
-.eyebrow { font: 500 var(--step--1)/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
 .lead { font-size: var(--step-1); color: var(--muted); max-width: 60ch; }
 .stack { display: flex; flex-direction: column; gap: 16px; }
-.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .num { font-variant-numeric: tabular-nums; }
 
+/* Etiqueta de conector: el "J" de cada sección, con los pines de los subsistemas que toca */
+.tag { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; padding: 5px 10px 5px 8px; border: 1.5px solid var(--ink); border-radius: 4px; background: var(--paper); font: 600 0.82rem/1 var(--display); text-transform: uppercase; letter-spacing: 0.08em; }
+.tag .ref { font-family: var(--mono); font-weight: 500; letter-spacing: 0; color: var(--copper); }
+.pins { display: inline-flex; gap: 3px; }
+.pin { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.p-ins { background: var(--w-ins); } .p-her { background: var(--w-her); } .p-ent { background: var(--w-ent); } .p-est { background: var(--w-est); } .p-ver { background: var(--w-ver); }
+
 /* Hero */
-.hero { padding-block: 64px 48px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 40px; align-items: center; }
-.hero h1 { font-size: var(--step-4); font-weight: 700; letter-spacing: -0.02em; }
-.hero h1 em { font-style: normal; color: var(--accent); }
-.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
-.btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 8px; font: 600 var(--step--1)/1 var(--body); text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: var(--surface); }
-.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.readout { background: var(--code-bg); color: var(--code-ink); border-radius: 12px; padding: 18px 20px; font: 400 0.8rem/1.65 var(--mono); overflow-x: auto; min-width: 0; }
-.readout .dim { color: var(--code-dim); }
-.readout .ok { color: #4cc38a; } .readout .bad { color: #f07a6f; } .readout .warn { color: #e3994d; }
-.readout pre { margin: 0; white-space: pre; }
+.hero { padding-block: 56px 40px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 32px; align-items: center; }
+.hero h1 .cu { color: var(--copper); }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 11px 16px; border-radius: 4px; font: 600 0.95rem/1 var(--display); text-transform: uppercase; letter-spacing: 0.06em; text-decoration: none; border: 1.5px solid var(--ink); color: var(--ink); background: var(--paper); }
+.btn.primary { background: var(--ink); color: var(--paper); }
+.btn::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--copper); }
+.drawing { min-width: 0; overflow-x: auto; }
+.drawing svg { display: block; width: 100%; min-width: 460px; height: auto; }
+.drawing svg text { font-family: var(--mono); fill: var(--muted); font-size: 10px; }
+.drawing svg .lbl { font-family: var(--display); fill: var(--ink); font-size: 14px; font-weight: 600; letter-spacing: 0.06em; }
+.drawing svg .box { fill: var(--paper); stroke: var(--ink); stroke-width: 1.5; }
+.drawing svg .engine { fill: var(--ink); }
+.drawing svg .engine-t { fill: var(--paper); font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: 0.08em; }
+.drawing svg .engine-s { fill: var(--paper); opacity: 0.75; }
+.drawing svg .sheath { fill: var(--sheath); }
+.drawing svg .tie { fill: var(--tie); }
+.drawing svg .wire { fill: none; stroke-width: 3; stroke-linecap: round; }
+.drawing svg .sig { fill: none; stroke-width: 3; stroke-linecap: round; stroke: var(--paper); stroke-dasharray: 2 46; opacity: 0.9; }
+.w-ins { stroke: var(--w-ins); } .w-her { stroke: var(--w-her); } .w-ent { stroke: var(--w-ent); } .w-est { stroke: var(--w-est); } .w-ver { stroke: var(--w-ver); }
+.f-ins { fill: var(--w-ins); } .f-her { fill: var(--w-her); } .f-ent { fill: var(--w-ent); } .f-est { fill: var(--w-est); } .f-ver { fill: var(--w-ver); }
+@media (prefers-reduced-motion: no-preference) { .drawing svg .sig { animation: flow 2.8s linear infinite; } @keyframes flow { to { stroke-dashoffset: -48; } } }
 
-/* Datos clave */
-.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-top: 8px; }
-.fact { background: var(--surface); padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; }
-.fact b { font: 700 var(--step-3)/1 var(--display); font-variant-numeric: tabular-nums; }
-.fact span { color: var(--muted); font-size: var(--step--1); line-height: 1.4; }
+/* Hoja de datos: las cifras del trabajo como una tabla de especificaciones */
+.spec { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1.5px solid var(--ink); border-radius: 4px; background: var(--paper); }
+.spec div { padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--line); }
+.spec div:last-child { border-right: 0; }
+.spec small { font: 500 0.72rem/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.spec b { font: 700 var(--step-3)/1 var(--display); font-variant-numeric: tabular-nums; }
+.spec span { color: var(--muted); font-size: var(--step--1); line-height: 1.4; }
 
-/* Harness: subsistemas */
+/* Código de colores: la leyenda de los cables */
 .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
-.subsys { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.subsys li { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); gap: 12px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
-.subsys b { font-family: var(--display); }
-.subsys span { color: var(--muted); font-size: var(--step--1); }
-
-/* Tablas */
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
-table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
-th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { font: 500 0.75rem/1.3 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); background: var(--bg); }
-tr:last-child td { border-bottom: 0; }
-td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.legend-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.legend-list li { display: grid; grid-template-columns: 4.5rem 7.5rem minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: 4px; }
+.cable { height: 8px; border-radius: 4px; position: relative; }
+.cable::after { content: ""; position: absolute; right: -3px; top: -3px; width: 6px; height: 14px; border-radius: 2px; background: var(--copper); }
+.legend-list b { font: 600 1rem/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.05em; }
+.legend-list b .code { font: 500 0.75rem/1 var(--mono); color: var(--muted); display: block; letter-spacing: 0; margin-top: 2px; }
+.legend-list span { color: var(--muted); font-size: var(--step--1); }
 
 /* Método */
-.method { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.method div { padding: 16px 18px; border-left: 2px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0; display: flex; flex-direction: column; gap: 6px; }
+.method { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
+.method div { padding: 16px 18px; border: 1px solid var(--line); border-top: 3px solid var(--copper); background: var(--paper); border-radius: 0 0 4px 4px; display: flex; flex-direction: column; gap: 6px; }
 .method p { color: var(--muted); font-size: var(--step--1); }
 
-/* Proyectos */
-.projects { display: grid; gap: 14px; }
-.proj { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr) minmax(0, 15rem); gap: 20px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
-.proj .id { font: 700 var(--step-2)/1 var(--display); color: var(--accent); }
+/* Gráfico */
+.chart { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 16px; overflow-x: auto; margin: 24px 0 0; }
+.chart svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.chart svg text { fill: var(--muted); font-family: var(--mono); font-size: 11px; }
+.chart svg .lbl { fill: var(--ink); font-family: var(--display); font-size: 14px; font-weight: 600; letter-spacing: 0.05em; }
+.chart svg .grid { stroke: var(--line); stroke-width: 1; }
+.chart svg .weak { fill: var(--sheath); } .chart svg .strong { fill: var(--copper); }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: var(--step--1); color: var(--muted); margin-top: 10px; }
+.legend i { display: inline-block; width: 22px; height: 6px; border-radius: 3px; margin-right: 6px; vertical-align: 2px; }
+
+/* Proyectos como conectores */
+.pin-key { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 500 0.78rem/1.4 var(--mono); color: var(--muted); margin-top: 18px; }
+.pin-key span { display: inline-flex; align-items: center; gap: 6px; }
+.projects { display: grid; gap: 12px; margin-top: 16px; }
+.proj { display: grid; grid-template-columns: 2.6rem 4.6rem minmax(0, 1fr) minmax(0, 15rem); gap: 18px; padding: 18px 20px 18px 0; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 4px; }
+.header { display: flex; flex-direction: column; justify-content: center; gap: 7px; padding: 0 0 0 12px; border-right: 1px dashed var(--line); }
+.header i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--line); display: block; }
+.header i:not(.on) { background: transparent; }
+.header i.on { border-color: transparent; box-shadow: 0 0 0 2px var(--paper), 0 0 6px var(--copper); }
+.proj .id { font: 700 var(--step-2)/1 var(--display); color: var(--copper); letter-spacing: 0.02em; }
+.proj .id small { display: block; font: 500 0.7rem/1.6 var(--mono); color: var(--muted); letter-spacing: 0; }
 .proj .body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .proj .q { color: var(--muted); font-size: var(--step--1); }
 .proj .finding { font-size: var(--step--1); }
-.proj .side { display: flex; flex-direction: column; gap: 8px; font-size: var(--step--1); min-width: 0; }
-.vs { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; align-items: baseline; }
-.vs dt { font: 500 0.72rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.vs { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 10px; align-items: baseline; margin: 0; font-size: var(--step--1); min-width: 0; }
+.vs dt { font: 600 0.78rem/1.4 var(--display); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
 .vs dd { margin: 0; font-variant-numeric: tabular-nums; }
-.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font: 500 0.72rem/1.5 var(--mono); border: 1px solid currentColor; }
-.pill.ok { color: var(--pass); } .pill.bad { color: var(--fail); } .pill.mid { color: var(--accent); }
+.state { display: inline-block; padding: 1px 7px; border-radius: 3px; font: 500 0.72rem/1.6 var(--mono); border: 1px solid currentColor; }
+.state.ok { color: var(--pass); } .state.bad { color: var(--fail); } .state.mid { color: var(--copper); }
 .proj a.more { font-size: var(--step--1); }
 
-/* Gráficos */
-.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-x: auto; }
-.chart svg { display: block; width: 100%; min-width: 560px; height: auto; }
-.chart svg text { fill: var(--muted); font-family: var(--mono); font-size: 11px; }
-.chart svg .lbl { fill: var(--ink); font-family: var(--body); font-size: 12px; font-weight: 600; }
-.chart svg .grid { stroke: var(--line); stroke-width: 1; }
-.chart svg .weak { fill: var(--weak); } .chart svg .strong { fill: var(--accent); }
-.legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: var(--step--1); color: var(--muted); margin-top: 10px; }
-.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
-
 /* Hallazgos */
-.findings { counter-reset: f; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.finding-card { padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
-.finding-card .tag { font: 500 0.72rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
-.finding-card p { color: var(--muted); font-size: var(--step--1); }
-.finding-card.key { background: var(--accent-soft); border-color: transparent; grid-column: 1 / -1; }
-.finding-card.key p { color: var(--ink); }
+.findings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px; }
+.f-card { padding: 18px 20px; border: 1px solid var(--line); border-left: 4px solid var(--wire, var(--copper)); border-radius: 0 4px 4px 0; background: var(--paper); display: flex; flex-direction: column; gap: 8px; }
+.f-card .k { font: 600 0.78rem/1 var(--display); text-transform: uppercase; letter-spacing: 0.1em; color: var(--wire, var(--copper)); }
+.f-card p { color: var(--muted); font-size: var(--step--1); }
+.f-card.main { grid-column: 1 / -1; border: 1.5px solid var(--ink); border-left: 4px solid var(--copper); }
+.f-card.main p { color: var(--ink); font-size: var(--step-0); }
+
+/* Tabla de piezas */
+.table-wrap { overflow-x: auto; border: 1.5px solid var(--ink); border-radius: 4px; background: var(--paper); margin-top: 24px; }
+table { border-collapse: collapse; width: 100%; font-size: var(--step--1); }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.78rem/1.3 var(--display); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+td.pn { font-family: var(--mono); color: var(--copper); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
 
 /* Herramientas */
-.tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.tools div { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.tools code { font: 500 var(--step--1)/1.3 var(--mono); color: var(--ink); overflow-wrap: anywhere; }
+.tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 24px; }
+.tools div { padding: 12px 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tools code { font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
 .tools span { color: var(--muted); font-size: var(--step--1); }
 
 .limits { display: grid; gap: 10px; padding: 0; margin: 0; list-style: none; }
-.limits li { padding-left: 18px; position: relative; color: var(--muted); max-width: 70ch; }
-.limits li::before { content: ""; position: absolute; left: 0; top: 0.65em; width: 8px; height: 2px; background: var(--accent); }
+.limits li { padding-left: 22px; position: relative; color: var(--muted); max-width: 70ch; }
+.limits li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 14px; height: 3px; border-radius: 2px; background: var(--copper); }
 
-footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--step--1); display: flex; flex-wrap: wrap; gap: 12px 32px; justify-content: space-between; }
+/* Cajetín del plano */
+.titleblock { margin-block: 24px 48px; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; border: 1.5px solid var(--ink); border-radius: 4px; background: var(--paper); font-size: var(--step--1); }
+.titleblock div { padding: 10px 14px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.titleblock div:nth-child(4n) { border-right: 0; }
+.titleblock div:nth-last-child(-n+4) { border-bottom: 0; }
+.titleblock small { font: 500 0.68rem/1.2 var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.titleblock strong { font: 600 1rem/1.3 var(--display); letter-spacing: 0.03em; overflow-wrap: anywhere; }
 
 @media (max-width: 860px) {
   .hero, .two { grid-template-columns: minmax(0, 1fr); }
-  .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .method { grid-template-columns: minmax(0, 1fr); }
-  .proj { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .findings, .tools { grid-template-columns: minmax(0, 1fr); }
+  .spec { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .spec div:nth-child(2) { border-right: 0; }
+  .spec div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .method, .findings, .tools { grid-template-columns: minmax(0, 1fr); }
+  .proj { grid-template-columns: 2.4rem minmax(0, 1fr); gap: 10px 14px; padding-right: 16px; }
+  .proj .header { grid-row: 1 / span 3; }
+  .proj .id, .proj .body, .proj .vs { grid-column: 2; }
+  .titleblock { grid-template-columns: 1fr 1fr; }
+  .titleblock div:nth-child(4n) { border-right: 1px solid var(--line); }
+  .titleblock div:nth-child(2n) { border-right: 0; }
+  .titleblock div:nth-last-child(-n+4) { border-bottom: 1px solid var(--line); }
+  .titleblock div:nth-last-child(-n+2) { border-bottom: 0; }
 }
-@media (max-width: 420px) { .subsys li { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
-@media (prefers-reduced-motion: no-preference) {
-  .readout pre { animation: rise 0.6s ease-out both; }
-  @keyframes rise { from { opacity: 0.35; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-}
+@media (max-width: 460px) { .legend-list li { grid-template-columns: 3rem minmax(0, 1fr); } .legend-list li span { grid-column: 1 / -1; } }
 </style>
 </head>
 <body>
@@ -147,62 +195,85 @@ footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var
 
   <header class="hero">
     <div class="stack">
-      <span class="eyebrow">Portfolio · Harness Engineering</span>
-      <h1>Mismo modelo, <em>distinto entorno</em>.</h1>
-      <p class="lead">Ocho proyectos y <span class="num" id="sessions-count">48</span> sesiones de Claude Code medidas para ver qué cambia el harness, las instrucciones, la verificación y el estado alrededor del agente, en lo que entrega el mismo modelo.</p>
+      <span class="tag"><span class="ref">J0</span> Portfolio · Harness Engineering <span class="pins"><i class="pin p-ins"></i><i class="pin p-her"></i><i class="pin p-ent"></i><i class="pin p-est"></i><i class="pin p-ver"></i></span></span>
+      <h1>Mismo motor,<br><span class="cu">distinto mazo de cables</span></h1>
+      <p class="lead">Ocho proyectos y <span class="num">48</span> sesiones de Claude Code medidas para ver qué cambia el harness, las instrucciones, la verificación y el estado alrededor del agente, en lo que entrega el mismo modelo.</p>
       <div class="actions">
-        <a class="btn primary" id="repo-link" href="https://github.com/matiasrodriguezc01/harness-portfolio" target="_blank" rel="noopener">Ver el repositorio</a>
+        <a class="btn primary" href="https://github.com/matiasrodriguezc01/harness-portfolio" target="_blank" rel="noopener">Ver el repositorio</a>
         <a class="btn" href="#hallazgos">Leer los hallazgos</a>
       </div>
     </div>
-    <div class="readout" role="img" aria-label="Salida real de las herramientas de verificación durante los experimentos">
-<pre><span class="dim">$ bash scripts/check-architecture.sh</span>
-<span class="bad">  VIOLATION: dist/preload/preload.js requires a local
-             file while the sandbox is on</span>
-  WHY: a sandboxed preload cannot load local modules,
-       so window.knowledgeBase is undefined
-  FIX: bundle the preload into a single file
-<span class="dim">$ node scripts/check-bridge.mjs 9334</span>
-  { "bridge": <span class="bad">"undefined"</span>, "keys": "" }
-<span class="dim"># P03: las dos corridas marcaron 4/4 como "pass"</span>
-<span class="dim">$ node scripts/p06-acceptance.mjs ~/harness-runs/p06-mio</span>
-  <span class="ok">12 / 12</span>  puente · importar · citas · id · calificar
-           historial · botones · persistencia · reset</pre>
+    <div class="drawing">
+      <svg viewBox="0 0 560 340" role="img" aria-label="Dibujo de un mazo de cables: el bloque del modelo envía cinco cables de colores, agrupados en un tronco con precintos, que se abren hacia cinco conectores: instrucciones, herramientas, entorno, estado y verificación.">
+        <!-- motor: el modelo -->
+        <rect class="engine" x="14" y="122" width="126" height="96" rx="6"/>
+        <text class="engine-t" x="77" y="164" text-anchor="middle">MODELO</text>
+        <text class="engine-s" x="77" y="184" text-anchor="middle">Claude Opus 5.5</text>
+        <text class="engine-s" x="77" y="200" text-anchor="middle">P/N HE-00</text>
+        <g><rect class="f-ins" x="140" y="140" width="8" height="6"/><rect class="f-her" x="140" y="153" width="8" height="6"/><rect class="f-ent" x="140" y="166" width="8" height="6"/><rect class="f-est" x="140" y="179" width="8" height="6"/><rect class="f-ver" x="140" y="192" width="8" height="6"/></g>
+        <!-- del motor al tronco -->
+        <path class="wire w-ins" d="M148 143 C 175 143, 180 162, 205 162"/>
+        <path class="wire w-her" d="M148 156 C 175 156, 180 166, 205 166"/>
+        <path class="wire w-ent" d="M148 169 L 205 170"/>
+        <path class="wire w-est" d="M148 182 C 175 182, 180 174, 205 174"/>
+        <path class="wire w-ver" d="M148 195 C 175 195, 180 178, 205 178"/>
+        <!-- tronco con funda y precintos -->
+        <rect class="sheath" x="205" y="155" width="132" height="30" rx="15"/>
+        <rect class="tie" x="232" y="151" width="7" height="38" rx="2"/>
+        <rect class="tie" x="298" y="151" width="7" height="38" rx="2"/>
+        <text x="271" y="146" text-anchor="middle">TRONCO · 5 × 0,5 mm²</text>
+        <!-- salida del tronco a los conectores -->
+        <path class="wire w-ins" d="M337 162 C 380 162, 380 52, 420 52"/>
+        <path class="wire w-her" d="M337 166 C 385 166, 385 116, 420 116"/>
+        <path class="wire w-ent" d="M337 170 L 420 180"/>
+        <path class="wire w-est" d="M337 174 C 385 174, 385 244, 420 244"/>
+        <path class="wire w-ver" d="M337 178 C 380 178, 380 308, 420 308"/>
+        <!-- señal -->
+        <path class="sig" d="M148 143 C 175 143, 180 162, 205 162 L 337 162 C 380 162, 380 52, 420 52"/>
+        <path class="sig" d="M148 169 L 205 170 L 337 170 L 420 180" style="animation-delay:-0.9s"/>
+        <path class="sig" d="M148 195 C 175 195, 180 178, 205 178 L 337 178 C 380 178, 380 308, 420 308" style="animation-delay:-1.8s"/>
+        <!-- conectores -->
+        <g><rect class="box" x="420" y="34" width="128" height="36" rx="4"/><rect class="f-ins" x="420" y="34" width="6" height="36"/><text class="lbl" x="434" y="52">INSTRUCCIONES</text><text x="434" y="64">J1 · BU</text></g>
+        <g><rect class="box" x="420" y="98" width="128" height="36" rx="4"/><rect class="f-her" x="420" y="98" width="6" height="36"/><text class="lbl" x="434" y="116">HERRAMIENTAS</text><text x="434" y="128">J2 · GN</text></g>
+        <g><rect class="box" x="420" y="162" width="128" height="36" rx="4"/><rect class="f-ent" x="420" y="162" width="6" height="36"/><text class="lbl" x="434" y="180">ENTORNO</text><text x="434" y="192">J3 · YE</text></g>
+        <g><rect class="box" x="420" y="226" width="128" height="36" rx="4"/><rect class="f-est" x="420" y="226" width="6" height="36"/><text class="lbl" x="434" y="244">ESTADO</text><text x="434" y="256">J4 · VT</text></g>
+        <g><rect class="box" x="420" y="290" width="128" height="36" rx="4"/><rect class="f-ver" x="420" y="290" width="6" height="36"/><text class="lbl" x="434" y="308">VERIFICACIÓN</text><text x="434" y="320">J5 · RD</text></g>
+      </svg>
     </div>
   </header>
 
-  <div class="facts" aria-label="Datos del trabajo">
-    <div class="fact"><b>8</b><span>proyectos del curso, del harness mínimo al grafo</span></div>
-    <div class="fact"><b id="fact-sessions">48</b><span>sesiones de agente con transcript guardado, US$53,86 en total</span></div>
-    <div class="fact"><b>5</b><span>verificaciones propias que los agentes no veían</span></div>
-    <div class="fact"><b>1</b><span>bug que se repite en las soluciones del propio curso</span></div>
+  <div class="spec" aria-label="Hoja de datos del trabajo">
+    <div><small>Proyectos</small><b>8</b><span>del harness mínimo al grafo</span></div>
+    <div><small>Sesiones</small><b>48</b><span>con transcript guardado · US$53,86</span></div>
+    <div><small>Verificaciones ocultas</small><b>5</b><span>que los agentes no veían</span></div>
+    <div><small>Defecto recurrente</small><b>1</b><span>en las soluciones del propio curso</span></div>
   </div>
 
   <section id="harness">
     <div class="two">
       <div class="stack">
-        <span class="eyebrow">El concepto</span>
+        <span class="tag"><span class="ref">J1</span> El concepto</span>
         <h2>Agente = modelo + harness</h2>
-        <p>El harness es todo lo que no es el modelo: qué instrucciones lee el agente, qué herramientas puede usar, en qué entorno corre, qué estado sobrevive entre sesiones y cómo se verifica su trabajo. La idea del curso es que, cuando un agente falla, primero hay que revisar el harness y recién después el modelo.</p>
+        <p>El modelo es el motor. El harness es el mazo de cables que lo conecta con todo lo demás: qué instrucciones lee, qué herramientas puede usar, en qué entorno corre, qué estado sobrevive entre sesiones y cómo se verifica lo que hace. La idea del curso es que, cuando un agente falla, primero hay que revisar el cableado y recién después el motor.</p>
         <p>Este portfolio pone esa idea a prueba: en cada proyecto corrí la misma tarea con el mismo modelo, cambiando solo el harness, y medí qué pasó.</p>
       </div>
-      <ul class="subsys" aria-label="Los cinco subsistemas de un harness">
-        <li><b>Instrucciones</b><span><code>AGENTS.md</code> corto que enruta a la documentación, con reglas de inicio y de cierre.</span></li>
-        <li><b>Herramientas</b><span>Shell, archivos, tests y scripts de verificación con mínimo privilegio.</span></li>
-        <li><b>Entorno</b><span><code>init.sh</code> que confirma que el proyecto compila y arranca antes de trabajar.</span></li>
-        <li><b>Estado</b><span>Lista de funciones, traspaso y log de progreso: lo que la próxima sesión necesita saber.</span></li>
-        <li><b>Verificación</b><span>Tipos y arquitectura, tests, y una prueba de punta a punta en la app real.</span></li>
+      <ul class="legend-list" aria-label="Código de colores de los cinco subsistemas">
+        <li><div class="cable" style="background:var(--w-ins)"></div><b>Instrucciones<span class="code">J1 · BU</span></b><span><code>AGENTS.md</code> corto que enruta a la documentación, con reglas de inicio y de cierre.</span></li>
+        <li><div class="cable" style="background:var(--w-her)"></div><b>Herramientas<span class="code">J2 · GN</span></b><span>Shell, archivos, tests y scripts de verificación con mínimo privilegio.</span></li>
+        <li><div class="cable" style="background:var(--w-ent)"></div><b>Entorno<span class="code">J3 · YE</span></b><span><code>init.sh</code> que confirma que el proyecto compila y arranca antes de trabajar.</span></li>
+        <li><div class="cable" style="background:var(--w-est)"></div><b>Estado<span class="code">J4 · VT</span></b><span>Lista de funciones, traspaso y log de progreso para la próxima sesión.</span></li>
+        <li><div class="cable" style="background:var(--w-ver)"></div><b>Verificación<span class="code">J5 · RD</span></b><span>Tipos y arquitectura, tests, y una prueba de punta a punta en la app real.</span></li>
       </ul>
     </div>
   </section>
 
   <section id="metodo">
     <div class="stack">
-      <span class="eyebrow">Cómo lo medí</span>
-      <h2>Una variable por vez, verificada por fuera</h2>
+      <span class="tag"><span class="ref">J2</span> Banco de pruebas <span class="pins"><i class="pin p-ver"></i></span></span>
+      <h2>Una variable por vez, medida por fuera</h2>
       <p class="lead">Cada corrida es una sesión no interactiva de Claude Code (Opus 5.5) en una carpeta aislada, con el mismo prompt y sin skills ni MCPs. Lo único que cambia entre corridas es el harness.</p>
     </div>
-    <div class="method" style="margin-top:24px">
+    <div class="method">
       <div><h3>Sin creerle al agente</h3><p>Cada resultado lo volví a verificar yo: typecheck, tests, build y la app real. En P03 eso mostró que dos agentes habían marcado como terminado algo que el usuario no podía usar.</p></div>
       <div><h3>Verificaciones ocultas</h3><p>Una suite de aceptación de punta a punta (P06), un chequeo del puente de la interfaz, verificaciones propias de las funciones de P07 y P08, y un juez independiente con la misma rúbrica para todas las configuraciones (P05).</p></div>
       <div><h3>Todo queda en el repo</h3><p>Transcripts, diffs, harness usado, métricas y conclusión por proyecto, más los scripts para repetir cada experimento.</p></div>
@@ -211,12 +282,12 @@ footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var
 
   <section id="resultados">
     <div class="stack">
-      <span class="eyebrow">Resultados</span>
+      <span class="tag"><span class="ref">J3</span> Resultados</span>
       <h2>Proyecto por proyecto</h2>
       <p class="lead">El costo de cada corrida, con harness débil y fuerte. Con un modelo actual, el harness rara vez decidió si la tarea se terminaba; cambió cómo se hizo y en qué estado quedó el repo.</p>
     </div>
 
-    <figure class="chart" style="margin:24px 0 0" aria-labelledby="chart-cap">
+    <figure class="chart" aria-labelledby="chart-cap">
       <svg viewBox="0 0 640 250" role="img" aria-label="Costo en dólares por corrida, harness débil contra fuerte, proyectos 1 a 4 y 6">
         <!-- escala: 0 a 3,5 dólares sobre 180 px (y = 210 - valor * 51,43) -->
         <line class="grid" x1="60" y1="210" x2="630" y2="210"/>
@@ -228,130 +299,138 @@ footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var
         <text x="52" y="111.1" text-anchor="end">2</text>
         <text x="52" y="59.7" text-anchor="end">3</text>
         <text x="8" y="22">US$</text>
-        <!-- P01 3,28 / 2,30 -->
-        <rect class="weak" x="88" y="41.3" width="34" height="168.7"/><rect class="strong" x="126" y="91.7" width="34" height="118.3"/>
+        <rect class="weak" x="88" y="41.3" width="34" height="168.7" rx="2"/><rect class="strong" x="126" y="91.7" width="34" height="118.3" rx="2"/>
         <text x="105" y="35" text-anchor="middle">3,28</text><text x="143" y="85" text-anchor="middle">2,30</text>
         <text class="lbl" x="124" y="232" text-anchor="middle">P01</text>
-        <!-- P02 1,85 / 2,04 -->
-        <rect class="weak" x="200" y="114.9" width="34" height="95.1"/><rect class="strong" x="238" y="105.1" width="34" height="104.9"/>
+        <rect class="weak" x="200" y="114.9" width="34" height="95.1" rx="2"/><rect class="strong" x="238" y="105.1" width="34" height="104.9" rx="2"/>
         <text x="217" y="108" text-anchor="middle">1,85</text><text x="255" y="98" text-anchor="middle">2,04</text>
         <text class="lbl" x="236" y="232" text-anchor="middle">P02</text>
-        <!-- P03 0,78 / 1,27 -->
-        <rect class="weak" x="312" y="169.9" width="34" height="40.1"/><rect class="strong" x="350" y="144.7" width="34" height="65.3"/>
+        <rect class="weak" x="312" y="169.9" width="34" height="40.1" rx="2"/><rect class="strong" x="350" y="144.7" width="34" height="65.3" rx="2"/>
         <text x="329" y="163" text-anchor="middle">0,78</text><text x="367" y="138" text-anchor="middle">1,27</text>
         <text class="lbl" x="348" y="232" text-anchor="middle">P03</text>
-        <!-- P04 0,29 / 0,49 -->
-        <rect class="weak" x="424" y="195.1" width="34" height="14.9"/><rect class="strong" x="462" y="184.8" width="34" height="25.2"/>
+        <rect class="weak" x="424" y="195.1" width="34" height="14.9" rx="2"/><rect class="strong" x="462" y="184.8" width="34" height="25.2" rx="2"/>
         <text x="441" y="189" text-anchor="middle">0,29</text><text x="479" y="178" text-anchor="middle">0,49</text>
         <text class="lbl" x="460" y="232" text-anchor="middle">P04</text>
-        <!-- P06 1,19 / 2,74 -->
-        <rect class="weak" x="536" y="148.8" width="34" height="61.2"/><rect class="strong" x="574" y="69.1" width="34" height="140.9"/>
+        <rect class="weak" x="536" y="148.8" width="34" height="61.2" rx="2"/><rect class="strong" x="574" y="69.1" width="34" height="140.9" rx="2"/>
         <text x="553" y="142" text-anchor="middle">1,19</text><text x="591" y="63" text-anchor="middle">2,74</text>
         <text class="lbl" x="572" y="232" text-anchor="middle">P06</text>
       </svg>
-      <figcaption class="legend" id="chart-cap"><span><i style="background:var(--weak)"></i>Harness débil</span><span><i style="background:var(--accent)"></i>Harness fuerte</span><span>P05 compara roles, no harness débil y fuerte: está en su ficha.</span></figcaption>
+      <figcaption class="legend" id="chart-cap"><span><i style="background:var(--sheath)"></i>Harness débil</span><span><i style="background:var(--copper)"></i>Harness fuerte</span><span>P05 compara roles, no harness débil y fuerte: está en su ficha.</span></figcaption>
     </figure>
 
-    <div class="projects" style="margin-top:24px">
+    <div class="pin-key" aria-label="Qué significan los pines de cada proyecto">
+      <span>Pines encendidos = subsistemas que probó el proyecto:</span>
+      <span><i class="pin p-ins"></i>Instrucciones</span><span><i class="pin p-her"></i>Herramientas</span><span><i class="pin p-ent"></i>Entorno</span><span><i class="pin p-est"></i>Estado</span><span><i class="pin p-ver"></i>Verificación</span>
+    </div>
+
+    <div class="projects">
       <article class="proj">
-        <div class="id">P01</div>
+        <div class="header" aria-label="Instrucciones, entorno, estado y verificación"><i class="on p-ins"></i><i></i><i class="on p-ent"></i><i class="on p-est"></i><i class="on p-ver"></i></div>
+        <div class="id">P01<small>HE-01</small></div>
         <div class="body"><h3>Solo prompt contra harness mínimo</h3>
           <p class="q">¿Cuánto cambia un <code>AGENTS.md</code>, un <code>init.sh</code> y una lista de funciones?</p>
           <p class="finding">Las dos corridas cumplieron las 4 funciones. Con harness fue un 21% más rápida, un 30% más barata, escribió un test de punta a punta y dejó el estado listo para seguir. Sin harness, el agente rediseñó componentes y sumó una integración con una API externa que nadie pidió.</p>
-          <a class="more" href="p01/metricas.md">Métricas y conclusión</a></div>
-        <dl class="side vs"><dt>Débil</dt><dd>4/4 · 11:40 · 54 turnos</dd><dt>Fuerte</dt><dd>4/4 · 9:13 · 31 turnos</dd><dt>Hallazgo</dt><dd><span class="pill mid">cómo, no si</span></dd></dl>
+          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p01/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+        <dl class="vs"><dt>Débil</dt><dd>4/4 · 11:40 · 54 turnos</dd><dt>Fuerte</dt><dd>4/4 · 9:13 · 31 turnos</dd><dt>Lectura</dt><dd><span class="state mid">cómo, no si</span></dd></dl>
       </article>
       <article class="proj">
-        <div class="id">P02</div>
+        <div class="header" aria-label="Instrucciones y estado"><i class="on p-ins"></i><i></i><i></i><i class="on p-est"></i><i></i></div>
+        <div class="id">P02<small>HE-02</small></div>
         <div class="body"><h3>Repo legible y retomable</h3>
           <p class="q">¿Una sesión nueva puede retomar el trabajo leyendo solo el repo?</p>
           <p class="finding">Las dos sesiones nuevas se ubicaron en 3 acciones. Sin traspaso, la segunda sesión hizo una de las dos funciones pendientes y dejó lo que descubrió solo en el chat; con traspaso, terminó las dos y volvió a dejarlo escrito.</p>
-          <a class="more" href="p02/metricas.md">Métricas y conclusión</a></div>
-        <dl class="side vs"><dt>Débil</dt><dd>2/3 funciones · US$1,85</dd><dt>Fuerte</dt><dd>3/3 funciones · US$2,04</dd><dt>Hallazgo</dt><dd><span class="pill mid">el chat no es estado</span></dd></dl>
+          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p02/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+        <dl class="vs"><dt>Débil</dt><dd>2/3 funciones · US$1,85</dd><dt>Fuerte</dt><dd>3/3 funciones · US$2,04</dd><dt>Lectura</dt><dd><span class="state mid">el chat no es estado</span></dd></dl>
       </article>
       <article class="proj">
-        <div class="id">P03</div>
+        <div class="header" aria-label="Instrucciones, estado y verificación"><i class="on p-ins"></i><i></i><i></i><i class="on p-est"></i><i class="on p-ver"></i></div>
+        <div class="id">P03<small>HE-03</small></div>
         <div class="body"><h3>Continuidad con reinicios</h3>
           <p class="q">Con sesiones cortadas a mitad de trabajo, ¿se pierde el estado? ¿Se marca como terminado algo sin evidencia?</p>
           <p class="finding">Una función a la vez con commit por función sobrevivió a un corte real sin perder nada. Pero las dos corridas marcaron las 4 funciones como terminadas con la interfaz desconectada: la evidencia que pedían (tipos, build, tests de servicios) era del tipo equivocado.</p>
-          <a class="more" href="p03/metricas.md">Métricas y conclusión</a></div>
-        <dl class="side vs"><dt>Débil</dt><dd>4/4 "pass" · <span class="pill bad">UI rota</span></dd><dt>Fuerte</dt><dd>4/4 "pass" · <span class="pill bad">UI rota</span></dd><dt>Hallazgo</dt><dd><span class="pill bad">falsos pass</span></dd></dl>
+          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p03/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+        <dl class="vs"><dt>Débil</dt><dd>4/4 "pass" · <span class="state bad">UI cortada</span></dd><dt>Fuerte</dt><dd>4/4 "pass" · <span class="state bad">UI cortada</span></dd><dt>Lectura</dt><dd><span class="state bad">falsos pass</span></dd></dl>
       </article>
       <article class="proj">
-        <div class="id">P04</div>
+        <div class="header" aria-label="Instrucciones, herramientas y verificación"><i class="on p-ins"></i><i class="on p-her"></i><i></i><i></i><i class="on p-ver"></i></div>
+        <div class="id">P04<small>HE-04</small></div>
         <div class="body"><h3>Feedback de runtime con un bug sembrado</h3>
           <p class="q">¿Los logs estructurados ayudan a encontrar un bug más rápido?</p>
           <p class="finding">El bug se veía leyendo el código, así que los logs no hicieron falta: la corrida débil lo encontró en 2 acciones. El harness cambió la disciplina: la fuerte arregló primero el typecheck roto, en un commit aparte, y terminó todo en verde.</p>
-          <a class="more" href="p04/metricas.md">Métricas y conclusión</a></div>
-        <dl class="side vs"><dt>Débil</dt><dd>arreglado · 59 s · repo con errores</dd><dt>Fuerte</dt><dd>arreglado · 92 s · todo en verde</dd><dt>Hallazgo</dt><dd><span class="pill mid">límite del diseño</span></dd></dl>
+          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p04/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+        <dl class="vs"><dt>Débil</dt><dd>arreglado · 59 s · con errores</dd><dt>Fuerte</dt><dd>arreglado · 92 s · todo en verde</dd><dt>Lectura</dt><dd><span class="state mid">límite del diseño</span></dd></dl>
       </article>
       <article class="proj">
-        <div class="id">P05</div>
+        <div class="header" aria-label="Instrucciones y verificación"><i class="on p-ins"></i><i></i><i></i><i></i><i class="on p-ver"></i></div>
+        <div class="id">P05<small>HE-05</small></div>
         <div class="body"><h3>Separar al que hace del que revisa</h3>
           <p class="q">Un solo rol, generador + evaluador, o planificador + generador + evaluador: ¿cuánto suma cada rol?</p>
           <p class="finding">Calificadas por el mismo juez independiente: el evaluador separado subió la nota de 3,9 a 4,5 encontrando 6 defectos reales; sumar un planificador no mejoró (4,0) y fue lo más caro. El solo rol se autoevaluó con precisión.</p>
-          <a class="more" href="p05/metricas.md">Métricas y conclusión</a></div>
-        <dl class="side vs"><dt>Un rol</dt><dd>juez 3,9 · US$2,54</dd><dt>Gen + eval</dt><dd>juez <b>4,5</b> · US$7,05</dd><dt>+ planif.</dt><dd>juez 4,0 · US$8,60</dd></dl>
+          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p05/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+        <dl class="vs"><dt>Un rol</dt><dd>juez 3,9 · US$2,54</dd><dt>Gen + eval</dt><dd>juez <b>4,5</b> · US$7,05</dd><dt>+ planif.</dt><dd>juez 4,0 · US$8,60</dd></dl>
       </article>
       <article class="proj">
-        <div class="id">P06</div>
+        <div class="header" aria-label="Los cinco subsistemas"><i class="on p-ins"></i><i class="on p-her"></i><i class="on p-ent"></i><i class="on p-est"></i><i class="on p-ver"></i></div>
+        <div class="id">P06<small>HE-06</small></div>
         <div class="body"><h3>Harness completo, benchmark y ablación</h3>
           <p class="q">Con todo lo aprendido, ¿qué componentes importan de verdad?</p>
           <p class="finding">Las cinco variantes pasaron 12/12 en la suite oculta: con una tarea bien especificada, el modelo entrega software que funciona con cualquier harness. La diferencia está en el repo: mi harness dejó 22 tests, un commit por función y el estado completo; el débil, cero tests, cero commits y el sandbox desactivado. En la ablación, lo que más pesó fueron las instrucciones.</p>
-          <a class="more" href="p06/metricas.md">Métricas y conclusión</a></div>
-        <dl class="side vs"><dt>Débil</dt><dd>12/12 · US$1,19 · 0 tests</dd><dt>Mío</dt><dd>12/12 · US$2,74 · 22 tests</dd><dt>Ablación</dt><dd>sin instrucciones: 0 commits</dd></dl>
+          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p06/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+        <dl class="vs"><dt>Débil</dt><dd>12/12 · US$1,19 · 0 tests</dd><dt>Mío</dt><dd>12/12 · US$2,74 · 22 tests</dd><dt>Ablación</dt><dd>sin instrucciones: 0 commits</dd></dl>
       </article>
-      <article class="proj" id="p07-card">
-        <div class="id">P07</div>
+      <article class="proj">
+        <div class="header" aria-label="Herramientas, entorno y verificación"><i></i><i class="on p-her"></i><i class="on p-ent"></i><i></i><i class="on p-ver"></i></div>
+        <div class="id">P07<small>HE-07</small></div>
         <div class="body"><h3>Loops: objetivo, timer y maker-checker</h3>
           <p class="q">¿Qué pasa cuando el agente corre solo, sin nadie en el loop?</p>
-          <p class="finding" id="p07-finding">El loop con timer fue el más claro: chequeo determinista primero y agente solo si falla; detectó y revirtió las dos fallas inyectadas por US$0,23 sin romper nada. El loop de objetivo llegó a la meta de cobertura en 4 vueltas, pero una sola pasada llegó más lejos por el mismo costo. Los tropiezos fueron del harness: un objetivo que ya estaba cumplido y una herramienta que el propio <code>init.sh</code> borraba.</p>
-          <a class="more" href="p07/metricas.md">Métricas y conclusión</a></div>
-        <dl class="side vs" id="p07-side"><dt>Objetivo</dt><dd>99% en 4 vueltas · US$0,74</dd><dt>Timer</dt><dd><span class="pill ok">2/2 fallas</span> · US$0,23</dd><dt>Maker-checker</dt><dd>PASS · confirmado 7/7</dd></dl>
+          <p class="finding">El loop con timer fue el más claro: chequeo determinista primero y agente solo si falla; detectó y revirtió las dos fallas inyectadas por US$0,23 sin romper nada. El loop de objetivo llegó a la meta de cobertura en 4 vueltas, pero una sola pasada llegó más lejos por el mismo costo. Los tropiezos fueron del harness: un objetivo que ya estaba cumplido y una herramienta que el propio <code>init.sh</code> borraba.</p>
+          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p07/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+        <dl class="vs"><dt>Objetivo</dt><dd>99% en 4 vueltas · US$0,74</dd><dt>Timer</dt><dd><span class="state ok">2/2 fallas</span> · US$0,23</dd><dt>Maker-checker</dt><dd>PASS · confirmado 7/7</dd></dl>
       </article>
-      <article class="proj" id="p08-card">
-        <div class="id">P08</div>
+      <article class="proj">
+        <div class="header" aria-label="Herramientas, estado y verificación"><i></i><i class="on p-her"></i><i></i><i class="on p-est"></i><i class="on p-ver"></i></div>
+        <div class="id">P08<small>HE-08</small></div>
         <div class="body"><h3>El flujo como grafo</h3>
           <p class="q">¿Qué aparece al dibujar el loop como nodos, aristas y estado compartido?</p>
-          <p class="finding" id="p08-finding">Dibujar el loop del P07 encontró cuatro decisiones que no estaban escritas, entre ellas observaciones del checker que nadie recibía. El grafo ejecutable verifica en paralelo (funcional y revisión, cada uno en su worktree), vuelve atrás según la capa del problema y se detiene en un nodo humano que escala si nadie responde, sin aprobar solo.</p>
-          <a class="more" href="p08/metricas.md">Métricas y conclusión</a></div>
-        <dl class="side vs" id="p08-side"><dt>Paralelo</dt><dd>123 s contra 186 s (−34%)</dd><dt>Función</dt><dd><span class="pill ok">6/6</span> · regresión 12/12</dd><dt>Aprobación</dt><dd><span class="pill mid">espera a una persona</span></dd></dl>
+          <p class="finding">Dibujar el loop del P07 encontró cuatro decisiones que no estaban escritas, entre ellas observaciones del checker que nadie recibía. El grafo ejecutable verifica en paralelo (funcional y revisión, cada uno en su worktree), vuelve atrás según la capa del problema y se detiene en un nodo humano que escala si nadie responde, sin aprobar solo.</p>
+          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p08/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+        <dl class="vs"><dt>Paralelo</dt><dd>123 s contra 186 s (−34%)</dd><dt>Función</dt><dd><span class="state ok">6/6</span> · regresión 12/12</dd><dt>Aprobación</dt><dd><span class="state mid">espera a una persona</span></dd></dl>
       </article>
     </div>
   </section>
 
   <section id="hallazgos">
     <div class="stack">
-      <span class="eyebrow">Lo que aprendí</span>
+      <span class="tag"><span class="ref">J4</span> Lo que aprendí</span>
       <h2>Hallazgos</h2>
     </div>
-    <div class="findings" style="margin-top:24px">
-      <div class="finding-card key"><span class="tag">El principal</span><h3>Con modelos actuales, el harness cambia cómo se trabaja más que si se termina</h3><p>En casi todos los proyectos las dos versiones entregaron la tarea. Lo que movió el harness fue el costo, la verificación, los tests, los commits y lo que queda escrito para la próxima sesión. Varias predicciones del curso (agentes que no terminan, autoevaluación muy indulgente) no aparecieron con este modelo.</p></div>
-      <div class="finding-card"><span class="tag">Verificación</span><h3>La evidencia del tipo equivocado produce falsos "terminado"</h3><p>En P03, dos agentes marcaron 4 funciones como terminadas con la interfaz desconectada. Cumplieron la regla de "no marcar sin evidencia", pero la evidencia era el build y tests de servicios. Solo una prueba en la app real lo detecta.</p></div>
-      <div class="finding-card"><span class="tag">El curso</span><h3>Las soluciones del curso repiten el mismo bug</h3><p>El preload importa un archivo local con el sandbox de Electron activo, y la interfaz queda sin acceso a la app. Aparece en los starters y en la solución del proyecto final, que su propia rúbrica califica 5/5. Lo convertí en una regla ejecutable con un mensaje de qué, por qué y cómo arreglarlo.</p></div>
-      <div class="finding-card"><span class="tag">Especificación</span><h3>Una tarea bien especificada hizo buena parte del trabajo</h3><p>En P06, con nombres de API fijos y "tiene que funcionar en la app real", las cinco variantes pasaron la suite oculta, incluido el harness débil. Es la capa 1 del diagnóstico: antes de agregar harness, especificar bien la tarea.</p></div>
-      <div class="finding-card"><span class="tag">Roles</span><h3>Un evaluador independiente suma; un planificador, no siempre</h3><p>En P05 el evaluador que usaba la app encontró defectos reales (+0,6 puntos según el juez). El planificador amplió el trabajo y su evaluador revisó contra el contrato, dejando pasar lo que quedó fuera.</p></div>
-      <div class="finding-card"><span class="tag">Loops y grafos</span><h3>Un loop vale lo que su condición de parada</h3><p>En P07, el loop con timer revisaba con un chequeo determinista y solo llamaba al agente si algo fallaba: detectó y revirtió dos fallas por US$0,23. En P08, dibujar ese tipo de loop como grafo mostró cuatro decisiones que nadie había escrito, y verificar en paralelo ahorró un tercio del tiempo.</p></div>
-      <div class="finding-card"><span class="tag">Ablación</span><h3>Lo que más pesa hoy son las instrucciones</h3><p>En P06, sacar el <code>AGENTS.md</code> llevó a cero commits y un tercio de los tests. Sacar la verificación de punta a punta no cambió nada medible en esa tarea, porque el propio prompt ya la exigía.</p></div>
+    <div class="findings">
+      <div class="f-card main"><span class="k">El principal</span><h3>Con modelos actuales, el harness cambia cómo se trabaja más que si se termina</h3><p>En casi todos los proyectos las dos versiones entregaron la tarea. Lo que movió el harness fue el costo, la verificación, los tests, los commits y lo que queda escrito para la próxima sesión. Varias predicciones del curso (agentes que no terminan, autoevaluación muy indulgente) no aparecieron con este modelo.</p></div>
+      <div class="f-card" style="--wire:var(--w-ver)"><span class="k">J5 · Verificación</span><h3>La evidencia del tipo equivocado produce falsos "terminado"</h3><p>En P03, dos agentes marcaron 4 funciones como terminadas con la interfaz desconectada. Cumplieron la regla de "no marcar sin evidencia", pero la evidencia era el build y tests de servicios. Solo una prueba en la app real lo detecta.</p></div>
+      <div class="f-card" style="--wire:var(--w-ent)"><span class="k">J3 · El curso</span><h3>Las soluciones del curso repiten el mismo defecto</h3><p>El preload importa un archivo local con el sandbox de Electron activo, y la interfaz queda sin acceso a la app. Aparece en los starters y en la solución del proyecto final, que su propia rúbrica califica 5/5. Lo convertí en una regla ejecutable con un mensaje de qué, por qué y cómo arreglarlo.</p></div>
+      <div class="f-card" style="--wire:var(--w-ins)"><span class="k">J1 · Especificación</span><h3>Una tarea bien especificada hizo buena parte del trabajo</h3><p>En P06, con nombres de API fijos y "tiene que funcionar en la app real", las cinco variantes pasaron la suite oculta, incluido el harness débil. Antes de agregar harness, conviene especificar bien la tarea.</p></div>
+      <div class="f-card" style="--wire:var(--w-ver)"><span class="k">J5 · Roles</span><h3>Un evaluador independiente suma; un planificador, no siempre</h3><p>En P05 el evaluador que usaba la app encontró defectos reales (+0,6 puntos según el juez). El planificador amplió el trabajo y su evaluador revisó contra el contrato, dejando pasar lo que quedó fuera.</p></div>
+      <div class="f-card" style="--wire:var(--w-her)"><span class="k">J2 · Loops y grafos</span><h3>Un loop vale lo que su condición de parada</h3><p>En P07, el loop con timer revisaba con un chequeo determinista y solo llamaba al agente si algo fallaba: detectó y revirtió dos fallas por US$0,23. En P08, dibujar ese tipo de loop como grafo mostró cuatro decisiones que nadie había escrito, y verificar en paralelo ahorró un tercio del tiempo.</p></div>
+      <div class="f-card" style="--wire:var(--w-ins)"><span class="k">J1 · Ablación</span><h3>Lo que más pesa hoy son las instrucciones</h3><p>En P06, sacar el <code>AGENTS.md</code> llevó a cero commits y un tercio de los tests. Sacar la verificación de punta a punta no cambió nada medible en esa tarea, porque el propio prompt ya la exigía.</p></div>
     </div>
   </section>
 
   <section id="mi-harness">
     <div class="stack">
-      <span class="eyebrow">El resultado</span>
+      <span class="tag"><span class="ref">J5</span> Lista de piezas <span class="pins"><i class="pin p-ins"></i><i class="pin p-her"></i><i class="pin p-ent"></i><i class="pin p-est"></i><i class="pin p-ver"></i></span></span>
       <h2>Mi harness</h2>
       <p class="lead">Lo armé en P06 con lo que dejó cada proyecto anterior. Cada pieza responde a una falla observada.</p>
     </div>
-    <div class="table-wrap" style="margin-top:24px">
+    <div class="table-wrap">
       <table>
-        <thead><tr><th>Pieza</th><th>Qué hace</th><th>De dónde viene</th></tr></thead>
+        <thead><tr><th>P/N</th><th>Pieza</th><th>Qué hace</th><th>De dónde viene</th></tr></thead>
         <tbody>
-          <tr><td><code>AGENTS.md</code></td><td>Rutina de inicio y cierre, una función a la vez, commit por función, mapa a la documentación</td><td>Clases 03–05 y 07 · P02, P03</td></tr>
-          <tr><td>Definición de terminado</td><td>Tres capas en orden: estática, tests y puente, prueba en la app real</td><td>Clases 09–10 · falsos pass de P03</td></tr>
-          <tr><td><code>feature_list.json</code></td><td>Cada función con comportamiento, comando de verificación y estado</td><td>Clase 08 · a las listas del curso les faltaba el comando</td></tr>
-          <tr><td><code>init.sh</code></td><td>Entorno, tipos, build, guarda de arquitectura y abre la app para comprobar el puente</td><td>Clase 06 · P01–P04</td></tr>
-          <tr><td><code>check-architecture.sh</code></td><td>Regla nueva del preload con mensaje qué / por qué / cómo</td><td>Clase 10 · el bug que se repitió en todos los proyectos</td></tr>
-          <tr><td>Traspaso, progreso, checklist</td><td>Lo verificado, lo roto, el próximo paso y qué no tocar</td><td>P02, P03</td></tr>
+          <tr><td class="pn">HE-J1-01</td><td><code>AGENTS.md</code></td><td>Rutina de inicio y cierre, una función a la vez, commit por función, mapa a la documentación</td><td>Clases 03–05 y 07 · P02, P03</td></tr>
+          <tr><td class="pn">HE-J5-01</td><td>Definición de terminado</td><td>Tres capas en orden: estática, tests y puente, prueba en la app real</td><td>Clases 09–10 · falsos pass de P03</td></tr>
+          <tr><td class="pn">HE-J4-01</td><td><code>feature_list.json</code></td><td>Cada función con comportamiento, comando de verificación y estado</td><td>Clase 08 · a las listas del curso les faltaba el comando</td></tr>
+          <tr><td class="pn">HE-J3-01</td><td><code>init.sh</code></td><td>Entorno, tipos, build, guarda de arquitectura y abre la app para comprobar el puente</td><td>Clase 06 · P01–P04</td></tr>
+          <tr><td class="pn">HE-J5-02</td><td><code>check-architecture.sh</code></td><td>Regla nueva del preload con mensaje qué / por qué / cómo</td><td>Clase 10 · el defecto que se repitió en todos los proyectos</td></tr>
+          <tr><td class="pn">HE-J4-02</td><td>Traspaso, progreso, checklist</td><td>Lo verificado, lo roto, el próximo paso y qué no tocar</td><td>P02, P03</td></tr>
         </tbody>
       </table>
     </div>
@@ -359,37 +438,43 @@ footer { padding-block: 40px 56px; border-top: 1px solid var(--line); color: var
 
   <section id="herramientas">
     <div class="stack">
-      <span class="eyebrow">Para repetirlo</span>
+      <span class="tag"><span class="ref">J6</span> Herramental <span class="pins"><i class="pin p-her"></i></span></span>
       <h2>Herramientas que construí</h2>
     </div>
-    <div class="tools" style="margin-top:24px">
+    <div class="tools">
       <div><code>run-session.sh</code><span>Corre una sesión no interactiva de Claude Code en una carpeta aislada y guarda transcript, diff y tiempos.</span></div>
       <div><code>run-multi.sh</code><span>Encadena sesiones nuevas con tope de gasto para simular reinicios.</span></div>
       <div><code>analyze-transcript.py</code><span>Turnos, costo y acciones antes de la primera edición (costo de redescubrimiento).</span></div>
       <div><code>check-bridge.mjs</code><span>Se conecta a la app abierta por Chrome DevTools y verifica que la interfaz tenga acceso a la API.</span></div>
       <div><code>p06-acceptance.mjs</code><span>Suite de punta a punta oculta: 12 chequeos con dos reinicios de la app.</span></div>
       <div><code>run-p05.sh</code><span>Las tres configuraciones de roles y el juez independiente.</span></div>
-      <div id="tool-p07"><code>p07-*.sh</code><span>Loop de objetivo, loop con timer que inyecta fallas y loop maker-checker.</span></div>
-      <div id="tool-p08"><code>p08-graph.sh</code><span>Grafo con verificación en paralelo en worktrees, ruteo, aprobación humana y timeout.</span></div>
+      <div><code>p07-*.sh</code><span>Loop de objetivo, loop con timer que inyecta fallas y loop maker-checker.</span></div>
+      <div><code>p08-graph.sh</code><span>Grafo con verificación en paralelo en worktrees, ruteo, aprobación humana y timeout.</span></div>
     </div>
   </section>
 
   <section id="limites">
     <div class="stack">
-      <span class="eyebrow">Para leer los números</span>
+      <span class="tag"><span class="ref">J7</span> Tolerancias</span>
       <h2>Límites</h2>
       <ul class="limits">
         <li>Una corrida por condición. Las diferencias de tiempo y costo son indicativas, no estadísticas.</li>
         <li>Un solo modelo (Claude Opus 5.5). Varias conclusiones dependen de qué tan capaz es; con otro modelo pueden cambiar.</li>
         <li>Corrí las sesiones en modo no interactivo, no a mano como propone el curso, para medir todas igual. Las intervenciones humanas son cero por diseño.</li>
-        <li>Algunos protocolos los diseñé yo porque el curso no los define (P02, P03, P05, P06). Cada ajuste está documentado en su <code>metricas.md</code>.</li>
+        <li>Algunos protocolos los diseñé yo porque el curso no los define (P02, P03, P05–P08). Cada ajuste está documentado en su <code>metricas.md</code>.</li>
       </ul>
     </div>
   </section>
 
-  <footer>
-    <span>Matías Rodríguez · sobre el curso <a href="https://github.com/walkinglabs/learn-harness-engineering" target="_blank" rel="noopener">Learn Harness Engineering</a> (WalkingLabs, MIT)</span>
-    <span><a href="https://github.com/matiasrodriguezc01/harness-portfolio" target="_blank" rel="noopener">Repositorio en GitHub</a></span>
+  <footer class="titleblock" aria-label="Cajetín del plano">
+    <div><small>Proyecto</small><strong>Harness Engineering · Portfolio</strong></div>
+    <div><small>Dibujó</small><strong>Matías Rodríguez</strong></div>
+    <div><small>Motor</small><strong>Claude Opus 5.5</strong></div>
+    <div><small>Revisión</small><strong>2026-11</strong></div>
+    <div><small>Basado en</small><strong><a href="https://github.com/walkinglabs/learn-harness-engineering" target="_blank" rel="noopener">Learn Harness Engineering</a> (WalkingLabs, MIT)</strong></div>
+    <div><small>Sesiones</small><strong>48 · US$53,86</strong></div>
+    <div><small>Repositorio</small><strong><a href="https://github.com/matiasrodriguezc01/harness-portfolio" target="_blank" rel="noopener">GitHub</a></strong></div>
+    <div><small>Hoja</small><strong>1 de 1</strong></div>
   </footer>
 </div>
 </body>
