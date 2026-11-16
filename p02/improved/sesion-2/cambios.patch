@@ -1,0 +1,504 @@
+commit 3494f8e5848eb86f767cfec565cb8cc4852d3714
+Author: run <run@local>
+Date:   Sun Nov 15 21:04:38 2026 -0300
+
+    fin de sesión: sesion-2
+
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index d7cbb86..830382d 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -67,8 +67,10 @@ the only way for the renderer to get the absolute path of a picked file.
+ React 18 application bundled by Vite:
+ 
+ - `App.tsx` -- Root layout with import toggle, document selection, and Q&A.
++  On mount it calls `refreshDocuments()` (`documents:list` + `indexing:status`),
++  so persisted documents and the status bar load on startup.
+ - `DocumentList` -- Sidebar listing of imported documents.
+-- `DocumentDetail` -- Shows metadata, full content, chunks, and delete button.
++- `DocumentDetail` -- Shows metadata, full content (loaded on selection), chunks, and delete button with inline confirmation.
+ - `ImportPanel` -- File input for importing .txt and .md documents.
+ - `QuestionPanel` -- Text input for asking questions.
+ - `StatusBar` -- Shows index status and document count.
+@@ -118,17 +120,34 @@ service and the ImportPanel.
+ 
+ ## Content Retrieval Flow
+ 
+-Document content viewing adds a dedicated IPC channel:
++Document content viewing uses a dedicated IPC channel:
+ 
+ ```
+-1. User clicks "View Content" in DocumentDetail
+-2. DocumentDetail calls window.knowledgeBase.documents.getContent(id)
+-3. Preload invokes 'documents:get-content' IPC
+-   (NOT YET IMPLEMENTED: channel, preload method and handler are pending --
+-    see feature document-detail)
++1. User selects a document in DocumentList; App renders DocumentDetail
++2. DocumentDetail (useEffect on document.id) calls
++   window.knowledgeBase.documents.getContent(id)
++3. Preload invokes ipcRenderer.invoke('documents:get-content', id)
++   (IPC_CHANNELS.GET_DOCUMENT_CONTENT)
+ 4. ipc-handlers delegates to DocumentService.getDocumentContent(id)
+-5. PersistenceService reads content/<id>.txt
+-6. Content flows back to renderer for display in pre-wrap container
++5. PersistenceService reads content/<id>.txt (null if missing)
++6. Content flows back to the renderer and is shown in a scrollable
++   pre-wrap container. Loading / missing-content / error states are shown
++   inline. A stale response for a previously selected document is ignored.
++   The "Hide Content / View Content" button toggles the viewer.
++```
++
++## Delete Flow
++
++```
++1. User clicks Delete in DocumentDetail, then confirms inline (Confirm/Cancel)
++2. App calls window.knowledgeBase.documents.delete(id) ('documents:delete')
++3. DocumentService.deleteDocument(id) removes:
++   - documents/<id>-<filename>   (original copy)
++   - content/<id>.txt            (extracted text)
++   - chunks/<id>.json            (if indexed)
++   - the <id> entry in index-meta.json (if present)
++   - the entry in documents-meta.json
++4. App clears the selection and refreshes the list and status bar
+ ```
+ 
+ ## Data Storage
+@@ -142,7 +161,8 @@ knowledge-base-data/
+     <doc-id>.txt          # Extracted text content per document
+   chunks/
+     <doc-id>.json         # Chunk array per document
+-  index/
+-    index-meta.json       # Mapping of document IDs to chunk IDs
++  index-meta.json         # Mapping of document IDs to chunk IDs
++                          # (IndexingService writes it at the data root;
++                          #  the index/ directory exists but is unused)
+   qa-history.json         # Q&A interaction log
+ ```
+diff --git a/docs/PRODUCT.md b/docs/PRODUCT.md
+index 68c2e59..506d144 100644
+--- a/docs/PRODUCT.md
++++ b/docs/PRODUCT.md
+@@ -14,9 +14,11 @@ A desktop application for managing a personal knowledge base. Users import text
+     sidebar list, and it is selected.
+   - Importing two files with the same name keeps both as separate documents.
+ - View document metadata: title, filename, size, import date, indexing status.
+-- View full document content in a scrollable text viewer.
++- View full document content in a scrollable text viewer. Content loads
++  automatically when a document is selected; the viewer can be hidden.
+ - Browse a list of all imported documents in a sidebar panel.
+-- Delete documents and their associated data (content file, original copy).
++- Delete documents and their associated data (content file, original copy,
++  chunks and index entry). Delete asks for an inline confirmation first.
+ 
+ ### Text Indexing
+ - Split documents into ~500-character chunks at paragraph boundaries.
+@@ -46,7 +48,7 @@ A desktop application for managing a personal knowledge base. Users import text
+ | Header           |                                Refresh |
+ +------------------+----------------------------------------+
+ | Document List    | ImportPanel / Document Detail          |
+-| (sidebar)        |   - View Content button                |
++| (sidebar)        |   - View/Hide Content toggle           |
+ |                  |   - Show Chunks toggle                 |
+ | [+ Import]       |   - Index Document button              |
+ |                  |   - Delete button                      |
+diff --git a/feature_list.json b/feature_list.json
+index e066e7f..0c2e986 100644
+--- a/feature_list.json
++++ b/feature_list.json
+@@ -46,17 +46,17 @@
+       "id": "document-detail",
+       "name": "Document Detail with Content",
+       "description": "DocumentDetail shows full document content via getContent IPC, metadata, and delete button",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "2026-11-15 (session 2): npm run check and npm run build clean. Launched Electron 33 with an isolated --user-data-dir and drove the UI over CDP: imported alpha.md and beta.txt through the real file input; after import beta's text renders in [data-testid=document-content]; selecting alpha in the sidebar shows content byte-identical to the source file; Hide Content removes the viewer and View Content restores it; beta indexed -> 'Show Chunks (4)'; Delete shows an inline confirmation, Cancel keeps the doc, Confirm Delete removes it from list and sidebar. On disk after delete: documents/<beta-id>-beta.txt, content/<beta-id>.txt, chunks/<beta-id>.json and the beta entry in index-meta.json are all gone, alpha's files untouched. getContent('../../documents-meta') -> null and delete('../x') -> false (non-UUID ids rejected).",
++      "testedAt": "2026-11-15T22:00:00Z"
+     },
+     {
+       "id": "basic-persistence",
+       "name": "Basic Persistence",
+       "description": "Imported documents persist across app restarts via filesystem storage in userData directory",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "2026-11-15 (session 2): npm run check and build clean. App.tsx calls refreshDocuments() on mount. Quit the Electron process from the document-detail run and launched a new one with the same --user-data-dir: without any click, the sidebar shows 'Documents (1)' with alpha and the status bar shows 'Index: ready | Documents: 1'. Selecting alpha shows its full content, identical to the source file.",
++      "testedAt": "2026-11-15T22:10:00Z"
+     }
+   ]
+ }
+diff --git a/session-handoff.md b/session-handoff.md
+index 3f22c67..0de6348 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -3,46 +3,49 @@
+ ## Verified Now
+ 
+ - What is currently working:
+-  - **document-import** (feature_list status `pass`): pick a .txt/.md file in ImportPanel -> validated -> stored -> appears in DocumentList and is selected. Unsupported types and >10 MB files show an inline error.
+-  - The preload bridge actually loads now (it never did before; see Changed This Session).
+-  - Status bar shows the document count and index status after import.
++  - **document-import** (`pass`, session 1): pick a .txt/.md file in ImportPanel -> validated -> stored -> appears in DocumentList and is selected. Unsupported types and files over 10 MB show an inline error.
++  - **document-detail** (`pass`, session 2): selecting a document loads its full text through `documents:get-content` into a scrollable pre-wrap viewer (with View/Hide toggle and loading/missing/error states). Delete has an inline Confirm/Cancel step and removes the original copy, `content/<id>.txt`, `chunks/<id>.json` and the document's `index-meta.json` entry.
++  - **basic-persistence** (`pass`, session 2): App calls `refreshDocuments()` on mount, so persisted docs and the status bar load on startup.
+ - What verification actually ran:
+   - `npm run check` and `npm run build`, both clean.
+-  - Launched Electron with `--remote-debugging-port=9333 --user-data-dir=<scratch>` and drove the real file input via CDP `DOM.setFileInputFiles`: bad extension, oversized file, two valid imports, and a duplicate filename. Inspected `knowledge-base-data/` on disk (meta, content, original copies match the source byte for byte).
+-  - Not run: `npm test` (no tests exist in the repo).
++  - Launched Electron with `--remote-debugging-port=9333 --user-data-dir=<scratch>` and drove the UI over CDP: imported 2 files through the real file input, selected each one and compared the rendered text to the source (byte-identical), toggled the viewer, indexed one doc, then went through delete -> cancel -> delete -> confirm. Checked the data dir on disk afterwards. Also called `getContent`/`delete` with path-traversal ids: they return null/false.
++  - Persistence: quit Electron, relaunched with the same user-data-dir. The list and status bar were populated without clicking, and the content was viewable.
++  - Not run: `npm test` (the repo has no tests).
+ 
+ ## Changed This Session
+ 
+ - Code or behavior added:
+-  - `DocumentService.importDocument` validates non-empty path, regular file, extension (`SUPPORTED_EXTENSIONS`), and size (`MAX_IMPORT_SIZE_BYTES`), all in `src/shared/types.ts`. It stores the original copy as `documents/<id>-<filename>` so same-named files don't overwrite each other. `deleteDocument` uses the same naming.
+-  - Preload exposes `documents.getFilePath(file)` (wraps `webUtils.getPathForFile`; `File.path` was removed in Electron 32).
+-  - ImportPanel: client-side pre-validation, importing state, inline error, Cancel button, and the input resets so the same file can be picked again.
+-  - App.handleImport selects the new doc, closes the panel, and rethrows a cleaned error message to the panel.
+-  - `IndexStatus` moved to shared types. App maps it to `AppStatus` (previously the status bar went blank once any document existed).
+-- Infrastructure or harness changes:
+-  - The baseline didn't type-check. Fixed the shared-type import paths in the renderer, unused imports, the duplicate `declare global` in App.tsx (types.d.ts is canonical), and the StatusBar index type.
+-  - **Preload is now bundled with esbuild** (`npm run build:preload`, added to `build` and `scripts/dev.js`). A sandboxed preload can't `require('../shared/types')`, so `window.knowledgeBase` was undefined. Added `esbuild@0.25.12` as an exact devDependency (same version vite already pulled in).
++  - `IPC_CHANNELS.GET_DOCUMENT_CONTENT = 'documents:get-content'`, its handler, preload `documents.getContent(id)`, and the `types.d.ts` entry.
++  - `DocumentService`: `getDocumentContent` and `deleteDocument` reject ids that aren't UUIDs (guards against path traversal from the renderer). `deleteDocument` now also removes the content file, the chunks file and the index-meta entry.
++  - `PersistenceService.deleteFile(relativePath)`.
++  - `App.tsx`: mount `useEffect` -> `refreshDocuments()`.
++  - `DocumentDetail`: loads content and chunks on `document.id` change, ignores stale responses, View/Hide Content toggle, inline delete confirmation (resets when the selection changes).
++- Docs:
++  - ARCHITECTURE.md: rewrote Content Retrieval Flow, added Delete Flow, and fixed Data Storage. `index-meta.json` actually lives at the data root, not in `index/`; the docs now match the code.
++  - PRODUCT.md: content loads on selection, delete cleanup and confirmation, and the UI diagram.
+ 
+ ## Broken Or Unverified
+ 
+ - Known defect:
+-  - `documents:get-content` channel / preload `getContent` / handler do not exist yet (docs mark this as pending). DocumentDetail `content` state is a placeholder.
+-  - `deleteDocument` removes metadata and the original copy but not `content/<id>.txt` or chunks (PRODUCT.md says it should).
+-  - App does not load the document list on startup; it only refreshes after import or Refresh (basic-persistence feature).
++  - `IndexingService.startIndexing(id)` (single document, the "Index Document" button) writes `chunks/<id>.json` but does NOT add the doc to `index-meta.json` and does not update `Document.status`/`chunks`. So the status bar's indexed count only changes after a full `startIndexing()`, and the button never disappears. Not fixed (out of scope).
++  - `selectedDoc` in App is a snapshot: metadata shown in DocumentDetail goes stale after indexing until the user re-selects the doc.
+   - `PersistenceService.writeJson` is not actually atomic despite its doc comment.
+   - Imported files are read as UTF-8 without encoding detection.
+-- Unverified path: inline display of a *server-side* import error through the UI. Client pre-validation catches type and size first; the prefix-stripping regex was checked against the actual raw message format only.
+-- Risk for the next session: new preload imports must stay bundle-able; don't switch preload back to plain tsc output.
++  - `getStatus().lastIndexed` always returns "now", not a real timestamp.
++- Unverified path: the 'missing' and 'error' content states in DocumentDetail were not exercised in the UI (a content file is always created on import).
++- Risk for the next session: new preload imports must stay bundle-able; don't switch the preload back to plain tsc output.
+ 
+ ## Next Best Step
+ 
+-- Highest-priority unfinished feature: `document-detail` (add `GET_DOCUMENT_CONTENT: 'documents:get-content'` to IPC_CHANNELS, the handler, preload `getContent`, the types.d.ts entry, and load content in DocumentDetail).
+-- Why it is next: import now produces content files that nothing can display.
+-- What counts as passing: selecting an imported doc shows its full text. Delete removes it from the list and removes its content file.
+-- What must not change during that step: preload bundling, the `<id>-<filename>` storage naming, and the import validation constants.
++- All features in feature_list.json are now `pass`.
++- Suggested next work, by value:
++  1. Make single-document indexing (`startIndexing(id)`) update `index-meta.json` and the document's `status`/`chunks`, and refresh `selectedDoc` in App after indexing.
++  2. Make `PersistenceService.writeJson` actually atomic (write to a temp file, then `renameSync`).
++  3. Add vitest unit tests for DocumentService and IndexingService (`npm test` currently has nothing to run).
++- What must not change: preload bundling, the `<id>-<filename>` storage naming, the import validation constants, and the UUID id guard in DocumentService.
+ 
+ ## Commands
+ 
+ - Startup: `npm install && npm run dev`
+ - Verification: `npm run check && npm run build`
+-- Focused debug command: `npm run build && env -u NODE_OPTIONS npx electron . --remote-debugging-port=9333 --user-data-dir=/tmp/kb-test` (NODE_OPTIONS in this shell contains `--openssl-legacy-provider`, which Electron rejects), then attach via `curl localhost:9333/json/list`.
++- Focused debug command: `npm run build && env -u NODE_OPTIONS npx electron . --remote-debugging-port=9333 --user-data-dir=<scratch dir>`. NODE_OPTIONS in this shell contains `--openssl-legacy-provider`, which Electron rejects. Then attach via `curl localhost:9333/json/list`. Node 20 needs `node --experimental-websocket` for a CDP client script that uses the global `WebSocket`.
+diff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts
+index 947e64e..b443cbc 100644
+--- a/src/main/ipc-handlers.ts
++++ b/src/main/ipc-handlers.ts
+@@ -26,6 +26,10 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+     return documentService.getDocument(id);
+   });
+ 
++  ipcMain.handle(IPC_CHANNELS.GET_DOCUMENT_CONTENT, async (_event, id: string) => {
++    return documentService.getDocumentContent(id);
++  });
++
+   ipcMain.handle(IPC_CHANNELS.DELETE_DOCUMENT, async (_event, id: string) => {
+     return documentService.deleteDocument(id);
+   });
+diff --git a/src/preload/preload.ts b/src/preload/preload.ts
+index 29c51fd..41bd771 100644
+--- a/src/preload/preload.ts
++++ b/src/preload/preload.ts
+@@ -9,6 +9,7 @@ const api = {
+     // Returns '' for files that don't come from the filesystem.
+     getFilePath: (file: File) => webUtils.getPathForFile(file),
+     get: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_DOCUMENT, id),
++    getContent: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_DOCUMENT_CONTENT, id),
+     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.DELETE_DOCUMENT, id),
+   },
+   indexing: {
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index 4e0404a..55db1bc 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -1,4 +1,4 @@
+-import { useState, useCallback } from 'react';
++import { useState, useCallback, useEffect } from 'react';
+ import { DocumentList } from './components/DocumentList';
+ import { QuestionPanel } from './components/QuestionPanel';
+ import { DocumentDetail } from './components/DocumentDetail';
+@@ -32,6 +32,11 @@ export function App() {
+     }
+   }, []);
+ 
++  // Load persisted documents and index status on startup.
++  useEffect(() => {
++    refreshDocuments();
++  }, [refreshDocuments]);
++
+   /** Imports a file; rejects with a user-readable Error so ImportPanel can display it. */
+   const handleImport = useCallback(async (filePath: string) => {
+     try {
+diff --git a/src/renderer/components/DocumentDetail.tsx b/src/renderer/components/DocumentDetail.tsx
+index 8193579..bb15a01 100644
+--- a/src/renderer/components/DocumentDetail.tsx
++++ b/src/renderer/components/DocumentDetail.tsx
+@@ -9,14 +9,37 @@ interface Props {
+ export function DocumentDetail({ document, onDelete }: Props) {
+   const [chunks, setChunks] = useState<Chunk[]>([]);
+   const [showChunks, setShowChunks] = useState(false);
+-  const [content] = useState<string | null>(null); // populated by the document-detail feature (next session)
++  const [content, setContent] = useState<string | null>(null);
++  const [contentState, setContentState] = useState<'loading' | 'loaded' | 'missing' | 'error'>('loading');
++  const [showContent, setShowContent] = useState(true);
++  const [confirmingDelete, setConfirmingDelete] = useState(false);
+ 
+   useEffect(() => {
+-    window.knowledgeBase.indexing.chunks(document.id).then(setChunks);
+-  }, [document.id]);
++    // Ignore responses that arrive after the user has selected another document.
++    let cancelled = false;
++    setChunks([]);
++    setContent(null);
++    setContentState('loading');
++    setConfirmingDelete(false);
++
++    window.knowledgeBase.indexing.chunks(document.id)
++      .then(c => { if (!cancelled) setChunks(c); })
++      .catch(err => console.error('Failed to load chunks:', err));
+ 
+-  // TODO: Load document content for viewing -- not yet implemented
+-  // This is part of the document-detail feature to be completed.
++    window.knowledgeBase.documents.getContent(document.id)
++      .then(text => {
++        if (cancelled) return;
++        setContent(text);
++        setContentState(text === null ? 'missing' : 'loaded');
++      })
++      .catch(err => {
++        if (cancelled) return;
++        console.error('Failed to load content:', err);
++        setContentState('error');
++      });
++
++    return () => { cancelled = true; };
++  }, [document.id]);
+ 
+   return (
+     <div>
+@@ -31,7 +54,21 @@ export function DocumentDetail({ document, onDelete }: Props) {
+         {document.chunks !== undefined && <div>Chunks: {document.chunks}</div>}
+       </div>
+ 
+-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
++      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
++        <button
++          onClick={() => setShowContent(!showContent)}
++          style={{
++            padding: '6px 12px',
++            background: '#0f3460',
++            color: '#e0e0e0',
++            border: '1px solid #1a1a4e',
++            borderRadius: '4px',
++            cursor: 'pointer',
++            fontSize: '12px',
++          }}
++        >
++          {showContent ? 'Hide' : 'View'} Content
++        </button>
+         <button
+           onClick={() => setShowChunks(!showChunks)}
+           style={{
+@@ -62,9 +99,9 @@ export function DocumentDetail({ document, onDelete }: Props) {
+             Index Document
+           </button>
+         )}
+-        {onDelete && (
++        {onDelete && !confirmingDelete && (
+           <button
+-            onClick={() => onDelete(document.id)}
++            onClick={() => setConfirmingDelete(true)}
+             style={{
+               padding: '6px 12px',
+               background: '#8b2252',
+@@ -78,11 +115,59 @@ export function DocumentDetail({ document, onDelete }: Props) {
+             Delete
+           </button>
+         )}
++        {onDelete && confirmingDelete && (
++          <span style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px' }}>
++            <span style={{ color: '#e08080' }}>Delete this document and its data?</span>
++            <button
++              onClick={() => onDelete(document.id)}
++              style={{
++                padding: '6px 12px',
++                background: '#8b2252',
++                color: '#fff',
++                border: 'none',
++                borderRadius: '4px',
++                cursor: 'pointer',
++                fontSize: '12px',
++              }}
++            >
++              Confirm Delete
++            </button>
++            <button
++              onClick={() => setConfirmingDelete(false)}
++              style={{
++                padding: '6px 12px',
++                background: 'transparent',
++                color: '#e0e0e0',
++                border: '1px solid #0f3460',
++                borderRadius: '4px',
++                cursor: 'pointer',
++                fontSize: '12px',
++              }}
++            >
++              Cancel
++            </button>
++          </span>
++        )}
+       </div>
+ 
+-      {/* Content viewer -- placeholder until document-detail feature is implemented */}
+-      {content && (
+-        <div style={{
++      {showContent && contentState === 'loading' && (
++        <div style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>Loading content...</div>
++      )}
++      {showContent && contentState === 'missing' && (
++        <div style={{ fontSize: '13px', color: '#e08080', marginBottom: '16px' }}>
++          Content file not found for this document.
++        </div>
++      )}
++      {showContent && contentState === 'error' && (
++        <div style={{ fontSize: '13px', color: '#e08080', marginBottom: '16px' }}>
++          Failed to load content.
++        </div>
++      )}
++      {showContent && contentState === 'loaded' && content !== null && (
++        <div data-testid="document-content" style={{
++          maxHeight: '50vh',
++          overflow: 'auto',
++          marginBottom: '16px',
+           padding: '16px',
+           background: '#1a1a3e',
+           borderRadius: '6px',
+@@ -90,8 +175,9 @@ export function DocumentDetail({ document, onDelete }: Props) {
+           fontSize: '13px',
+           lineHeight: 1.6,
+           whiteSpace: 'pre-wrap',
++          wordBreak: 'break-word',
+         }}>
+-          {content}
++          {content.length > 0 ? content : <span style={{ color: '#888' }}>(empty document)</span>}
+         </div>
+       )}
+ 
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index ef84a38..bc9ac65 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -9,6 +9,7 @@ declare global {
+         import: (filePath: string) => Promise<import('../shared/types').Document>;
+         getFilePath: (file: File) => string;
+         get: (id: string) => Promise<import('../shared/types').Document | null>;
++        getContent: (id: string) => Promise<string | null>;
+         delete: (id: string) => Promise<boolean>;
+       };
+       indexing: {
+diff --git a/src/services/document-service.ts b/src/services/document-service.ts
+index 4a18dc5..f296517 100644
+--- a/src/services/document-service.ts
++++ b/src/services/document-service.ts
+@@ -5,6 +5,14 @@ import { Document, MAX_IMPORT_SIZE_BYTES, SUPPORTED_EXTENSIONS } from '../shared
+ import { PersistenceService } from './persistence-service';
+ 
+ const DOCUMENTS_META = 'documents-meta.json';
++// Owned by IndexingService; DocumentService only removes a deleted document's entries.
++const INDEX_META = 'index-meta.json';
++
++/** Document IDs are generated UUIDs; reject anything else before building file paths. */
++const ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++function isValidId(id: unknown): id is string {
++  return typeof id === 'string' && ID_PATTERN.test(id);
++}
+ 
+ /** Name of the original-file copy inside the documents/ directory. */
+ function storedFilename(doc: Document): string {
+@@ -87,6 +95,7 @@ export class DocumentService {
+ 
+   /** Get the text content of a document. */
+   getDocumentContent(id: string): string | null {
++    if (!isValidId(id)) return null;
+     return this.persistence.readText(`content/${id}.txt`);
+   }
+ 
+@@ -103,11 +112,20 @@ export class DocumentService {
+ 
+   /** Delete a document by ID. */
+   deleteDocument(id: string): boolean {
++    if (!isValidId(id)) return false;
+     const docs = this.listDocuments();
+     const doc = docs.find(d => d.id === id);
+     if (!doc) return false;
+ 
+     this.persistence.deleteFromDocuments(storedFilename(doc));
++    this.persistence.deleteFile(`content/${id}.txt`);
++    this.persistence.deleteFile(`chunks/${id}.json`);
++
++    const indexMeta = this.persistence.readJson<Record<string, string[]>>(INDEX_META);
++    if (indexMeta && id in indexMeta) {
++      delete indexMeta[id];
++      this.persistence.writeJson(INDEX_META, indexMeta);
++    }
+ 
+     const updated = docs.filter(d => d.id !== id);
+     this.persistence.writeJson(DOCUMENTS_META, updated);
+diff --git a/src/services/persistence-service.ts b/src/services/persistence-service.ts
+index 54ddfac..a718c89 100644
+--- a/src/services/persistence-service.ts
++++ b/src/services/persistence-service.ts
+@@ -65,6 +65,14 @@ export class PersistenceService {
+     }
+   }
+ 
++  /** Delete a file (relative to the data directory) if it exists. */
++  deleteFile(relativePath: string): void {
++    const fullPath = path.join(this.dataDir, relativePath);
++    if (fs.existsSync(fullPath)) {
++      fs.unlinkSync(fullPath);
++    }
++  }
++
+   /** List all files in a directory. */
+   listFiles(relativePath: string): string[] {
+     const fullPath = path.join(this.dataDir, relativePath);
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index ad80832..bc54293 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -61,6 +61,7 @@ export const IPC_CHANNELS = {
+   LIST_DOCUMENTS: 'documents:list',
+   IMPORT_DOCUMENT: 'documents:import',
+   GET_DOCUMENT: 'documents:get',
++  GET_DOCUMENT_CONTENT: 'documents:get-content',
+   DELETE_DOCUMENT: 'documents:delete',
+ 
+   // Indexing

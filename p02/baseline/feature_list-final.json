@@ -1,0 +1,62 @@
+{
+  "project": "project-02",
+  "description": "Agent-readable workspace with import, detail view, and persistence",
+  "features": [
+    {
+      "id": "window-launch",
+      "name": "Window Launch",
+      "description": "Electron app opens a BrowserWindow with correct dimensions and preload script",
+      "status": "pass",
+      "evidence": "Carried over from P1 -- verified working",
+      "testedAt": "2026-03-30T10:00:00Z"
+    },
+    {
+      "id": "document-list",
+      "name": "Document List Panel",
+      "description": "Left sidebar shows imported documents with empty state message",
+      "status": "pass",
+      "evidence": "Carried over from P1 -- verified working",
+      "testedAt": "2026-03-30T10:05:00Z"
+    },
+    {
+      "id": "question-panel",
+      "name": "Question Panel",
+      "description": "Bottom input bar accepts questions and submits via IPC",
+      "status": "pass",
+      "evidence": "Carried over from P1 -- verified working",
+      "testedAt": "2026-03-30T10:08:00Z"
+    },
+    {
+      "id": "data-directory",
+      "name": "Data Directory",
+      "description": "PersistenceService creates and manages userData/knowledge-base-data directory",
+      "status": "pass",
+      "evidence": "Carried over from P1 -- verified working",
+      "testedAt": "2026-03-30T10:10:00Z"
+    },
+    {
+      "id": "document-import",
+      "name": "Document Import",
+      "description": "Users can import .txt and .md files via ImportPanel with file picker",
+      "status": "pass",
+      "evidence": "npm run check clean; vitest src/services/document-service.test.ts 15/15 (samples, same-name files, BOM/UTF-8, binary/invalid UTF-8, size limit, unsupported/missing/dir/relative paths, partial batches). Electron 33 e2e with stubbed native dialog: picker imports 3 sample docs, rejects .pdf with message, sidebar + status bar update, cancel is a no-op. Drag-and-drop path (webUtils.getPathForFile) not exercised by a real OS drag.",
+      "testedAt": "2026-11-15T20:55:00Z"
+    },
+    {
+      "id": "document-detail",
+      "name": "Document Detail with Content",
+      "description": "DocumentDetail shows full document content, metadata, and delete button",
+      "status": "pass",
+      "evidence": "npm run check clean; vitest 19/19 incl. src/services/document-detail.test.ts (full content returned, unknown/path-like IDs return null, delete removes meta + stored original + content + chunks + index entry, unknown-ID delete no-op). Electron 33 e2e (temp userData, stubbed picker): imported 3 samples, detail shows metadata + word count, rendered content equals source file byte-for-byte, switching docs loads the new content, Delete shows inline confirm, Cancel keeps doc, Confirm removes it from sidebar (3->2) and leaves no files on disk. Not covered: 10 MB render performance.",
+      "testedAt": "2026-11-15T20:55:00Z"
+    },
+    {
+      "id": "basic-persistence",
+      "name": "Basic Persistence",
+      "description": "Imported documents persist across app restarts via filesystem storage",
+      "status": "not-started",
+      "evidence": null,
+      "testedAt": null
+    }
+  ]
+}

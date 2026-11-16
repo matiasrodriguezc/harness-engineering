@@ -1,0 +1,674 @@
+commit 9e1eb7e6779f253d0d78075a5aa453967d1953ea
+Author: run <run@local>
+Date:   Sun Nov 15 21:01:19 2026 -0300
+
+    fin de sesión: sesion-1
+
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index b2a1d4a..d7cbb86 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -45,12 +45,23 @@ The preload script exposes a typed API via `contextBridge`:
+ 
+ ```typescript
+ window.knowledgeBase = {
+-  documents: { list, import, get, getContent, delete },
++  documents: { list, import, getFilePath, get, getContent, delete },
+   indexing:   { start, status, chunks },
+   qa:         { ask, history },
+ }
+ ```
+ 
++**Build note:** Electron sandboxes preload scripts by default, and a sandboxed
++preload can only `require('electron')`. Plain `tsc` output for the preload
++(`require('../shared/types')`) therefore fails to load and `window.knowledgeBase`
++is undefined. The preload is bundled into a single file with esbuild
++(`npm run build:preload`, invoked by `npm run build` and `npm run dev`), with
++`electron` kept external. Never add `sandbox: false` to work around this.
++
++`documents.getFilePath(file)` is a synchronous, non-IPC helper wrapping
++`webUtils.getPathForFile`. `File.path` was removed in Electron 32, so this is
++the only way for the renderer to get the absolute path of a picked file.
++
+ ### Renderer (`src/renderer/`)
+ 
+ React 18 application bundled by Vite:
+@@ -74,23 +85,35 @@ React 18 application bundled by Vite:
+ The document import flow demonstrates the full IPC data path:
+ 
+ ```
+-1. User clicks "Import" button in App.tsx
+-2. ImportPanel renders file input
+-3. User selects a .txt or .md file
+-4. ImportPanel calls onImport(file.path)
+-5. App.tsx calls window.knowledgeBase.documents.import(filePath)
+-6. Preload bridge invokes ipcRenderer.invoke('documents:import', filePath)
+-7. ipc-handlers.ts delegates to DocumentService.importDocument(filePath)
+-8. DocumentService:
+-   a. Validates the file exists
+-   b. Reads file content and stats
+-   c. Creates Document metadata object
+-   d. Copies file to documents directory via PersistenceService
+-   e. Stores extracted text content via PersistenceService
+-   f. Appends to documents-meta.json
+-9. Result flows back through IPC
+-10. App.tsx calls refreshDocuments() to update the list
+-11. DocumentList re-renders with the new document
++1. User clicks "+ Import" button in App.tsx
++2. ImportPanel renders file input (accept=".txt,.md")
++3. User selects a file
++4. ImportPanel pre-validates extension and size (<= 10 MB) and shows an
++   inline error if invalid (no IPC call is made)
++5. ImportPanel resolves the absolute path via
++   window.knowledgeBase.documents.getFilePath(file)  (webUtils, in preload)
++6. ImportPanel awaits onImport(filePath) -> App.handleImport
++7. App.tsx calls window.knowledgeBase.documents.import(filePath)
++8. Preload bridge invokes ipcRenderer.invoke('documents:import', filePath)
++9. ipc-handlers.ts delegates to DocumentService.importDocument(filePath)
++10. DocumentService (authoritative validation):
++   a. Validates the path is a non-empty string, exists, and is a regular file
++   b. Rejects unsupported extensions and files > MAX_IMPORT_SIZE_BYTES
++   c. Reads file content and stats
++   d. Creates Document metadata object (title = filename without extension)
++   e. Copies the original to documents/<id>-<filename> via PersistenceService
++   f. Stores extracted text content at content/<id>.txt
++   g. Appends to documents-meta.json
++11. Result flows back through IPC. On failure, App.handleImport strips the
++    "Error invoking remote method ..." prefix and rethrows so ImportPanel
++    shows the service's message inline.
++12. On success App.tsx calls refreshDocuments(), selects the new document,
++    and closes the ImportPanel
++13. DocumentList re-renders with the new document
++
++Supported extensions and the size limit live in `src/shared/types.ts`
++(`SUPPORTED_EXTENSIONS`, `MAX_IMPORT_SIZE_BYTES`) and are used by both the
++service and the ImportPanel.
+ ```
+ 
+ ## Content Retrieval Flow
+@@ -101,6 +124,8 @@ Document content viewing adds a dedicated IPC channel:
+ 1. User clicks "View Content" in DocumentDetail
+ 2. DocumentDetail calls window.knowledgeBase.documents.getContent(id)
+ 3. Preload invokes 'documents:get-content' IPC
++   (NOT YET IMPLEMENTED: channel, preload method and handler are pending --
++    see feature document-detail)
+ 4. ipc-handlers delegates to DocumentService.getDocumentContent(id)
+ 5. PersistenceService reads content/<id>.txt
+ 6. Content flows back to renderer for display in pre-wrap container
+@@ -111,6 +136,8 @@ Document content viewing adds a dedicated IPC channel:
+ ```
+ knowledge-base-data/
+   documents-meta.json     # Document metadata array
++  documents/
++    <doc-id>-<filename>   # Copy of the original imported file
+   content/
+     <doc-id>.txt          # Extracted text content per document
+   chunks/
+diff --git a/docs/PRODUCT.md b/docs/PRODUCT.md
+index 275157f..68c2e59 100644
+--- a/docs/PRODUCT.md
++++ b/docs/PRODUCT.md
+@@ -8,6 +8,11 @@ A desktop application for managing a personal knowledge base. Users import text
+ 
+ ### Document Management
+ - Import `.txt` and `.md` files through a file picker in the ImportPanel.
++  - Unsupported types and files over 10 MB are rejected with an inline error
++    message in the ImportPanel; nothing is stored.
++  - After a successful import the panel closes, the document appears in the
++    sidebar list, and it is selected.
++  - Importing two files with the same name keeps both as separate documents.
+ - View document metadata: title, filename, size, import date, indexing status.
+ - View full document content in a scrollable text viewer.
+ - Browse a list of all imported documents in a sidebar panel.
+diff --git a/feature_list.json b/feature_list.json
+index d65056c..e066e7f 100644
+--- a/feature_list.json
++++ b/feature_list.json
+@@ -38,9 +38,9 @@
+       "id": "document-import",
+       "name": "Document Import",
+       "description": "Users can import .txt and .md files via ImportPanel with file picker, document appears in list",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "2026-11-15: npm run check clean; npm run build clean. Launched Electron 33 with an isolated --user-data-dir and drove the real <input type=file> over CDP (DOM.setFileInputFiles): .pdf -> inline 'Unsupported file type' error, 10.5 MB .txt -> inline 'too large' error, nothing stored; design-notes.md and meeting-summary.txt imported -> appear in sidebar, selected, status bar shows Documents: N; re-importing design-notes.md creates a 3rd separate doc. On disk: documents-meta.json has 3 entries, content/<id>.txt and documents/<id>-<filename> byte-identical to source. Direct IPC import of a missing path rejects with 'File not found'.",
++      "testedAt": "2026-11-15T21:00:00Z"
+     },
+     {
+       "id": "document-detail",
+diff --git a/package.json b/package.json
+index c57e574..b36c27e 100644
+--- a/package.json
++++ b/package.json
+@@ -5,7 +5,8 @@
+   "main": "dist/main/main.js",
+   "scripts": {
+     "dev": "node scripts/dev.js",
+-    "build": "tsc -p tsconfig.node.json && vite build",
++    "build": "tsc -p tsconfig.node.json && npm run build:preload && vite build",
++    "build:preload": "esbuild src/preload/preload.ts --bundle --platform=node --format=cjs --external:electron --sourcemap --outfile=dist/preload/preload.js",
+     "check": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.json",
+     "test": "vitest run",
+     "test:watch": "vitest"
+@@ -21,6 +22,7 @@
+     "@types/uuid": "^9.0.7",
+     "@vitejs/plugin-react": "^4.3.4",
+     "electron": "^33.2.0",
++    "esbuild": "0.25.12",
+     "typescript": "^5.7.0",
+     "vite": "^6.0.0",
+     "vitest": "^2.1.0"
+diff --git a/scripts/dev.js b/scripts/dev.js
+index 2312bab..a8cefd6 100644
+--- a/scripts/dev.js
++++ b/scripts/dev.js
+@@ -6,6 +6,8 @@ const root = path.resolve(__dirname, '..');
+ console.log('[dev] Building main + preload...');
+ try {
+   execSync('npx tsc -p tsconfig.node.json', { cwd: root, stdio: 'inherit' });
++  // Sandboxed preloads can only require('electron'), so bundle shared imports into one file.
++  execSync('npm run build:preload', { cwd: root, stdio: 'inherit' });
+ } catch {
+   console.error('[dev] TypeScript compilation failed');
+   process.exit(1);
+diff --git a/session-handoff.md b/session-handoff.md
+index c37cf46..3f22c67 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -3,28 +3,46 @@
+ ## Verified Now
+ 
+ - What is currently working:
++  - **document-import** (feature_list status `pass`): pick a .txt/.md file in ImportPanel -> validated -> stored -> appears in DocumentList and is selected. Unsupported types and >10 MB files show an inline error.
++  - The preload bridge actually loads now (it never did before; see Changed This Session).
++  - Status bar shows the document count and index status after import.
+ - What verification actually ran:
++  - `npm run check` and `npm run build`, both clean.
++  - Launched Electron with `--remote-debugging-port=9333 --user-data-dir=<scratch>` and drove the real file input via CDP `DOM.setFileInputFiles`: bad extension, oversized file, two valid imports, and a duplicate filename. Inspected `knowledge-base-data/` on disk (meta, content, original copies match the source byte for byte).
++  - Not run: `npm test` (no tests exist in the repo).
+ 
+ ## Changed This Session
+ 
+ - Code or behavior added:
++  - `DocumentService.importDocument` validates non-empty path, regular file, extension (`SUPPORTED_EXTENSIONS`), and size (`MAX_IMPORT_SIZE_BYTES`), all in `src/shared/types.ts`. It stores the original copy as `documents/<id>-<filename>` so same-named files don't overwrite each other. `deleteDocument` uses the same naming.
++  - Preload exposes `documents.getFilePath(file)` (wraps `webUtils.getPathForFile`; `File.path` was removed in Electron 32).
++  - ImportPanel: client-side pre-validation, importing state, inline error, Cancel button, and the input resets so the same file can be picked again.
++  - App.handleImport selects the new doc, closes the panel, and rethrows a cleaned error message to the panel.
++  - `IndexStatus` moved to shared types. App maps it to `AppStatus` (previously the status bar went blank once any document existed).
+ - Infrastructure or harness changes:
++  - The baseline didn't type-check. Fixed the shared-type import paths in the renderer, unused imports, the duplicate `declare global` in App.tsx (types.d.ts is canonical), and the StatusBar index type.
++  - **Preload is now bundled with esbuild** (`npm run build:preload`, added to `build` and `scripts/dev.js`). A sandboxed preload can't `require('../shared/types')`, so `window.knowledgeBase` was undefined. Added `esbuild@0.25.12` as an exact devDependency (same version vite already pulled in).
+ 
+ ## Broken Or Unverified
+ 
+ - Known defect:
+-- Unverified path:
+-- Risk for the next session:
++  - `documents:get-content` channel / preload `getContent` / handler do not exist yet (docs mark this as pending). DocumentDetail `content` state is a placeholder.
++  - `deleteDocument` removes metadata and the original copy but not `content/<id>.txt` or chunks (PRODUCT.md says it should).
++  - App does not load the document list on startup; it only refreshes after import or Refresh (basic-persistence feature).
++  - `PersistenceService.writeJson` is not actually atomic despite its doc comment.
++  - Imported files are read as UTF-8 without encoding detection.
++- Unverified path: inline display of a *server-side* import error through the UI. Client pre-validation catches type and size first; the prefix-stripping regex was checked against the actual raw message format only.
++- Risk for the next session: new preload imports must stay bundle-able; don't switch preload back to plain tsc output.
+ 
+ ## Next Best Step
+ 
+-- Highest-priority unfinished feature:
+-- Why it is next:
+-- What counts as passing:
+-- What must not change during that step:
++- Highest-priority unfinished feature: `document-detail` (add `GET_DOCUMENT_CONTENT: 'documents:get-content'` to IPC_CHANNELS, the handler, preload `getContent`, the types.d.ts entry, and load content in DocumentDetail).
++- Why it is next: import now produces content files that nothing can display.
++- What counts as passing: selecting an imported doc shows its full text. Delete removes it from the list and removes its content file.
++- What must not change during that step: preload bundling, the `<id>-<filename>` storage naming, and the import validation constants.
+ 
+ ## Commands
+ 
+-- Startup:
+-- Verification:
+-- Focused debug command:
++- Startup: `npm install && npm run dev`
++- Verification: `npm run check && npm run build`
++- Focused debug command: `npm run build && env -u NODE_OPTIONS npx electron . --remote-debugging-port=9333 --user-data-dir=/tmp/kb-test` (NODE_OPTIONS in this shell contains `--openssl-legacy-provider`, which Electron rejects), then attach via `curl localhost:9333/json/list`.
+diff --git a/src/preload/preload.ts b/src/preload/preload.ts
+index dc95883..29c51fd 100644
+--- a/src/preload/preload.ts
++++ b/src/preload/preload.ts
+@@ -1,10 +1,13 @@
+-import { contextBridge, ipcRenderer } from 'electron';
++import { contextBridge, ipcRenderer, webUtils } from 'electron';
+ import { IPC_CHANNELS } from '../shared/types';
+ 
+ const api = {
+   documents: {
+     list: () => ipcRenderer.invoke(IPC_CHANNELS.LIST_DOCUMENTS),
+     import: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_DOCUMENT, filePath),
++    // File.path was removed in Electron 32; resolve a picked File's absolute path here.
++    // Returns '' for files that don't come from the filesystem.
++    getFilePath: (file: File) => webUtils.getPathForFile(file),
+     get: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_DOCUMENT, id),
+     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.DELETE_DOCUMENT, id),
+   },
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index 6b1f344..4e0404a 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -1,32 +1,10 @@
+-import React, { useState, useCallback } from 'react';
++import { useState, useCallback } from 'react';
+ import { DocumentList } from './components/DocumentList';
+ import { QuestionPanel } from './components/QuestionPanel';
+ import { DocumentDetail } from './components/DocumentDetail';
+ import { ImportPanel } from './components/ImportPanel';
+ import { StatusBar } from './components/StatusBar';
+-import { Document, AppStatus, QAResponse } from '../../shared/types';
+-
+-declare global {
+-  interface Window {
+-    knowledgeBase: {
+-      documents: {
+-        list: () => Promise<Document[]>;
+-        import: (filePath: string) => Promise<Document>;
+-        get: (id: string) => Promise<Document | null>;
+-        delete: (id: string) => Promise<boolean>;
+-      };
+-      indexing: {
+-        start: (documentId?: string) => Promise<{ status: string }>;
+-        status: () => Promise<AppStatus>;
+-        chunks: (documentId: string) => Promise<Array<{ id: string; content: string; index: number }>>;
+-      };
+-      qa: {
+-        ask: (question: string) => Promise<QAResponse>;
+-        history: () => Promise<Array<{ question: string; response: QAResponse }>>;
+-      };
+-    };
+-  }
+-}
++import { Document, AppStatus, QAResponse } from '../shared/types';
+ 
+ export function App() {
+   const [documents, setDocuments] = useState<Document[]>([]);
+@@ -44,19 +22,28 @@ export function App() {
+       const docs = await window.knowledgeBase.documents.list();
+       setDocuments(docs);
+       const status = await window.knowledgeBase.indexing.status();
+-      setAppStatus(status);
++      setAppStatus({
++        documentsLoaded: status.totalDocuments,
++        indexStatus: status.status,
++        lastActivity: status.lastIndexed ?? '',
++      });
+     } catch (err) {
+       console.error('Failed to refresh documents:', err);
+     }
+   }, []);
+ 
++  /** Imports a file; rejects with a user-readable Error so ImportPanel can display it. */
+   const handleImport = useCallback(async (filePath: string) => {
+     try {
+-      await window.knowledgeBase.documents.import(filePath);
++      const doc = await window.knowledgeBase.documents.import(filePath);
+       await refreshDocuments();
++      setSelectedDoc(doc);
+       setShowImport(false);
+     } catch (err) {
+       console.error('Import failed:', err);
++      // ipcRenderer.invoke wraps errors as "Error invoking remote method '...': Error: <msg>"
++      const raw = err instanceof Error ? err.message : String(err);
++      throw new Error(raw.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+     }
+   }, [refreshDocuments]);
+ 
+@@ -157,7 +144,7 @@ export function App() {
+         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+           <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+             {showImport ? (
+-              <ImportPanel onImport={handleImport} />
++              <ImportPanel onImport={handleImport} onCancel={() => setShowImport(false)} />
+             ) : selectedDoc ? (
+               <DocumentDetail
+                 document={selectedDoc}
+diff --git a/src/renderer/components/DocumentDetail.tsx b/src/renderer/components/DocumentDetail.tsx
+index c2a5096..8193579 100644
+--- a/src/renderer/components/DocumentDetail.tsx
++++ b/src/renderer/components/DocumentDetail.tsx
+@@ -1,5 +1,5 @@
+-import React, { useEffect, useState } from 'react';
+-import { Document, Chunk } from '../../../shared/types';
++import { useEffect, useState } from 'react';
++import { Document, Chunk } from '../../shared/types';
+ 
+ interface Props {
+   document: Document;
+@@ -9,7 +9,7 @@ interface Props {
+ export function DocumentDetail({ document, onDelete }: Props) {
+   const [chunks, setChunks] = useState<Chunk[]>([]);
+   const [showChunks, setShowChunks] = useState(false);
+-  const [content, setContent] = useState<string | null>(null);
++  const [content] = useState<string | null>(null); // populated by the document-detail feature (next session)
+ 
+   useEffect(() => {
+     window.knowledgeBase.indexing.chunks(document.id).then(setChunks);
+diff --git a/src/renderer/components/DocumentList.tsx b/src/renderer/components/DocumentList.tsx
+index f3166ed..be4a73b 100644
+--- a/src/renderer/components/DocumentList.tsx
++++ b/src/renderer/components/DocumentList.tsx
+@@ -1,5 +1,4 @@
+-import React from 'react';
+-import { Document } from '../../../shared/types';
++import { Document } from '../../shared/types';
+ 
+ interface Props {
+   documents: Document[];
+diff --git a/src/renderer/components/ImportPanel.tsx b/src/renderer/components/ImportPanel.tsx
+index 29ca5cd..5328286 100644
+--- a/src/renderer/components/ImportPanel.tsx
++++ b/src/renderer/components/ImportPanel.tsx
+@@ -1,10 +1,59 @@
+-import React from 'react';
++import { useState } from 'react';
++import { MAX_IMPORT_SIZE_BYTES, SUPPORTED_EXTENSIONS } from '../../shared/types';
+ 
+ interface Props {
+-  onImport: (filePath: string) => void;
++  /** Resolves when the import succeeds; rejects with a user-readable Error otherwise. */
++  onImport: (filePath: string) => Promise<void>;
++  onCancel?: () => void;
+ }
+ 
+-export function ImportPanel({ onImport }: Props) {
++/** Client-side pre-check; DocumentService re-validates authoritatively in main. */
++function validateFile(file: File): string | null {
++  const dot = file.name.lastIndexOf('.');
++  const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : '';
++  if (!(SUPPORTED_EXTENSIONS as readonly string[]).includes(ext)) {
++    return `Unsupported file type "${ext || '(none)'}". Supported: ${SUPPORTED_EXTENSIONS.join(', ')}`;
++  }
++  if (file.size > MAX_IMPORT_SIZE_BYTES) {
++    return `File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum size is 10 MB.`;
++  }
++  return null;
++}
++
++export function ImportPanel({ onImport, onCancel }: Props) {
++  const [importing, setImporting] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++
++  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
++    const input = e.currentTarget;
++    const file = input.files?.[0];
++    // Reset so selecting the same file again still fires onChange.
++    input.value = '';
++    if (!file) return;
++
++    setError(null);
++    const validationError = validateFile(file);
++    if (validationError) {
++      setError(validationError);
++      return;
++    }
++
++    const filePath = window.knowledgeBase.documents.getFilePath(file);
++    if (!filePath) {
++      setError('Could not resolve the file location. Please pick a file from disk.');
++      return;
++    }
++
++    setImporting(true);
++    try {
++      await onImport(filePath);
++    } catch (err) {
++      setError(err instanceof Error ? err.message : String(err));
++    } finally {
++      setImporting(false);
++    }
++  };
++
+   return (
+     <div style={{
+       padding: '20px',
+@@ -16,19 +65,47 @@ export function ImportPanel({ onImport }: Props) {
+     }}>
+       <div style={{ fontSize: '14px', marginBottom: '8px' }}>Import Documents</div>
+       <div style={{ fontSize: '12px' }}>
+-        Use the import button or drag files here.
++        Choose a file to add to your knowledge base.
+         <br />
+-        Supported: .txt, .md files
++        Supported: {SUPPORTED_EXTENSIONS.join(', ')} files up to 10 MB
+       </div>
+       <input
+         type="file"
+-        accept=".txt,.md"
+-        onChange={e => {
+-          const file = e.target.files?.[0];
+-          if (file) onImport(file.path);
+-        }}
++        accept={SUPPORTED_EXTENSIONS.join(',')}
++        onChange={handleChange}
++        disabled={importing}
+         style={{ marginTop: '10px' }}
+       />
++      {importing && (
++        <div style={{ marginTop: '10px', fontSize: '12px', color: '#a0a0c0' }}>Importing…</div>
++      )}
++      {error && (
++        <div
++          role="alert"
++          style={{ marginTop: '10px', fontSize: '12px', color: '#d9534f' }}
++        >
++          {error}
++        </div>
++      )}
++      {onCancel && (
++        <div style={{ marginTop: '12px' }}>
++          <button
++            onClick={onCancel}
++            disabled={importing}
++            style={{
++              padding: '4px 10px',
++              background: 'transparent',
++              color: '#a0a0c0',
++              border: '1px solid #0f3460',
++              borderRadius: '3px',
++              cursor: 'pointer',
++              fontSize: '12px',
++            }}
++          >
++            Cancel
++          </button>
++        </div>
++      )}
+     </div>
+   );
+ }
+diff --git a/src/renderer/components/StatusBar.tsx b/src/renderer/components/StatusBar.tsx
+index 1bf587c..577e345 100644
+--- a/src/renderer/components/StatusBar.tsx
++++ b/src/renderer/components/StatusBar.tsx
+@@ -1,17 +1,17 @@
+-import React from 'react';
+-import { AppStatus } from '../../../shared/types';
++import { AppStatus } from '../../shared/types';
+ 
+ interface Props {
+   status: AppStatus;
+ }
+ 
+ export function StatusBar({ status }: Props) {
+-  const statusColor = {
++  const colors: Record<AppStatus['indexStatus'], string> = {
+     idle: '#888',
+     indexing: '#f0ad4e',
+     ready: '#5cb85c',
+     error: '#d9534f',
+-  }[status.indexStatus] ?? '#888';
++  };
++  const statusColor = colors[status.indexStatus] ?? '#888';
+ 
+   return (
+     <div style={{
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index 905f47f..ef84a38 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -7,12 +7,13 @@ declare global {
+       documents: {
+         list: () => Promise<import('../shared/types').Document[]>;
+         import: (filePath: string) => Promise<import('../shared/types').Document>;
++        getFilePath: (file: File) => string;
+         get: (id: string) => Promise<import('../shared/types').Document | null>;
+         delete: (id: string) => Promise<boolean>;
+       };
+       indexing: {
+-        start: (documentId?: string) => Promise<import('../shared/types').AppStatus>;
+-        status: () => Promise<import('../shared/types').AppStatus>;
++        start: (documentId?: string) => Promise<import('../shared/types').IndexStatus>;
++        status: () => Promise<import('../shared/types').IndexStatus>;
+         chunks: (documentId: string) => Promise<import('../shared/types').Chunk[]>;
+       };
+       qa: {
+diff --git a/src/services/document-service.ts b/src/services/document-service.ts
+index 535418a..4a18dc5 100644
+--- a/src/services/document-service.ts
++++ b/src/services/document-service.ts
+@@ -1,11 +1,16 @@
+ import * as fs from 'fs';
+ import * as path from 'path';
+ import { v4 as uuidv4 } from 'uuid';
+-import { Document } from '../shared/types';
++import { Document, MAX_IMPORT_SIZE_BYTES, SUPPORTED_EXTENSIONS } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ 
+ const DOCUMENTS_META = 'documents-meta.json';
+ 
++/** Name of the original-file copy inside the documents/ directory. */
++function storedFilename(doc: Document): string {
++  return `${doc.id}-${doc.filename}`;
++}
++
+ export class DocumentService {
+   private persistence: PersistenceService;
+ 
+@@ -19,27 +24,49 @@ export class DocumentService {
+     return docs ?? [];
+   }
+ 
+-  /** Import a file from the given path. */
++  /**
++   * Import a .txt or .md file from the given absolute path.
++   * Throws a user-readable Error if the file is missing, unsupported, or too large.
++   */
+   importDocument(filePath: string): Document {
++    if (typeof filePath !== 'string' || filePath.trim() === '') {
++      throw new Error('No file path provided');
++    }
+     if (!fs.existsSync(filePath)) {
+       throw new Error(`File not found: ${filePath}`);
+     }
+ 
++    const stats = fs.statSync(filePath);
++    if (!stats.isFile()) {
++      throw new Error(`Not a regular file: ${filePath}`);
++    }
++
+     const filename = path.basename(filePath);
++    const ext = path.extname(filename).toLowerCase();
++    if (!(SUPPORTED_EXTENSIONS as readonly string[]).includes(ext)) {
++      throw new Error(
++        `Unsupported file type "${ext || '(none)'}". Supported: ${SUPPORTED_EXTENSIONS.join(', ')}`,
++      );
++    }
++    if (stats.size > MAX_IMPORT_SIZE_BYTES) {
++      const mb = (stats.size / (1024 * 1024)).toFixed(1);
++      throw new Error(`File is too large (${mb} MB). Maximum size is 10 MB.`);
++    }
++
+     const content = fs.readFileSync(filePath, 'utf-8');
+-    const stats = fs.statSync(filePath);
+ 
+     const doc: Document = {
+       id: uuidv4(),
+-      title: filename.replace(/\.[^.]+$/, ''),
++      title: filename.slice(0, filename.length - ext.length) || filename,
+       filename,
+       importedAt: new Date().toISOString(),
+       size: stats.size,
+       status: 'imported',
+     };
+ 
+-    // Copy file to data directory
+-    this.persistence.copyFileToDocuments(filePath, filename);
++    // Copy original into the data directory under an id-prefixed name so that
++    // two imports with the same filename never overwrite each other.
++    this.persistence.copyFileToDocuments(filePath, storedFilename(doc));
+ 
+     // Store content for indexing
+     this.persistence.writeText(`content/${doc.id}.txt`, content);
+@@ -80,7 +107,7 @@ export class DocumentService {
+     const doc = docs.find(d => d.id === id);
+     if (!doc) return false;
+ 
+-    this.persistence.deleteFromDocuments(doc.filename);
++    this.persistence.deleteFromDocuments(storedFilename(doc));
+ 
+     const updated = docs.filter(d => d.id !== id);
+     this.persistence.writeJson(DOCUMENTS_META, updated);
+diff --git a/src/services/indexing-service.ts b/src/services/indexing-service.ts
+index f63f3be..3c8ba57 100644
+--- a/src/services/indexing-service.ts
++++ b/src/services/indexing-service.ts
+@@ -1,17 +1,10 @@
+ import { v4 as uuidv4 } from 'uuid';
+-import { Chunk, Document } from '../shared/types';
++import { Chunk, Document, IndexStatus } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ 
+ const INDEX_META = 'index-meta.json';
+ const CHUNKS_DIR = 'chunks';
+ 
+-interface IndexStatus {
+-  status: 'idle' | 'indexing' | 'ready' | 'error';
+-  currentIndexed: number;
+-  totalDocuments: number;
+-  lastIndexed: string | null;
+-}
+-
+ export class IndexingService {
+   private persistence: PersistenceService;
+ 
+diff --git a/src/services/qa-service.ts b/src/services/qa-service.ts
+index 719c6cc..f0061f6 100644
+--- a/src/services/qa-service.ts
++++ b/src/services/qa-service.ts
+@@ -1,4 +1,4 @@
+-import { QAResponse, QAHistory, Citation, Chunk } from '../shared/types';
++import { QAResponse, QAHistory, Citation } from '../shared/types';
+ import { PersistenceService } from './persistence-service';
+ import { IndexingService } from './indexing-service';
+ 
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index 1db11e1..ad80832 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -43,6 +43,18 @@ export interface AppStatus {
+   lastActivity: string;
+ }
+ 
++/** Returned by the indexing:start and indexing:status IPC channels. */
++export interface IndexStatus {
++  status: 'idle' | 'indexing' | 'ready' | 'error';
++  currentIndexed: number;
++  totalDocuments: number;
++  lastIndexed: string | null;
++}
++
++/** Import constraints, enforced by DocumentService and mirrored in the ImportPanel UI. */
++export const SUPPORTED_EXTENSIONS = ['.txt', '.md'] as const;
++export const MAX_IMPORT_SIZE_BYTES = 10 * 1024 * 1024;
++
+ /** IPC channel names -- single source of truth. */
+ export const IPC_CHANNELS = {
+   // Document operations

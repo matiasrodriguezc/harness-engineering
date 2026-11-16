@@ -1,0 +1,62 @@
+{
+  "project": "project-02",
+  "description": "Agent-readable workspace with import, detail view, and persistence",
+  "features": [
+    {
+      "id": "window-launch",
+      "name": "Window Launch",
+      "description": "Electron app opens a BrowserWindow with correct dimensions and preload script",
+      "status": "pass",
+      "evidence": "Carried over from P1 -- verified working",
+      "testedAt": "2026-03-30T10:00:00Z"
+    },
+    {
+      "id": "document-list",
+      "name": "Document List Panel",
+      "description": "Left sidebar shows imported documents with empty state message",
+      "status": "pass",
+      "evidence": "Carried over from P1 -- verified working",
+      "testedAt": "2026-03-30T10:05:00Z"
+    },
+    {
+      "id": "question-panel",
+      "name": "Question Panel",
+      "description": "Bottom input bar accepts questions and submits via IPC",
+      "status": "pass",
+      "evidence": "Carried over from P1 -- verified working",
+      "testedAt": "2026-03-30T10:08:00Z"
+    },
+    {
+      "id": "data-directory",
+      "name": "Data Directory",
+      "description": "PersistenceService creates and manages userData/knowledge-base-data directory",
+      "status": "pass",
+      "evidence": "Carried over from P1 -- verified working",
+      "testedAt": "2026-03-30T10:10:00Z"
+    },
+    {
+      "id": "document-import",
+      "name": "Document Import",
+      "description": "Users can import .txt and .md files via ImportPanel with file picker, document appears in list",
+      "status": "pass",
+      "evidence": "2026-11-15: npm run check clean; npm run build clean. Launched Electron 33 with an isolated --user-data-dir and drove the real <input type=file> over CDP (DOM.setFileInputFiles): .pdf -> inline 'Unsupported file type' error, 10.5 MB .txt -> inline 'too large' error, nothing stored; design-notes.md and meeting-summary.txt imported -> appear in sidebar, selected, status bar shows Documents: N; re-importing design-notes.md creates a 3rd separate doc. On disk: documents-meta.json has 3 entries, content/<id>.txt and documents/<id>-<filename> byte-identical to source. Direct IPC import of a missing path rejects with 'File not found'.",
+      "testedAt": "2026-11-15T21:00:00Z"
+    },
+    {
+      "id": "document-detail",
+      "name": "Document Detail with Content",
+      "description": "DocumentDetail shows full document content via getContent IPC, metadata, and delete button",
+      "status": "pass",
+      "evidence": "2026-11-15 (session 2): npm run check and npm run build clean. Launched Electron 33 with an isolated --user-data-dir and drove the UI over CDP: imported alpha.md and beta.txt through the real file input; after import beta's text renders in [data-testid=document-content]; selecting alpha in the sidebar shows content byte-identical to the source file; Hide Content removes the viewer and View Content restores it; beta indexed -> 'Show Chunks (4)'; Delete shows an inline confirmation, Cancel keeps the doc, Confirm Delete removes it from list and sidebar. On disk after delete: documents/<beta-id>-beta.txt, content/<beta-id>.txt, chunks/<beta-id>.json and the beta entry in index-meta.json are all gone, alpha's files untouched. getContent('../../documents-meta') -> null and delete('../x') -> false (non-UUID ids rejected).",
+      "testedAt": "2026-11-15T22:00:00Z"
+    },
+    {
+      "id": "basic-persistence",
+      "name": "Basic Persistence",
+      "description": "Imported documents persist across app restarts via filesystem storage in userData directory",
+      "status": "pass",
+      "evidence": "2026-11-15 (session 2): npm run check and build clean. App.tsx calls refreshDocuments() on mount. Quit the Electron process from the document-detail run and launched a new one with the same --user-data-dir: without any click, the sidebar shows 'Documents (1)' with alpha and the status bar shows 'Index: ready | Documents: 1'. Selecting alpha shows its full content, identical to the source file.",
+      "testedAt": "2026-11-15T22:10:00Z"
+    }
+  ]
+}

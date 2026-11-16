@@ -1,0 +1,25 @@
+a460697 fin de sesión: sesion-1
+
+ .gitignore                                 |    2 +
+ docs/ARCHITECTURE.md                       |   15 +-
+ feature_list.json                          |    6 +-
+ package-lock.json                          | 4093 ++++++++++++++++++++++++++++
+ package.json                               |    4 +-
+ scripts/dev.js                             |    3 +
+ src/main/ipc-handlers.ts                   |   33 +-
+ src/preload/preload.ts                     |   14 +-
+ src/renderer/App.tsx                       |   48 +-
+ src/renderer/components/DocumentDetail.tsx |    7 +-
+ src/renderer/components/DocumentList.tsx   |    3 +-
+ src/renderer/components/ImportPanel.tsx    |  140 +-
+ src/renderer/components/StatusBar.tsx      |    3 +-
+ src/renderer/types.d.ts                    |   27 +-
+ src/services/document-service.test.ts      |  126 +
+ src/services/document-service.ts           |  110 +-
+ src/services/indexing-service.ts           |    9 +-
+ src/services/persistence-service.ts        |    8 +
+ src/services/qa-service.ts                 |    2 +-
+ src/shared/types.ts                        |   32 +-
+ tsconfig.node.json                         |    3 +-
+ vite.config.ts                             |    7 +-
+ 22 files changed, 4578 insertions(+), 117 deletions(-)

@@ -1,0 +1,1 @@
+Implement document import for this knowledge base app. This session covers import only; the document detail view and persistence will be done in a later session.

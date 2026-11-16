@@ -1,0 +1,487 @@
+commit 07a547bc7f4d8ef5796620af72de791c03e446f3
+Author: run <run@local>
+Date:   Sun Nov 15 20:54:28 2026 -0300
+
+    fin de sesión: sesion-2
+
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index a9a406c..4debbdf 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -49,7 +49,7 @@ The preload script runs in the renderer context before any page scripts load. It
+ 
+ ```typescript
+ window.knowledgeBase = {
+-  documents: { list, importWithDialog, import, getPathForFile, get, delete },
++  documents: { list, importWithDialog, import, getPathForFile, get, getContent, delete },
+   indexing:   { start, status, chunks },
+   qa:         { ask, history },
+ }
+@@ -61,13 +61,15 @@ The preload runs in Electron's renderer sandbox, which can only `require('electr
+ 
+ **Import flow**: `importWithDialog()` asks the main process to show the native file picker (filtered to `.txt`/`.md`, multi-select) and import the selection. Drag-and-drop resolves dropped `File`s to paths with `getPathForFile()` (Electron's `webUtils`; `File.path` was removed in Electron 32) and calls `import(paths)`. Both return an `ImportResult` (`imported`, `failed`, `canceled`); `DocumentService` validates each file (extension, regular file, ≤10 MB, UTF-8 text) independently, so one bad file does not abort the batch.
+ 
++**Delete flow**: the `documents:delete` handler calls `DocumentService.deleteDocument()` (metadata, stored original, `content/<id>.txt`) and then `IndexingService.removeDocument()` (`chunks/<id>.json` and the `index-meta.json` entry), so no orphaned data remains.
++
+ ### Renderer (`src/renderer/`)
+ 
+ The renderer is a React 18 application bundled by Vite. Components:
+ 
+ - `App.tsx` -- Root layout with header, sidebar, main panel, and status bar.
+ - `DocumentList` -- Sidebar listing of imported documents.
+-- `DocumentDetail` -- Shows document metadata, chunks, and indexing controls.
++- `DocumentDetail` -- Shows document metadata, full text content (`documents.getContent`), chunks, indexing controls, and a delete button with inline confirmation.
+ - `ImportPanel` -- File input for importing .txt and .md documents.
+ - `QuestionPanel` -- Text input for asking questions.
+ - `StatusBar` -- Shows index status and document count.
+diff --git a/feature_list.json b/feature_list.json
+index f1c6501..6c8a9e7 100644
+--- a/feature_list.json
++++ b/feature_list.json
+@@ -46,9 +46,9 @@
+       "id": "document-detail",
+       "name": "Document Detail with Content",
+       "description": "DocumentDetail shows full document content, metadata, and delete button",
+-      "status": "not-started",
+-      "evidence": null,
+-      "testedAt": null
++      "status": "pass",
++      "evidence": "npm run check clean; vitest 19/19 incl. src/services/document-detail.test.ts (full content returned, unknown/path-like IDs return null, delete removes meta + stored original + content + chunks + index entry, unknown-ID delete no-op). Electron 33 e2e (temp userData, stubbed picker): imported 3 samples, detail shows metadata + word count, rendered content equals source file byte-for-byte, switching docs loads the new content, Delete shows inline confirm, Cancel keeps doc, Confirm removes it from sidebar (3->2) and leaves no files on disk. Not covered: 10 MB render performance.",
++      "testedAt": "2026-11-15T20:55:00Z"
+     },
+     {
+       "id": "basic-persistence",
+diff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts
+index b4040d7..c50bee1 100644
+--- a/src/main/ipc-handlers.ts
++++ b/src/main/ipc-handlers.ts
+@@ -51,8 +51,18 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+     return documentService.getDocument(id);
+   });
+ 
+-  ipcMain.handle(IPC_CHANNELS.DELETE_DOCUMENT, async (_event, id: string) => {
+-    return documentService.deleteDocument(id);
++  ipcMain.handle(IPC_CHANNELS.GET_DOCUMENT_CONTENT, async (_event, id: unknown) => {
++    if (typeof id !== 'string') throw new Error('Expected a document ID');
++    return documentService.getDocumentContent(id);
++  });
++
++  ipcMain.handle(IPC_CHANNELS.DELETE_DOCUMENT, async (_event, id: unknown) => {
++    if (typeof id !== 'string') throw new Error('Expected a document ID');
++    const deleted = documentService.deleteDocument(id);
++    // Drop chunks and the index entry too, so search and index status
++    // no longer see the deleted document.
++    if (deleted) indexingService.removeDocument(id);
++    return deleted;
+   });
+ 
+   // Indexing
+diff --git a/src/preload/preload.ts b/src/preload/preload.ts
+index 1aabf06..bd8a41b 100644
+--- a/src/preload/preload.ts
++++ b/src/preload/preload.ts
+@@ -16,6 +16,8 @@ const api = {
+      */
+     getPathForFile: (file: File) => webUtils.getPathForFile(file),
+     get: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_DOCUMENT, id),
++    /** Extracted text of a document, or null if the document does not exist. */
++    getContent: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_DOCUMENT_CONTENT, id),
+     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.DELETE_DOCUMENT, id),
+   },
+   indexing: {
+diff --git a/src/renderer/components/DocumentDetail.tsx b/src/renderer/components/DocumentDetail.tsx
+index 3046f64..f537aef 100644
+--- a/src/renderer/components/DocumentDetail.tsx
++++ b/src/renderer/components/DocumentDetail.tsx
+@@ -3,101 +3,148 @@ import { Document, Chunk } from '../../shared/types';
+ 
+ interface Props {
+   document: Document;
+-  onDelete?: (id: string) => void;
++  onDelete?: (id: string) => void | Promise<void>;
+ }
+ 
++type ContentState =
++  | { kind: 'loading' }
++  | { kind: 'loaded'; text: string }
++  | { kind: 'missing' }
++  | { kind: 'error'; message: string };
++
++const buttonStyle = {
++  padding: '6px 12px',
++  border: 'none',
++  borderRadius: '4px',
++  cursor: 'pointer',
++  fontSize: '12px',
++} as const;
++
++const panelStyle = {
++  padding: '16px',
++  background: '#1a1a3e',
++  borderRadius: '6px',
++  border: '1px solid #0f3460',
++  fontSize: '13px',
++  lineHeight: 1.6,
++} as const;
++
+ export function DocumentDetail({ document, onDelete }: Props) {
+   const [chunks, setChunks] = useState<Chunk[]>([]);
+   const [showChunks, setShowChunks] = useState(false);
+-  // setContent is wired up by the document-detail feature.
+-  const [content] = useState<string | null>(null);
++  const [content, setContent] = useState<ContentState>({ kind: 'loading' });
++  const [confirmingDelete, setConfirmingDelete] = useState(false);
++  const [deleting, setDeleting] = useState(false);
+ 
+   useEffect(() => {
+-    window.knowledgeBase.indexing.chunks(document.id).then(setChunks);
++    // Ignore responses that arrive after the user switched to another document.
++    let current = true;
++    setContent({ kind: 'loading' });
++    setChunks([]);
++    setShowChunks(false);
++    setConfirmingDelete(false);
++    setDeleting(false);
++
++    window.knowledgeBase.documents.getContent(document.id).then(
++      text => {
++        if (current) setContent(text === null ? { kind: 'missing' } : { kind: 'loaded', text });
++      },
++      (err: unknown) => {
++        if (current) {
++          setContent({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
++        }
++      },
++    );
++    window.knowledgeBase.indexing.chunks(document.id).then(
++      result => { if (current) setChunks(result); },
++      (err: unknown) => console.error('Failed to load chunks:', err),
++    );
++
++    return () => { current = false; };
+   }, [document.id]);
+ 
+-  // TODO: Load document content for viewing -- not yet implemented
+-  // This is part of the document-detail feature to be completed.
++  const handleConfirmDelete = async () => {
++    if (!onDelete) return;
++    setDeleting(true);
++    try {
++      await onDelete(document.id);
++    } finally {
++      setDeleting(false);
++      setConfirmingDelete(false);
++    }
++  };
++
++  const wordCount = content.kind === 'loaded'
++    ? content.text.split(/\s+/).filter(Boolean).length
++    : null;
+ 
+   return (
+     <div>
+-      <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px' }}>
++      <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px', overflowWrap: 'anywhere' }}>
+         {document.title}
+       </h2>
+       <div style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>
+         <div>Filename: {document.filename}</div>
+         <div>Imported: {new Date(document.importedAt).toLocaleString()}</div>
+         <div>Size: {(document.size / 1024).toFixed(1)} KB</div>
++        {wordCount !== null && <div>Words: {wordCount.toLocaleString()}</div>}
+         <div>Status: {document.status}</div>
+         {document.chunks !== undefined && <div>Chunks: {document.chunks}</div>}
+       </div>
+ 
+-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
++      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+         <button
+           onClick={() => setShowChunks(!showChunks)}
+-          style={{
+-            padding: '6px 12px',
+-            background: '#0f3460',
+-            color: '#e0e0e0',
+-            border: '1px solid #1a1a4e',
+-            borderRadius: '4px',
+-            cursor: 'pointer',
+-            fontSize: '12px',
+-          }}
++          style={{ ...buttonStyle, background: '#0f3460', color: '#e0e0e0', border: '1px solid #1a1a4e' }}
+         >
+           {showChunks ? 'Hide' : 'Show'} Chunks ({chunks.length})
+         </button>
+         {document.status !== 'indexed' && (
+           <button
+             onClick={() => window.knowledgeBase.indexing.start(document.id)}
+-            style={{
+-              padding: '6px 12px',
+-              background: '#533483',
+-              color: '#fff',
+-              border: 'none',
+-              borderRadius: '4px',
+-              cursor: 'pointer',
+-              fontSize: '12px',
+-            }}
++            style={{ ...buttonStyle, background: '#533483', color: '#fff' }}
+           >
+             Index Document
+           </button>
+         )}
+-        {onDelete && (
++        {onDelete && !confirmingDelete && (
+           <button
+-            onClick={() => onDelete(document.id)}
+-            style={{
+-              padding: '6px 12px',
+-              background: '#8b2252',
+-              color: '#fff',
+-              border: 'none',
+-              borderRadius: '4px',
+-              cursor: 'pointer',
+-              fontSize: '12px',
+-            }}
++            onClick={() => setConfirmingDelete(true)}
++            style={{ ...buttonStyle, background: '#8b2252', color: '#fff' }}
+           >
+             Delete
+           </button>
+         )}
++        {onDelete && confirmingDelete && (
++          <>
++            <span style={{ fontSize: '12px', color: '#e0a0b0' }}>
++              Delete “{document.title}” and its indexed data?
++            </span>
++            <button
++              onClick={handleConfirmDelete}
++              disabled={deleting}
++              style={{ ...buttonStyle, background: '#c0392b', color: '#fff', opacity: deleting ? 0.6 : 1 }}
++            >
++              {deleting ? 'Deleting…' : 'Confirm Delete'}
++            </button>
++            <button
++              onClick={() => setConfirmingDelete(false)}
++              disabled={deleting}
++              style={{ ...buttonStyle, background: 'transparent', color: '#e0e0e0', border: '1px solid #0f3460' }}
++            >
++              Cancel
++            </button>
++          </>
++        )}
+       </div>
+ 
+-      {/* Content viewer -- placeholder until document-detail feature is implemented */}
+-      {content && (
+-        <div style={{
+-          padding: '16px',
+-          background: '#1a1a3e',
+-          borderRadius: '6px',
+-          border: '1px solid #0f3460',
+-          fontSize: '13px',
+-          lineHeight: 1.6,
+-          whiteSpace: 'pre-wrap',
+-        }}>
+-          {content}
+-        </div>
+-      )}
+-
+       {showChunks && (
+-        <div>
++        <div style={{ marginBottom: '16px' }}>
++          {chunks.length === 0 && (
++            <div style={{ fontSize: '13px', color: '#888' }}>
++              No chunks yet. Index the document to create them.
++            </div>
++          )}
+           {chunks.map(chunk => (
+             <div
+               key={chunk.id}
+@@ -109,6 +156,7 @@ export function DocumentDetail({ document, onDelete }: Props) {
+                 borderLeft: '3px solid #533483',
+                 fontSize: '13px',
+                 lineHeight: 1.5,
++                whiteSpace: 'pre-wrap',
+               }}
+             >
+               <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>
+@@ -119,6 +167,31 @@ export function DocumentDetail({ document, onDelete }: Props) {
+           ))}
+         </div>
+       )}
++
++      <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#a0a0c0', marginBottom: '8px' }}>Content</h3>
++      {content.kind === 'loading' && (
++        <div style={{ ...panelStyle, color: '#888' }}>Loading content…</div>
++      )}
++      {content.kind === 'missing' && (
++        <div style={{ ...panelStyle, color: '#e0a0b0' }}>
++          The stored content for this document could not be found.
++        </div>
++      )}
++      {content.kind === 'error' && (
++        <div style={{ ...panelStyle, color: '#e0a0b0' }}>
++          Failed to load content: {content.message}
++        </div>
++      )}
++      {content.kind === 'loaded' && (
++        <div
++          data-testid="document-content"
++          style={{ ...panelStyle, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
++        >
++          {content.text.length > 0
++            ? content.text
++            : <span style={{ color: '#888' }}>This document is empty.</span>}
++        </div>
++      )}
+     </div>
+   );
+ }
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index 94cfd81..4278ff5 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -19,6 +19,7 @@ declare global {
+         import: (filePaths: string[]) => Promise<ImportResult>;
+         getPathForFile: (file: File) => string;
+         get: (id: string) => Promise<Document | null>;
++        getContent: (id: string) => Promise<string | null>;
+         delete: (id: string) => Promise<boolean>;
+       };
+       indexing: {
+diff --git a/src/services/document-detail.test.ts b/src/services/document-detail.test.ts
+new file mode 100644
+index 0000000..f1ff10b
+--- /dev/null
++++ b/src/services/document-detail.test.ts
+@@ -0,0 +1,72 @@
++import * as fs from 'fs';
++import * as os from 'os';
++import * as path from 'path';
++import { afterEach, beforeEach, describe, expect, it } from 'vitest';
++import { DocumentService } from './document-service';
++import { IndexingService } from './indexing-service';
++import { PersistenceService } from './persistence-service';
++
++describe('document detail: content and delete', () => {
++  let tmp: string;
++  let dataDir: string;
++  let documents: DocumentService;
++  let indexing: IndexingService;
++
++  beforeEach(() => {
++    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-detail-'));
++    dataDir = path.join(tmp, 'data');
++    const persistence = new PersistenceService(dataDir);
++    documents = new DocumentService(persistence);
++    indexing = new IndexingService(persistence);
++  });
++
++  afterEach(() => {
++    fs.rmSync(tmp, { recursive: true, force: true });
++  });
++
++  const importText = (name: string, text: string) => {
++    const p = path.join(tmp, name);
++    fs.writeFileSync(p, text);
++    return documents.importDocument(p);
++  };
++
++  it('returns the full content of a known document', () => {
++    const text = 'Para one.\n\n' + 'x'.repeat(2000) + '\n\nLast — ✓';
++    const doc = importText('long.md', text);
++    expect(documents.getDocumentContent(doc.id)).toBe(text);
++  });
++
++  it('returns null for unknown or path-like IDs without touching the filesystem outside content/', () => {
++    fs.writeFileSync(path.join(dataDir, 'secret.txt'), 'nope');
++    expect(documents.getDocumentContent('does-not-exist')).toBeNull();
++    expect(documents.getDocumentContent('../secret')).toBeNull();
++  });
++
++  it('delete removes metadata, stored original, content, chunks and index entry', async () => {
++    const keep = importText('keep.txt', 'keep me');
++    const doc = importText('gone.md', 'first\n\nsecond');
++    await indexing.startIndexing();
++    expect(indexing.getChunksForDocument(doc.id).length).toBeGreaterThan(0);
++
++    expect(documents.deleteDocument(doc.id)).toBe(true);
++    indexing.removeDocument(doc.id);
++
++    expect(documents.getDocument(doc.id)).toBeNull();
++    expect(documents.getDocumentContent(doc.id)).toBeNull();
++    expect(fs.existsSync(path.join(dataDir, 'documents', `${doc.id}.md`))).toBe(false);
++    expect(fs.existsSync(path.join(dataDir, 'content', `${doc.id}.txt`))).toBe(false);
++    expect(fs.existsSync(path.join(dataDir, 'chunks', `${doc.id}.json`))).toBe(false);
++    expect(indexing.getAllChunks().every(c => c.documentId === keep.id)).toBe(true);
++    expect(indexing.getStatus()).toMatchObject({ currentIndexed: 1, totalDocuments: 1, status: 'ready' });
++
++    // The other document is untouched.
++    expect(documents.getDocumentContent(keep.id)).toBe('keep me');
++  });
++
++  it('delete of an unknown ID is a no-op', () => {
++    const doc = importText('a.txt', 'a');
++    expect(documents.deleteDocument('missing')).toBe(false);
++    indexing.removeDocument('missing');
++    expect(documents.listDocuments()).toEqual([doc]);
++  });
++});
+diff --git a/src/services/document-service.ts b/src/services/document-service.ts
+index 7038d92..b7d84a2 100644
+--- a/src/services/document-service.ts
++++ b/src/services/document-service.ts
+@@ -106,8 +106,13 @@ export class DocumentService {
+     return docs.find(d => d.id === id) ?? null;
+   }
+ 
+-  /** Get the text content of a document. */
++  /**
++   * Get the extracted text of a document, or null if no such document exists.
++   * Only IDs of known documents are used to build a path, so a crafted ID
++   * cannot read outside the content directory.
++   */
+   getDocumentContent(id: string): string | null {
++    if (!this.getDocument(id)) return null;
+     return this.persistence.readText(`content/${id}.txt`);
+   }
+ 
+@@ -129,6 +134,7 @@ export class DocumentService {
+     if (!doc) return false;
+ 
+     this.persistence.deleteFromDocuments(storedFilename(doc));
++    this.persistence.deleteFile(`content/${id}.txt`);
+ 
+     const updated = docs.filter(d => d.id !== id);
+     this.persistence.writeJson(DOCUMENTS_META, updated);
+diff --git a/src/services/indexing-service.ts b/src/services/indexing-service.ts
+index 3c8ba57..4932521 100644
+--- a/src/services/indexing-service.ts
++++ b/src/services/indexing-service.ts
+@@ -63,6 +63,16 @@ export class IndexingService {
+     };
+   }
+ 
++  /** Remove a document's chunks and index entry (used when it is deleted). */
++  removeDocument(documentId: string): void {
++    const chunksMeta = this.persistence.readJson<Record<string, string[]>>(INDEX_META);
++    if (chunksMeta && documentId in chunksMeta) {
++      delete chunksMeta[documentId];
++      this.persistence.writeJson(INDEX_META, chunksMeta);
++    }
++    this.persistence.deleteFile(`${CHUNKS_DIR}/${documentId}.json`);
++  }
++
+   /** Get all chunks for a document. */
+   getChunksForDocument(documentId: string): Chunk[] {
+     return this.persistence.readJson<Chunk[]>(`${CHUNKS_DIR}/${documentId}.json`) ?? [];
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index 981f236..4bbd9dc 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -79,6 +79,7 @@ export const IPC_CHANNELS = {
+   IMPORT_DOCUMENTS: 'documents:import',
+   IMPORT_DOCUMENTS_DIALOG: 'documents:importDialog',
+   GET_DOCUMENT: 'documents:get',
++  GET_DOCUMENT_CONTENT: 'documents:content',
+   DELETE_DOCUMENT: 'documents:delete',
+ 
+   // Indexing
