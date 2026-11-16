@@ -1,0 +1,176 @@
+commit 78d56074830fc1faff3e8285c07be41626114ef8
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:37:56 2026 -0300
+
+    document-search: checker round 1 verdict PASS
+
+diff --git a/checker-verdict.md b/checker-verdict.md
+new file mode 100644
+index 0000000..12ee84a
+--- /dev/null
++++ b/checker-verdict.md
+@@ -0,0 +1,31 @@
++VERDICT: PASS
++
++Round 1 — Checker, 2026-11-16. Commit checked: 402c7ee.
++
++## Defects
++
++None blocking. Every point of the task works in the running app, and nothing else broke.
++
++## Non-blocking observations (spec is silent; not counted as defects)
++
++1. **The query is trimmed before matching.** `documents.search("attendees ")` returns `["meeting-summary"]`. A literal substring check returns `[]`, because no document contains "attendees " with a trailing space ("Attendees:" is followed by a colon). A whitespace-only query `"   "` returns all 3 documents. This is a reasonable UX choice and the Maker flagged it, but it is stricter than the spec's wording. If the goal means a literal "contains", this should change.
++2. The "Documents (N)" header shows the total count, not the filtered count. The spec doesn't say which.
++3. Importing through the bridge doesn't refresh the list by itself (this was already the case). After Refresh, a new matching document shows up under the active filter, as expected.
++
++## Evidence
++
++Static / runtime:
++- `npm run check` -> no errors
++- `npm test` -> `Test Files 5 passed (5)`, `Tests 38 passed (38)`
++- `bash scripts/check-architecture.sh` -> `PASS: All architecture boundary checks passed`
++- `bash scripts/smoke-bridge.sh` -> keys `documents,indexing,qa,feedback,app`, `PASS: the running app exposes window.knowledgeBase`
++- `env -u NODE_OPTIONS npm run build` -> built OK
++
++Maker's e2e, rerun against the fresh build: document-search 10/10, answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13.
++
++Independent e2e (`node --experimental-websocket evaluation/checker-round1.mjs`). The real app, the 3 sample docs plus 1 extra doc, CDP `Input.insertText`/`Input.dispatchKeyEvent` used as real keystrokes. Expected results come from a brute-force oracle over the raw files, not from the app's code -> `checker round 1: all 28 checks passed`:
++- Empty library: `search("")` -> `[]`, `search("design")` -> `[]`, and the input is present.
++- Bridge, each result equal to the oracle: `RETRIEVAL` (3), `retrieval-PLAN` (1), `AtTeNdEeS` (meeting-summary, content only), `Design-Notes` (title only), `design` (2), `chunk` (3), `zzz-nothing` ([]), `.*` ([], literal, not regex), `(` (3), multi-word phrases, `""` (all 3).
++- UI: typing "ATTENDEES" key by key -> only meeting-summary. Backspacing 9 times -> input empty, all 3 shown. "Plan" -> retrieval-plan. "zzz" -> empty list plus the "No documents match" message. "DESIGN" -> design-notes, retrieval-plan. Escape (native search clear) -> all 3.
++- Clicking a filtered doc opens its detail view.
++- Regression: indexing and asking "How does retrieval work?" through the UI with a filter active -> 1 exchange with 2 citations, and the filter is still applied. Importing a 4th doc and pressing Refresh -> the filtered list shows it. After a reload the conversation persists and all 4 docs are listed.
+diff --git a/evaluation/checker-round1.mjs b/evaluation/checker-round1.mjs
+new file mode 100644
+index 0000000..ba316e3
+--- /dev/null
++++ b/evaluation/checker-round1.mjs
+@@ -0,0 +1,107 @@
++// Checker round 1: independent probe of document search in the real app, with real CDP keystrokes.
++// Usage: env -u NODE_OPTIONS npm run build && node --experimental-websocket evaluation/checker-round1.mjs
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { withApp, pageHelpers, report } from '../scripts/e2e/app-session.mjs';
++
++const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-checker-r1-'));
++const docs = ['design-notes.md', 'meeting-summary.txt', 'retrieval-plan.md'].map((f) => path.resolve('data/sample-documents', f));
++const all = ['design-notes', 'meeting-summary', 'retrieval-plan'];
++const checks = [];
++const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
++const search = (q) => `window.knowledgeBase.documents.search(${JSON.stringify(q)}).then(r => r.map(d => d.title).sort())`;
++const listed = `[...document.querySelectorAll('[data-document-id]')].map(e => e.firstChild.textContent).sort()`;
++const expectSearch = async (evaluate, q, exp, label) => { const r = await evaluate(search(q)); checks.push([label ?? `search(${JSON.stringify(q)})`, same(r, exp), r]); };
++
++// Expected by brute force from file contents + titles (independent of the app's code).
++const contents = Object.fromEntries(all.map((t, i) => [t, fs.readFileSync(docs[i], 'utf8')]));
++const oracle = (q) => all.filter((t) => t.toLowerCase().includes(q.toLowerCase()) || contents[t].toLowerCase().includes(q.toLowerCase()));
++
++try {
++  await withApp({ dataDir, port: 9377 }, async ({ evaluate, waitFor, reload, send }) => {
++    await expectSearch(evaluate, '', [], 'empty library: search("") -> []');
++    await expectSearch(evaluate, 'design', [], 'empty library: search("design") -> []');
++    await evaluate(pageHelpers);
++    checks.push(['empty library: input present', (await evaluate(`__e2e.byLabel('Search documents').length`)) === 1]);
++
++    for (const d of docs) await evaluate(`window.knowledgeBase.documents.import(${JSON.stringify(d)})`);
++
++    for (const q of ['RETRIEVAL', 'retrieval-PLAN', 'AtTeNdEeS', 'Design-Notes', 'design', 'chunk', 'zzz-nothing', '.*', '(', 'Software Design Notes', 'paragraph boundaries'])
++      await expectSearch(evaluate, q, oracle(q), `search(${JSON.stringify(q)}) matches oracle ${JSON.stringify(oracle(q))}`);
++    await expectSearch(evaluate, '', all, 'search("") -> all 3');
++
++    // UI with real keystrokes.
++    await reload(); await evaluate(pageHelpers);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 3`);
++    await evaluate(`__e2e.byLabel('Search documents')[0].focus(); true`);
++    for (const ch of 'ATTENDEES') await send('Input.insertText', { text: ch });
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 1`);
++    await evaluate(`__e2e.sleep(400)`);
++    checks.push(['UI: typed "ATTENDEES" (real keys) -> meeting-summary', same(await evaluate(listed), ['meeting-summary']), await evaluate(listed)]);
++
++    // Backspace one key at a time to empty.
++    for (let i = 0; i < 9; i++) {
++      await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
++      await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
++    }
++    await evaluate(`__e2e.sleep(400)`);
++    const val = await evaluate(`__e2e.byLabel('Search documents')[0].value`);
++    checks.push(['UI: backspacing clears input & shows all 3', val === '' && same(await evaluate(listed), all), [val, await evaluate(listed)]]);
++
++    // Intermediate state checks while typing "retrieval-p" etc.
++    for (const q of ['Plan', 'zzz', 'DESIGN']) {
++      await evaluate(`__e2e.setInput(__e2e.byLabel('Search documents')[0], ''); true`);
++      await evaluate(`__e2e.byLabel('Search documents')[0].focus(); true`);
++      for (const ch of q) await send('Input.insertText', { text: ch });
++      await evaluate(`__e2e.sleep(400)`);
++      const got = await evaluate(listed);
++      checks.push([`UI: typed ${JSON.stringify(q)} -> ${JSON.stringify(oracle(q))}`, same(got, oracle(q)), got]);
++      if (q === 'zzz') checks.push(['UI: no-match message shown for zzz', await evaluate(`document.body.innerText.includes('No documents match')`)]);
++    }
++
++    // Native search-input clear (Escape) clears the field.
++    await evaluate(`__e2e.byLabel('Search documents')[0].focus(); true`);
++    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
++    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
++    await evaluate(`__e2e.sleep(400)`);
++    checks.push(['UI: Escape (native search clear) shows all 3', same(await evaluate(listed), all), [await evaluate(`__e2e.byLabel('Search documents')[0].value`), await evaluate(listed)]]);
++
++    // Filter active, then select a filtered doc -> detail view.
++    await evaluate(`__e2e.setInput(__e2e.byLabel('Search documents')[0], 'attendees'); true`);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 1`);
++    await evaluate(`document.querySelector('[data-document-id]').click(); true`);
++    await waitFor(`document.body.innerText.includes('meeting-summary.txt')`);
++    checks.push(['UI: clicking a filtered doc opens it', true]);
++
++    // Delete while filtered + Refresh: list must not show the deleted doc.
++    // Observation only (spec silent on whitespace): query is trimmed before matching.
++    console.log('OBS search("attendees ") ->', JSON.stringify(await evaluate(search('attendees '))), 'literal oracle ->', JSON.stringify(oracle('attendees ')));
++    console.log('OBS search("   ") ->', JSON.stringify(await evaluate(search('   '))));
++    // Regression: index + ask + conversation, with filter active.
++    await evaluate(`window.knowledgeBase.indexing.start()`);
++    await evaluate(`[...document.querySelectorAll('header button')].find((b) => b.textContent === 'Conversation').click(); true`);
++    await evaluate(`(() => { __e2e.setInput(__e2e.byLabel('Ask a question')[0], 'How does retrieval work?'); document.querySelector('form').requestSubmit(); return true; })()`);
++    await waitFor(`document.querySelectorAll('[data-exchange]').length === 1 && !!document.querySelector('[data-answer-id]')`, 15000);
++    const hist = await evaluate(`window.knowledgeBase.qa.history()`);
++    checks.push(['ask works; answer has citations', hist.length === 1 && hist[0].response.citations.length > 0, hist.map((h) => h.response.citations.length)]);
++    checks.push(['filter still applied after asking', same(await evaluate(listed), ['meeting-summary']), await evaluate(listed)]);
++
++    // Import a new doc while filter active, then Refresh: new matching doc should appear.
++    const extra = path.join(dataDir, 'extra-attendees.txt');
++    fs.writeFileSync(extra, 'Nothing special here. ATTENDEES list follows.');
++    await evaluate(`window.knowledgeBase.documents.import(${JSON.stringify(extra)})`);
++    await evaluate(`[...document.querySelectorAll('header button')].find((b) => b.textContent === 'Refresh').click(); true`);
++    await evaluate(`__e2e.sleep(600)`);
++    checks.push(['import + Refresh while filtered shows new matching doc', same(await evaluate(listed), ['extra-attendees', 'meeting-summary']), await evaluate(listed)]);
++
++    // Reload: conversation persists.
++    await reload(); await evaluate(pageHelpers);
++    await waitFor(`document.querySelectorAll('[data-exchange]').length === 1`);
++    checks.push(['conversation persists after reload', true]);
++    checks.push(['after reload, list shows all 4 docs', (await evaluate(listed)).length === 4, await evaluate(listed)]);
++  });
++} finally {
++  fs.rmSync(dataDir, { recursive: true, force: true });
++}
++report('checker round 1', checks);
+diff --git a/loop-state.md b/loop-state.md
+index a4286b6..ed205fe 100644
+--- a/loop-state.md
++++ b/loop-state.md
+@@ -32,3 +32,15 @@ Loop: maker-checker para búsqueda de documentos. Para con 2 PASS seguidos o 6 v
+ 4. Stale `content/<id>.txt` files of deleted docs are not deleted by `deleteDocument` (pre-existing), but search only scans listed docs, so they don't show up (unit test covers this).
+ 5. The search input is not cleared when switching to a document view or on Refresh (only on Reset).
+ 6. No UI import picker exists (pre-existing); e2e imports via `window.knowledgeBase.documents.import(path)`.
++
++### Checker (round 1)
++
++**Verdict: PASS**
++
++**Defects:** none blocking.
++**Observations (non-blocking):**
++1. The query is trimmed: `search("attendees ")` -> `["meeting-summary"]`, but a literal "contains" check returns `[]`. `"   "` returns all docs.
++2. The header count shows the total, not the filtered count.
++3. A bridge import needs a Refresh before the list updates (this was already the case).
++
++**What I ran:** `npm run check`, `npm test` (38/38), `check-architecture.sh` (PASS), `smoke-bridge.sh` (PASS), `npm run build`. The Maker's e2e scripts: document-search 10/10, answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13. My own `evaluation/checker-round1.mjs` (real CDP keystrokes, results checked against a brute-force oracle, plus ask/conversation/import regressions): 28/28 passed. Details are in `checker-verdict.md`.

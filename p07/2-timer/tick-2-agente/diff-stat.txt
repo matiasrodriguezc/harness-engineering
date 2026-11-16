@@ -1,0 +1,4 @@
+fc81108 monitor: revert d29cb1e (invalid brokenCount export broke type check)
+
+ src/services/qa-service.ts | 2 --
+ 1 file changed, 2 deletions(-)

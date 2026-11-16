@@ -1,0 +1,4 @@
+tests_exit=0 coverage_lines=83.13 coverage_functions=74.07 files_below_90=document-service.ts:63.23,indexing-service.ts:87.61,logger.ts:70.11,persistence-service.ts:77.33 types_exit=0 arch_exit=0
+GOAL: FAIL
+WHY: files below 90% lines: document-service.ts:63.23,indexing-service.ts:87.61,logger.ts:70.11,persistence-service.ts:77.33. FIX: add tests for those files first
+WHY: lines 83.13% / functions 74.07% (need 95/95). FIX: test the uncovered functions listed in .coverage-goal/coverage-summary.json

@@ -1,0 +1,652 @@
+commit 402c7ee220220aeeaf5373c74e7c7a4c3f3c5d0b
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:36:03 2026 -0300
+
+    document-search: documents.search bridge + 'Search documents' list filter (maker round 1)
+
+diff --git a/claude-progress.md b/claude-progress.md
+index 12b4c22..9496173 100644
+--- a/claude-progress.md
++++ b/claude-progress.md
+@@ -10,3 +10,7 @@ Log de sesiones: qué se hizo, qué se verificó y con qué comando.
+ - conversation-history -> passing (743f509). Verified: npm test (22/22), smoke-bridge, scripts/e2e/conversation-history.mjs 13/13 including reload and restart; earlier e2e suites re-run as regression.
+ - Left for next session: StatusBar status shape mismatch, UI import picker (see session-handoff.md).
+ - Cleanup pass (no new features): `bash init.sh` OK, `npm test` 22/22, smoke-bridge PASS, e2e re-run answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13 -> all three `passing` features still pass. Added `.gitignore`; marked benchmark.sh/cleanup-scanner.sh as not implemented in docs/RELIABILITY.md.
++
++## 2026-11-16
++
++- Maker-checker loop round 1 (Maker): document-search implemented (service, `documents:search` IPC, preload, 'Search documents' input). Verified: init.sh OK, npm test 38/38, check-architecture PASS, smoke-bridge PASS, scripts/e2e/document-search.mjs 10/10, regression e2e 7/7, 6/6, 13/13. Feature left `active` pending the Checker.
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 2585830..225b116 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -24,7 +24,7 @@ This is the capstone project combining all features from the Learn Harness Engin
+ +-----------------------------------------------------------+
+ |                     Main Process                           |
+ |  main.ts -> createWindow(), initializeServices()          |
+-|  ipc-handlers.ts -> registerIpcHandlers() (14 channels)   |
++|  ipc-handlers.ts -> registerIpcHandlers() (15 channels)   |
+ +-----------------------------------------------------------+
+          |  Service method calls
+ +-----------------------------------------------------------+
+@@ -40,7 +40,7 @@ This is the capstone project combining all features from the Learn Harness Engin
+ ### Main Process (`src/main/`)
+ 
+ - **Window management**: Creates `BrowserWindow` instances with secure web preferences.
+-- **IPC registration**: Maps 14 IPC channel names to service methods via `registerIpcHandlers()`.
++- **IPC registration**: Maps 15 IPC channel names to service methods via `registerIpcHandlers()`.
+ - **Service initialization**: Constructs all services with dependency injection.
+ - **Logging**: Logs application lifecycle events (ready, shutdown).
+ 
+@@ -50,7 +50,7 @@ The preload script exposes a typed API via `contextBridge`:
+ 
+ ```typescript
+ window.knowledgeBase = {
+-  documents: { list, import, get, delete },
++  documents: { list, import, get, delete, search },
+   indexing:   { start, status, chunks },
+   qa:         { ask, history, clearHistory },
+   feedback:   { submit, list },
+@@ -63,7 +63,7 @@ window.knowledgeBase = {
+ React 18 application bundled by Vite:
+ 
+ - `App.tsx` -- Root layout; owns Q&A history + ratings; switches between the conversation and a selected document; Reset all data button (`ResetDataButton`, in-page confirmation).
+-- `DocumentList` -- Sidebar listing of imported documents with status and chunk counts.
++- `DocumentList` -- Sidebar listing of imported documents with status and chunk counts, and a 'Search documents' input. App calls `documents.search(query)` as the user types (only the latest response is applied); a blank query shows all documents.
+ - `DocumentDetail` -- Shows metadata, chunks, indexing controls, and delete button.
+ - `ImportPanel` -- File input for importing .txt and .md documents.
+ - `QuestionPanel` -- Text input for asking questions.
+@@ -146,7 +146,7 @@ React 18 application bundled by Vite:
+ 6. refreshDocuments() reloads empty state
+ ```
+ 
+-## IPC Channels (14 total)
++## IPC Channels (15 total)
+ 
+ | Channel | Direction | Handler | Purpose |
+ |---------|-----------|---------|---------|
+@@ -154,6 +154,7 @@ React 18 application bundled by Vite:
+ | `documents:import` | R -> M | DocumentService.importDocument | Import a file |
+ | `documents:get` | R -> M | DocumentService.getDocument | Get document by ID |
+ | `documents:delete` | R -> M | DocumentService.deleteDocument | Delete document |
++| `documents:search` | R -> M | DocumentService.searchDocuments | Documents whose title or content contains the query (case-insensitive, trimmed; blank = all) |
+ | `indexing:start` | R -> M | IndexingService.startIndexing | Start indexing |
+ | `indexing:status` | R -> M | IndexingService.getStatus | Get indexing status |
+ | `indexing:chunks` | R -> M | IndexingService.getChunksForDocument | Get chunks |
+diff --git a/feature_list.json b/feature_list.json
+index 6001a58..4a888f2 100644
+--- a/feature_list.json
++++ b/feature_list.json
+@@ -40,6 +40,16 @@
+         "smoke": "bash scripts/smoke-bridge.sh -> 'PASS: the running app exposes window.knowledgeBase'",
+         "e2e": "npm run build && node --experimental-websocket scripts/e2e/conversation-history.mjs -> 'conversation-history e2e: all 13 checks passed': asked two questions through the question box; before reload, after reload and after a real app restart both exchanges render in order, each with citations (collapsed) and a confidence indicator ('High confidence (85%)'); after reload each citation expands (aria-expanded=true, aria-controls matches) to the stored excerpt and collapses again; document view and back. Regression: answer-feedback e2e 7/7 and reset-all-data e2e 6/6 re-run after the UI change"
+       }
++    },
++    {
++      "id": "document-search",
++      "behavior": "window.knowledgeBase.documents.search(query) returns the documents whose title or content contains query (case-insensitive); an empty query returns all documents. The document list has a text input with aria-label 'Search documents' that filters the list as the user types; clearing it shows all documents again.",
++      "verification": "npm test (tests/document-search.test.tsx) + bash scripts/smoke-bridge.sh + npm run build && node --experimental-websocket scripts/e2e/document-search.mjs; independent Checker verdict in checker-verdict.md",
++      "state": "active",
++      "evidence": {
++        "date": "2026-11-16",
++        "note": "Maker round 1 evidence is in loop-state.md; state stays 'active' until the Checker returns PASS."
++      }
+     }
+   ]
+ }
+diff --git a/loop-state.md b/loop-state.md
+index f6a01b0..a4286b6 100644
+--- a/loop-state.md
++++ b/loop-state.md
+@@ -1,3 +1,34 @@
+ # loop-state.md
+ 
+ Loop: maker-checker para búsqueda de documentos. Para con 2 PASS seguidos o 6 vueltas.
++
++## Vuelta 1
++
++### Maker (round 1)
++
++**What changed**
++- `DocumentService.searchDocuments(query)`: case-insensitive substring match on `title` or stored content (`content/<id>.txt`). Blank query (`''`, whitespace, `undefined`/`null`) returns `listDocuments()`. Non-blank query is trimmed. Literal text, not regex. Non-string query -> `TypeError`.
++- New IPC channel `documents:search` (`IPC_CHANNELS.SEARCH_DOCUMENTS`) -> handler -> preload `documents.search(query)`; renderer type in `types.d.ts`.
++- UI: `DocumentList` now always renders `<input type="search" aria-label="Search documents">`. `App` keeps `searchQuery`; on every change (and when the document set changes) it calls `documents.search`; a sequence counter makes only the latest response apply. Blank query shows `documents` directly (no IPC). No match -> "No documents match "<q>"." (role=status). Zero documents -> the existing "No documents imported yet." message (input still shown). Reset clears the query. Header "Documents (N)" still shows the total, not the filtered count.
++- Docs: `docs/ARCHITECTURE.md` (preload API, 15 channels, table row, DocumentList). `feature_list.json`: new `document-search`, state `active` (left for the Checker to decide).
++
++**Files**: `src/services/document-service.ts`, `src/shared/types.ts`, `src/main/ipc-handlers.ts`, `src/preload/preload.ts`, `src/renderer/types.d.ts`, `src/renderer/App.tsx`, `src/renderer/components/DocumentList.tsx`, `tests/document-search.test.tsx` (new, 16 tests), `scripts/e2e/document-search.mjs` (new), `docs/ARCHITECTURE.md`, `feature_list.json`, `session-handoff.md`, `claude-progress.md`.
++
++**Verification (Maker, 2026-11-16)**
++- `bash init.sh` (start) -> `init.sh OK` on the untouched baseline.
++- `npm run check` -> no errors.
++- `npm test` -> `Test Files 5 passed (5)`, `Tests 38 passed (38)` (was 22; +16 in document-search.test.tsx: title/content match, case, multiple matches, blank query, no match, literal `$5.00 (approx`, deleted docs excluded, restart, non-string rejected, preload channel, IPC handler, DocumentList input/filtered/no-match/empty).
++- `bash scripts/check-architecture.sh` -> `PASS: All architecture boundary checks passed`.
++- `bash scripts/smoke-bridge.sh` -> keys `documents,indexing,qa,feedback,app`, `PASS: the running app exposes window.knowledgeBase`.
++- `env -u NODE_OPTIONS npm run build && node --experimental-websocket scripts/e2e/document-search.mjs` -> `all 10 checks passed` (real app, 3 sample docs: bridge title/content/empty/no-match; UI typing "ATTENDEES" keystroke-by-keystroke -> only meeting-summary; "Design-Notes" -> only design-notes; no match -> empty list + message; clearing -> all 3).
++- Regression e2e: answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13.
++- `bash init.sh` (end) -> `init.sh OK`.
++- First e2e run failed on MY test expectation: I expected "design" to match only design-notes, but retrieval-plan's content contains "design"; the app was right. Changed the query to "Design-Notes" (title-only).
++
++**Unsure about (please check)**
++1. Trimming: `"  zebra "` searches for `zebra`. The spec says "contains query"; a literal reading would search with the spaces. Whitespace-only is treated as empty.
++2. "Documents (N)" header shows the total, not the filtered count. Spec does not say.
++3. Search is content-based via the main process, so each keystroke is one IPC call (no debounce). Fine for the sample size; not measured on large libraries.
++4. Stale `content/<id>.txt` files of deleted docs are not deleted by `deleteDocument` (pre-existing), but search only scans listed docs, so they don't show up (unit test covers this).
++5. The search input is not cleared when switching to a document view or on Refresh (only on Reset).
++6. No UI import picker exists (pre-existing); e2e imports via `window.knowledgeBase.documents.import(path)`.
+diff --git a/scripts/e2e/document-search.mjs b/scripts/e2e/document-search.mjs
+new file mode 100644
+index 0000000..d24866c
+--- /dev/null
++++ b/scripts/e2e/document-search.mjs
+@@ -0,0 +1,74 @@
++// E2E for document search, against the built app (run `npm run build` first).
++// Usage: node --experimental-websocket scripts/e2e/document-search.mjs
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { withApp, pageHelpers, report } from './app-session.mjs';
++
++const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-e2e-search-'));
++const docs = ['design-notes.md', 'meeting-summary.txt', 'retrieval-plan.md'].map((f) => path.resolve('data/sample-documents', f));
++const checks = [];
++
++const search = (q) => `window.knowledgeBase.documents.search(${JSON.stringify(q)}).then(r => r.map(d => d.title).sort())`;
++// Titles currently rendered in the sidebar list.
++const listed = `[...document.querySelectorAll('[data-document-id]')].map(e => e.firstChild.textContent).sort()`;
++const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
++const all = ['design-notes', 'meeting-summary', 'retrieval-plan'];
++
++try {
++  await withApp({ dataDir }, async ({ evaluate, waitFor, reload }) => {
++    await evaluate(`(async () => { for (const d of ${JSON.stringify(docs)}) await window.knowledgeBase.documents.import(d); return true; })()`);
++
++    // 1. Through the bridge.
++    const byTitle = await evaluate(search('RETRIEVAL-plan'));
++    checks.push(['search matches title, case-insensitive', same(byTitle, ['retrieval-plan']), byTitle]);
++    const byContent = await evaluate(search('attendees'));
++    checks.push(['search matches content only (meeting-summary has "Attendees:")', same(byContent, ['meeting-summary']), byContent]);
++    const empty = await evaluate(search(''));
++    checks.push(['empty query returns all documents', same(empty, all), empty]);
++    const none = await evaluate(search('zzz-no-such-text'));
++    checks.push(['no match returns []', same(none, []), none]);
++
++    // 2. Through the UI.
++    await reload();
++    await evaluate(pageHelpers);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 3`);
++    const inputs = await evaluate(`__e2e.byLabel('Search documents').map(e => e.tagName)`);
++    checks.push(['one input with aria-label "Search documents"', same(inputs, ['INPUT']), inputs]);
++
++    // Type character by character, like a user, with no waits between keystrokes.
++    await evaluate(`(async () => { const el = __e2e.byLabel('Search documents')[0]; let v = '';
++      for (const ch of 'ATTENDEES') { v += ch; __e2e.setInput(el, v); } return true; })()`);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 1`);
++    await evaluate(`__e2e.sleep(500)`); // let any stale responses land
++    const typed = await evaluate(listed);
++    checks.push(['typing filters the list by content (case-insensitive)', same(typed, ['meeting-summary']), typed]);
++
++    // "Design-Notes" only appears in a title, never in any document's content.
++    await evaluate(`__e2e.setInput(__e2e.byLabel('Search documents')[0], 'Design-Notes'); true`);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 1`);
++    await evaluate(`__e2e.sleep(300)`);
++    const byTitleUi = await evaluate(listed);
++    checks.push(['changing the query filters by title (case-insensitive)', same(byTitleUi, ['design-notes']), byTitleUi]);
++
++    await evaluate(`__e2e.setInput(__e2e.byLabel('Search documents')[0], 'zzz-no-such-text'); true`);
++    await waitFor(`document.body.innerText.includes('No documents match')`);
++    const noMatch = await evaluate(listed);
++    checks.push(['no match shows an empty list and a message', same(noMatch, []), noMatch]);
++
++    await evaluate(`__e2e.setInput(__e2e.byLabel('Search documents')[0], ''); true`);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 3`);
++    const cleared = await evaluate(listed);
++    checks.push(['clearing the input shows all documents again', same(cleared, all), cleared]);
++
++    // A query that several documents contain lists all of them.
++    await evaluate(`__e2e.setInput(__e2e.byLabel('Search documents')[0], 'retrieval'); true`);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length >= 1`);
++    await evaluate(`__e2e.sleep(300)`);
++    const retrieval = await evaluate(listed);
++    checks.push(['"retrieval" lists docs whose title or content mention it', same(retrieval, all), retrieval]);
++  });
++} finally {
++  fs.rmSync(dataDir, { recursive: true, force: true });
++}
++report('document-search e2e', checks);
+diff --git a/session-handoff.md b/session-handoff.md
+index 33651de..9cf616f 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -2,6 +2,8 @@
+ 
+ ## Verified Now
+ 
++- 2026-11-16 (maker-checker loop, round 1, Maker): `document-search` implemented and verified by the Maker (npm test 38/38, smoke PASS, `scripts/e2e/document-search.mjs` 10/10, regression e2e 7/7, 6/6, 13/13). State is `active` until the Checker's verdict (`checker-verdict.md`). Details in `loop-state.md`.
++
+ - What is currently working: all three features in feature_list.json are `passing`: answer-feedback, reset-all-data, conversation-history. The UI reaches `window.knowledgeBase` (documents, indexing, qa, feedback, app).
+ - What verification actually ran (2026-11-15, cleanup pass, no feature work): `bash init.sh` -> 'init.sh OK' (types, build, 'PASS: All architecture boundary checks passed', smoke keys 'documents,indexing,qa,feedback,app' 'PASS: the running app exposes window.knowledgeBase'); `npm test` -> 'Test Files 4 passed (4), Tests 22 passed (22)'; real-app e2e re-run: `scripts/e2e/answer-feedback.mjs` 7/7, `scripts/e2e/reset-all-data.mjs` 6/6, `scripts/e2e/conversation-history.mjs` 13/13 (each includes a real app restart on the same data dir and deletes its temp data dir).
+ 
+@@ -32,7 +34,7 @@ Earlier in the session:
+ - Highest-priority unfinished feature: none in feature_list.json. Suggested: fix the StatusBar/indexing status shape mismatch, then a real import file picker.
+ - Why it is next: both are visible to the user in the running app.
+ - What counts as passing: same three layers as AGENTS.md; add an e2e script under `scripts/e2e/`.
+-- What must not change: the preload bundling and the sandbox; the bridge names `feedback.submit/list`, `app.reset`, `qa.ask` returning `id`; the aria-labels 'Mark answer helpful', 'Mark answer not helpful', 'Reset all data'.
++- What must not change: `documents.search` (channel `documents:search`) and the aria-label 'Search documents'; the preload bundling and the sandbox; the bridge names `feedback.submit/list`, `app.reset`, `qa.ask` returning `id`; the aria-labels 'Mark answer helpful', 'Mark answer not helpful', 'Reset all data'.
+ 
+ ## Commands
+ 
+diff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts
+index 517f6cd..62260f5 100644
+--- a/src/main/ipc-handlers.ts
++++ b/src/main/ipc-handlers.ts
+@@ -41,6 +41,11 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+     return documentService.deleteDocument(id);
+   });
+ 
++  ipcMain.handle(IPC_CHANNELS.SEARCH_DOCUMENTS, async (_event, query: unknown) => {
++    logger.debug(SERVICE, 'IPC: SEARCH_DOCUMENTS');
++    return documentService.searchDocuments(query);
++  });
++
+   // Indexing
+   ipcMain.handle(IPC_CHANNELS.START_INDEXING, async (_event, documentId?: string) => {
+     logger.info(SERVICE, 'IPC: START_INDEXING', { documentId: documentId ?? 'all' });
+diff --git a/src/preload/preload.ts b/src/preload/preload.ts
+index 92f5324..fd62065 100644
+--- a/src/preload/preload.ts
++++ b/src/preload/preload.ts
+@@ -7,6 +7,7 @@ const api = {
+     import: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_DOCUMENT, filePath),
+     get: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_DOCUMENT, id),
+     delete: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.DELETE_DOCUMENT, id),
++    search: (query: string) => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_DOCUMENTS, query),
+   },
+   indexing: {
+     start: (documentId?: string) => ipcRenderer.invoke(IPC_CHANNELS.START_INDEXING, documentId),
+diff --git a/src/renderer/App.tsx b/src/renderer/App.tsx
+index a5e01e5..cb865a1 100644
+--- a/src/renderer/App.tsx
++++ b/src/renderer/App.tsx
+@@ -1,4 +1,4 @@
+-import { useState, useCallback, useEffect } from 'react';
++import { useState, useCallback, useEffect, useRef } from 'react';
+ import { DocumentList } from './components/DocumentList';
+ import { QuestionPanel } from './components/QuestionPanel';
+ import { DocumentDetail } from './components/DocumentDetail';
+@@ -32,6 +32,10 @@ export function App() {
+   const [ratings, setRatings] = useState<Record<string, FeedbackRating>>({});
+   const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+   const [askError, setAskError] = useState<string | null>(null);
++  const [searchQuery, setSearchQuery] = useState('');
++  /** Result of documents.search for the current query; null while the query is blank (show all). */
++  const [searchResults, setSearchResults] = useState<Document[] | null>(null);
++  const searchSeq = useRef(0);
+ 
+   const refreshDocuments = useCallback(async () => {
+     try {
+@@ -63,6 +67,22 @@ export function App() {
+     refreshConversation();
+   }, [refreshDocuments, refreshConversation]);
+ 
++  // Re-run the search when the query or the document set changes. Only the latest request
++  // may update the list, so a slow earlier response cannot overwrite a newer one.
++  useEffect(() => {
++    const seq = ++searchSeq.current;
++    if (searchQuery.trim() === '') {
++      setSearchResults(null);
++      return;
++    }
++    window.knowledgeBase.documents.search(searchQuery).then(
++      results => {
++        if (seq === searchSeq.current) setSearchResults(results);
++      },
++      err => console.error('Document search failed:', err),
++    );
++  }, [searchQuery, documents]);
++
+   const handleImport = useCallback(async () => {
+     console.log('Import triggered - use window.knowledgeBase.documents.import(filePath)');
+   }, []);
+@@ -71,6 +91,7 @@ export function App() {
+     setSelectedDoc(null);
+     setView('conversation');
+     setAskError(null);
++    setSearchQuery('');
+     await Promise.all([refreshDocuments(), refreshConversation()]);
+   }, [refreshDocuments, refreshConversation]);
+ 
+@@ -168,7 +189,10 @@ export function App() {
+             </button>
+           </div>
+           <DocumentList
+-            documents={documents}
++            documents={searchResults ?? documents}
++            totalCount={documents.length}
++            query={searchQuery}
++            onQueryChange={setSearchQuery}
+             onSelect={handleSelectDocument}
+             selectedId={selectedDoc?.id ?? null}
+           />
+diff --git a/src/renderer/components/DocumentList.tsx b/src/renderer/components/DocumentList.tsx
+index 889f781..5e1f955 100644
+--- a/src/renderer/components/DocumentList.tsx
++++ b/src/renderer/components/DocumentList.tsx
+@@ -1,45 +1,74 @@
+ import { Document } from '../../shared/types';
+ 
+ interface Props {
++  /** Documents to show (already filtered by the search query). */
+   documents: Document[];
++  /** How many documents exist in total, regardless of the search. */
++  totalCount: number;
++  query: string;
++  onQueryChange: (query: string) => void;
+   onSelect: (doc: Document) => void;
+   selectedId: string | null;
+ }
+ 
+-export function DocumentList({ documents, onSelect, selectedId }: Props) {
+-  if (documents.length === 0) {
+-    return (
+-      <div style={{ padding: '20px 16px', color: '#666', fontSize: '13px', textAlign: 'center' }}>
+-        No documents imported yet.
+-        <br />
+-        <span style={{ fontSize: '11px', color: '#555' }}>
+-          Import documents to get started.
+-        </span>
+-      </div>
+-    );
+-  }
+-
++export function DocumentList({ documents, totalCount, query, onQueryChange, onSelect, selectedId }: Props) {
+   return (
+-    <div style={{ flex: 1, overflow: 'auto' }}>
+-      {documents.map(doc => (
+-        <div
+-          key={doc.id}
+-          onClick={() => onSelect(doc)}
++    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
++      <div style={{ padding: '8px 16px', borderBottom: '1px solid #0f3460' }}>
++        <input
++          type="search"
++          aria-label="Search documents"
++          placeholder="Search documents"
++          value={query}
++          onChange={e => onQueryChange(e.target.value)}
+           style={{
+-            padding: '10px 16px',
+-            cursor: 'pointer',
+-            borderBottom: '1px solid #0f3460',
+-            background: selectedId === doc.id ? '#0f3460' : 'transparent',
+-            transition: 'background 0.15s',
++            width: '100%',
++            boxSizing: 'border-box',
++            padding: '6px 8px',
++            background: '#1a1a2e',
++            color: '#e0e0e0',
++            border: '1px solid #0f3460',
++            borderRadius: '3px',
++            fontSize: '12px',
+           }}
+-        >
+-          <div style={{ fontSize: '13px', fontWeight: 500 }}>{doc.title}</div>
+-          <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
+-            {doc.status === 'indexed' ? 'Indexed ' : ''}
+-            {(doc.size / 1024).toFixed(1)} KB
+-          </div>
++        />
++      </div>
++      {totalCount === 0 ? (
++        <div style={{ padding: '20px 16px', color: '#666', fontSize: '13px', textAlign: 'center' }}>
++          No documents imported yet.
++          <br />
++          <span style={{ fontSize: '11px', color: '#555' }}>
++            Import documents to get started.
++          </span>
++        </div>
++      ) : documents.length === 0 ? (
++        <div role="status" style={{ padding: '20px 16px', color: '#666', fontSize: '13px', textAlign: 'center' }}>
++          No documents match "{query.trim()}".
++        </div>
++      ) : (
++        <div style={{ flex: 1, overflow: 'auto' }}>
++          {documents.map(doc => (
++            <div
++              key={doc.id}
++              data-document-id={doc.id}
++              onClick={() => onSelect(doc)}
++              style={{
++                padding: '10px 16px',
++                cursor: 'pointer',
++                borderBottom: '1px solid #0f3460',
++                background: selectedId === doc.id ? '#0f3460' : 'transparent',
++                transition: 'background 0.15s',
++              }}
++            >
++              <div style={{ fontSize: '13px', fontWeight: 500 }}>{doc.title}</div>
++              <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>
++                {doc.status === 'indexed' ? 'Indexed ' : ''}
++                {(doc.size / 1024).toFixed(1)} KB
++              </div>
++            </div>
++          ))}
+         </div>
+-      ))}
++      )}
+     </div>
+   );
+ }
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index 558db86..627e48b 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -9,6 +9,8 @@ declare global {
+         import: (filePath: string) => Promise<import('../shared/types').Document>;
+         get: (id: string) => Promise<import('../shared/types').Document | null>;
+         delete: (id: string) => Promise<boolean>;
++        /** Documents whose title or content contains `query` (case-insensitive); '' returns all. */
++        search: (query: string) => Promise<import('../shared/types').Document[]>;
+       };
+       indexing: {
+         start: (documentId?: string) => Promise<import('../shared/types').AppStatus>;
+diff --git a/src/services/document-service.ts b/src/services/document-service.ts
+index 547a4ff..54130c7 100644
+--- a/src/services/document-service.ts
++++ b/src/services/document-service.ts
+@@ -61,6 +61,27 @@ export class DocumentService {
+     return doc;
+   }
+ 
++  /**
++   * Documents whose title or content contains `query`, case-insensitive.
++   * A blank query (empty or only whitespace) returns every document; the query is trimmed otherwise.
++   */
++  searchDocuments(query: unknown): Document[] {
++    if (query !== undefined && query !== null && typeof query !== 'string') {
++      throw new TypeError('Search query must be a string');
++    }
++    const docs = this.listDocuments();
++    const needle = (query ?? '').trim().toLowerCase();
++    if (needle === '') return docs;
++
++    const matches = docs.filter(doc => {
++      if (doc.title.toLowerCase().includes(needle)) return true;
++      const content = this.getDocumentContent(doc.id);
++      return content !== null && content.toLowerCase().includes(needle);
++    });
++    logger.debug(SERVICE, 'Searched documents', { queryLength: needle.length, matches: matches.length });
++    return matches;
++  }
++
+   /** Get a single document by ID. */
+   getDocument(id: string): Document | null {
+     const docs = this.listDocuments();
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index 346c80f..36ec2ba 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -72,6 +72,7 @@ export const IPC_CHANNELS = {
+   IMPORT_DOCUMENT: 'documents:import',
+   GET_DOCUMENT: 'documents:get',
+   DELETE_DOCUMENT: 'documents:delete',
++  SEARCH_DOCUMENTS: 'documents:search',
+ 
+   // Indexing
+   START_INDEXING: 'indexing:start',
+diff --git a/tests/document-search.test.tsx b/tests/document-search.test.tsx
+new file mode 100644
+index 0000000..81de2a6
+--- /dev/null
++++ b/tests/document-search.test.tsx
+@@ -0,0 +1,151 @@
++import * as fs from 'fs';
++import * as path from 'path';
++import { beforeEach, describe, expect, it, vi } from 'vitest';
++import { renderToStaticMarkup } from 'react-dom/server';
++import { IPC_CHANNELS, Document } from '../src/shared/types';
++import { registerIpcHandlers, Services } from '../src/main/ipc-handlers';
++import { DocumentList } from '../src/renderer/components/DocumentList';
++import { makeServices, quietLogs, tempDir } from './helpers';
++
++// Capture what the preload exposes and what it invokes.
++const exposed: Record<string, any> = {};
++const invoke = vi.fn(async (..._args: unknown[]) => undefined);
++vi.mock('electron', () => ({
++  contextBridge: { exposeInMainWorld: (key: string, api: unknown) => { exposed[key] = api; } },
++  ipcRenderer: { invoke: (...args: unknown[]) => invoke(...args) },
++}));
++
++beforeEach(() => quietLogs());
++
++/** Writes fixture files and imports them; returns services and the imported docs by title. */
++function setup(files: Record<string, string>, dataDir = tempDir()) {
++  const s = makeServices(dataDir);
++  const src = tempDir();
++  const docs: Record<string, Document> = {};
++  for (const [name, content] of Object.entries(files)) {
++    const p = path.join(src, name);
++    fs.writeFileSync(p, content);
++    const doc = s.documentService.importDocument(p);
++    docs[doc.title] = doc;
++  }
++  return { s, docs, dataDir };
++}
++
++const FILES = {
++  'Alpha-Report.md': 'Quarterly numbers for the sales team.',
++  'beta-notes.txt': 'The Zebra crossing is near the office.',
++  'gamma.md': 'Nothing interesting here.',
++};
++const titles = (docs: Document[]) => docs.map(d => d.title).sort();
++
++describe('DocumentService.searchDocuments', () => {
++  it('matches the title, case-insensitively', () => {
++    const { s } = setup(FILES);
++    expect(titles(s.documentService.searchDocuments('alpha'))).toEqual(['Alpha-Report']);
++    expect(titles(s.documentService.searchDocuments('BETA'))).toEqual(['beta-notes']);
++  });
++
++  it('matches the content, case-insensitively', () => {
++    const { s } = setup(FILES);
++    expect(titles(s.documentService.searchDocuments('zebra'))).toEqual(['beta-notes']);
++    expect(titles(s.documentService.searchDocuments('QUARTERLY NUMBERS'))).toEqual(['Alpha-Report']);
++  });
++
++  it('returns every document that matches, by title or content', () => {
++    const { s } = setup({ ...FILES, 'zebra-facts.md': 'Stripes.' });
++    expect(titles(s.documentService.searchDocuments('Zebra'))).toEqual(['beta-notes', 'zebra-facts']);
++  });
++
++  it('returns all documents for an empty or blank query', () => {
++    const { s } = setup(FILES);
++    const all = titles(s.documentService.listDocuments());
++    expect(all).toHaveLength(3);
++    expect(titles(s.documentService.searchDocuments(''))).toEqual(all);
++    expect(titles(s.documentService.searchDocuments('   '))).toEqual(all);
++    expect(titles(s.documentService.searchDocuments(undefined))).toEqual(all);
++  });
++
++  it('returns nothing when no document matches', () => {
++    const { s } = setup(FILES);
++    expect(s.documentService.searchDocuments('unicorn')).toEqual([]);
++  });
++
++  it('treats the query as literal text, not a pattern', () => {
++    const { s } = setup({ ...FILES, 'regex.md': 'Price is $5.00 (approx).' });
++    expect(titles(s.documentService.searchDocuments('$5.00 (approx'))).toEqual(['regex']);
++    expect(s.documentService.searchDocuments('.*')).toEqual([]);
++  });
++
++  it('does not return deleted documents', () => {
++    const { s, docs } = setup(FILES);
++    s.documentService.deleteDocument(docs['beta-notes'].id);
++    expect(s.documentService.searchDocuments('zebra')).toEqual([]);
++  });
++
++  it('returns full document metadata', () => {
++    const { s, docs } = setup(FILES);
++    expect(s.documentService.searchDocuments('gamma')).toEqual([docs['gamma']]);
++  });
++
++  it('works after a restart on the same data dir', () => {
++    const { dataDir } = setup(FILES);
++    expect(titles(makeServices(dataDir).documentService.searchDocuments('zebra'))).toEqual(['beta-notes']);
++  });
++
++  it('rejects a non-string query', () => {
++    const { s } = setup(FILES);
++    expect(() => s.documentService.searchDocuments(42)).toThrow(/string/);
++  });
++});
++
++describe('documents.search over the bridge', () => {
++  it('preload exposes documents.search on the documents:search channel', async () => {
++    await import('../src/preload/preload');
++    const kb = exposed.knowledgeBase;
++    expect(typeof kb.documents.search).toBe('function');
++    await kb.documents.search('zebra');
++    expect(invoke).toHaveBeenLastCalledWith(IPC_CHANNELS.SEARCH_DOCUMENTS, 'zebra');
++  });
++
++  it('the documents:search handler returns the matching documents', async () => {
++    const { s } = setup(FILES);
++    const handlers = new Map<string, (...args: any[]) => any>();
++    registerIpcHandlers({ handle: (c: string, fn: any) => handlers.set(c, fn) } as any, s as Services);
++    const search = handlers.get(IPC_CHANNELS.SEARCH_DOCUMENTS)!;
++    expect(titles(await search({}, 'ZEBRA'))).toEqual(['beta-notes']);
++    expect(await search({}, '')).toHaveLength(3);
++  });
++});
++
++describe('DocumentList search UI', () => {
++  const doc = (id: string, title: string): Document => ({
++    id, title, filename: `${title}.md`, importedAt: '2026-11-16T00:00:00.000Z', size: 1024, status: 'imported',
++  });
++  const render = (props: Partial<Parameters<typeof DocumentList>[0]>) =>
++    renderToStaticMarkup(
++      <DocumentList documents={[]} totalCount={0} query="" onQueryChange={() => {}} onSelect={() => {}} selectedId={null} {...props} />,
++    );
++
++  it('renders a search input labelled "Search documents" with the current query', () => {
++    const html = render({ documents: [doc('1', 'one')], totalCount: 1, query: 'on' });
++    expect(html).toMatch(/<input[^>]*aria-label="Search documents"[^>]*value="on"/);
++  });
++
++  it('lists only the documents it is given', () => {
++    const html = render({ documents: [doc('1', 'kept')], totalCount: 2, query: 'kep' });
++    expect(html).toContain('kept');
++    expect(html).not.toContain('No documents');
++  });
++
++  it('says nothing matches when the search has no results', () => {
++    const html = render({ documents: [], totalCount: 2, query: ' unicorn ' });
++    expect(html).toContain('No documents match &quot;unicorn&quot;');
++    expect(html).not.toContain('No documents imported yet');
++  });
++
++  it('keeps the empty-library message when there are no documents at all', () => {
++    const html = render({ documents: [], totalCount: 0 });
++    expect(html).toContain('No documents imported yet');
++    expect(html).toContain('aria-label="Search documents"');
++  });
++});

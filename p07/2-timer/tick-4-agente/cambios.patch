@@ -1,0 +1,19 @@
+commit df3b5b9ad5bfa0218f82d18e6dac5d316bdb6444
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:28:30 2026 -0300
+
+    monitor: revert d7d9208 (renderer fs-helper imported Node 'fs', violating renderer boundary)
+    
+    src/renderer/fs-helper.ts imported the Node.js core module 'fs' into the
+    renderer, which breaks the architecture rule that the renderer only talks
+    to the app through window.knowledgeBase. The file was unreferenced, so the
+    revert has no functional impact. init.sh passes after the revert.
+
+diff --git a/src/renderer/fs-helper.ts b/src/renderer/fs-helper.ts
+deleted file mode 100644
+index 5936736..0000000
+--- a/src/renderer/fs-helper.ts
++++ /dev/null
+@@ -1,2 +0,0 @@
+-import * as fs from 'fs';
+-export const leaked = typeof fs;

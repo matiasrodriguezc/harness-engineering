@@ -1,0 +1,1 @@
+Read goal.md and loop-state.md, then make one round of progress toward the goal as goal.md describes.

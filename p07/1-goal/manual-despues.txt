@@ -1,0 +1,5 @@
+tests_exit=1 coverage_lines=0 coverage_functions=0 files_below_90=unknown types_exit=0 arch_exit=0
+GOAL: FAIL
+WHY: tests fail. FIX: see .coverage-goal.log
+WHY: files below 90% lines: unknown. FIX: add tests for those files first
+WHY: lines 0% / functions 0% (need 95/95). FIX: test the uncovered functions listed in .coverage-goal/coverage-summary.json

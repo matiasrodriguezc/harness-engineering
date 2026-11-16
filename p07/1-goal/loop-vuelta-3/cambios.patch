@@ -1,0 +1,195 @@
+commit 15bec9b162210e7574306a960521018db5b15273
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:13:58 2026 -0300
+
+    goal round 2: unit tests for logger and persistence-service (lines 89.8->96.47%)
+
+diff --git a/loop-state.md b/loop-state.md
+index 84b3b98..ec15b2b 100644
+--- a/loop-state.md
++++ b/loop-state.md
+@@ -8,7 +8,16 @@
+ - Coverage after: lines 89.8% / functions 85.18%; below 90%: indexing-service 87.61, logger 74.71, persistence-service 84. document-service no longer below the bar.
+ - tests, types and architecture checks all pass (`check-goal.sh` exit fields = 0).
+ 
++### Next (superseded by Round 2)
++
++## Round 2
++
++- Added `tests/services/logger.test.ts` (4 tests): JSON entry shape + per-level console stream, `data` only when non-empty, `LOG_LEVEL=WARN` filtering (module re-imported with `vi.resetModules`), `forService` ServiceLogger at all levels.
++- Added `tests/services/persistence-service.test.ts` (6 tests): directory creation + path getters, readJson/readText missing -> null and round-trips in nested dirs, copy/delete in documents (missing delete is a no-op), listFiles/exists on missing paths, resetAll.
++- No changes to `src/`.
++- Coverage before: lines 89.8% / functions 85.18%; below 90%: indexing-service 87.61, logger 74.71, persistence-service 84.
++- Coverage after: lines 96.47% / functions 98.3%; below 90%: indexing-service 87.61 only.
++- `check-goal.sh`: tests_exit=0 types_exit=0 arch_exit=0; GOAL: FAIL only because of indexing-service.
++
+ ### Next
+-1. `logger.ts` (74.71%) — least covered now.
+-2. `persistence-service.ts` (84%) — direct unit tests for its read/write/copy/delete helpers, including missing-file paths.
+-3. `indexing-service.ts` (87.61%) — uncovered branches (see `.coverage-goal/coverage-summary.json`).
++1. `indexing-service.ts` (87.61%) — the only remaining blocker. Run coverage with a text/json reporter (only `coverage-summary.json` is written to `.coverage-goal/`) to find the uncovered lines, then add `tests/services/indexing-service.test.ts` for those branches.
+diff --git a/tests/services/logger.test.ts b/tests/services/logger.test.ts
+new file mode 100644
+index 0000000..6d1f2b8
+--- /dev/null
++++ b/tests/services/logger.test.ts
+@@ -0,0 +1,86 @@
++import { afterEach, describe, expect, it, vi } from 'vitest';
++
++async function loadLogger(level?: string) {
++  vi.resetModules();
++  if (level === undefined) delete process.env.LOG_LEVEL;
++  else process.env.LOG_LEVEL = level;
++  return import('../../src/services/logger');
++}
++
++function spies() {
++  return {
++    log: vi.spyOn(console, 'log').mockImplementation(() => {}),
++    warn: vi.spyOn(console, 'warn').mockImplementation(() => {}),
++    error: vi.spyOn(console, 'error').mockImplementation(() => {}),
++  };
++}
++
++const originalLevel = process.env.LOG_LEVEL;
++afterEach(() => {
++  if (originalLevel === undefined) delete process.env.LOG_LEVEL;
++  else process.env.LOG_LEVEL = originalLevel;
++  vi.restoreAllMocks();
++});
++
++describe('logger', () => {
++  it('emits JSON entries with timestamp, level, service and message to the console stream for the level', async () => {
++    const { logger, LogLevel } = await loadLogger();
++    const s = spies();
++    logger.debug('svc', 'd');
++    logger.info('svc', 'i');
++    logger.warn('svc', 'w');
++    logger.error('svc', 'e');
++
++    expect(s.log).toHaveBeenCalledTimes(2);
++    expect(s.warn).toHaveBeenCalledTimes(1);
++    expect(s.error).toHaveBeenCalledTimes(1);
++
++    const debugEntry = JSON.parse(s.log.mock.calls[0][0] as string);
++    expect(debugEntry).toMatchObject({ level: LogLevel.DEBUG, service: 'svc', message: 'd' });
++    expect(new Date(debugEntry.timestamp).toISOString()).toBe(debugEntry.timestamp);
++    expect(debugEntry).not.toHaveProperty('data');
++    expect(JSON.parse(s.log.mock.calls[1][0] as string).level).toBe(LogLevel.INFO);
++    expect(JSON.parse(s.warn.mock.calls[0][0] as string).level).toBe(LogLevel.WARN);
++    expect(JSON.parse(s.error.mock.calls[0][0] as string).level).toBe(LogLevel.ERROR);
++  });
++
++  it('includes data only when it has keys', async () => {
++    const { logger } = await loadLogger();
++    const s = spies();
++    logger.info('svc', 'with', { a: 1 });
++    logger.info('svc', 'empty', {});
++    expect(JSON.parse(s.log.mock.calls[0][0] as string).data).toEqual({ a: 1 });
++    expect(JSON.parse(s.log.mock.calls[1][0] as string)).not.toHaveProperty('data');
++  });
++
++  it('drops entries below LOG_LEVEL', async () => {
++    const { logger } = await loadLogger('WARN');
++    const s = spies();
++    logger.debug('svc', 'd');
++    logger.info('svc', 'i');
++    logger.warn('svc', 'w');
++    logger.error('svc', 'e');
++    expect(s.log).not.toHaveBeenCalled();
++    expect(s.warn).toHaveBeenCalledTimes(1);
++    expect(s.error).toHaveBeenCalledTimes(1);
++  });
++
++  it('forService returns a ServiceLogger that tags every level with the service name', async () => {
++    const { logger, ServiceLogger } = await loadLogger();
++    const s = spies();
++    const scoped = logger.forService('scoped');
++    expect(scoped).toBeInstanceOf(ServiceLogger);
++    scoped.debug('d', { k: 'v' });
++    scoped.info('i');
++    scoped.warn('w');
++    scoped.error('e');
++    const entries = [
++      ...s.log.mock.calls.map(c => JSON.parse(c[0] as string)),
++      JSON.parse(s.warn.mock.calls[0][0] as string),
++      JSON.parse(s.error.mock.calls[0][0] as string),
++    ];
++    expect(entries.map(e => e.message)).toEqual(['d', 'i', 'w', 'e']);
++    expect(entries.every(e => e.service === 'scoped')).toBe(true);
++    expect(entries[0].data).toEqual({ k: 'v' });
++  });
++});
+diff --git a/tests/services/persistence-service.test.ts b/tests/services/persistence-service.test.ts
+new file mode 100644
+index 0000000..d7cdb40
+--- /dev/null
++++ b/tests/services/persistence-service.test.ts
+@@ -0,0 +1,67 @@
++import { beforeEach, describe, expect, it } from 'vitest';
++import * as fs from 'fs';
++import * as path from 'path';
++import { PersistenceService } from '../../src/services/persistence-service';
++import { quietLogs, tempDir } from '../helpers';
++
++let root: string;
++let dataDir: string;
++let p: PersistenceService;
++
++beforeEach(() => {
++  quietLogs();
++  root = tempDir();
++  dataDir = path.join(root, 'data');
++  p = new PersistenceService(dataDir);
++});
++
++describe('PersistenceService', () => {
++  it('creates data, documents and index directories and exposes their paths', () => {
++    expect(p.getDataDir()).toBe(dataDir);
++    expect(p.getDocumentsDir()).toBe(path.join(dataDir, 'documents'));
++    expect(p.getIndexDir()).toBe(path.join(dataDir, 'index'));
++    for (const d of [p.getDataDir(), p.getDocumentsDir(), p.getIndexDir()]) {
++      expect(fs.statSync(d).isDirectory()).toBe(true);
++    }
++  });
++
++  it('readJson returns null for a missing file and round-trips written JSON in nested dirs', () => {
++    expect(p.readJson('nope.json')).toBeNull();
++    p.writeJson('a/b/c.json', { x: [1, 2] });
++    expect(p.readJson('a/b/c.json')).toEqual({ x: [1, 2] });
++    expect(p.exists('a/b/c.json')).toBe(true);
++  });
++
++  it('readText returns null for a missing file and round-trips written text', () => {
++    expect(p.readText('missing.txt')).toBeNull();
++    p.writeText('t/notes.txt', 'hello\nworld');
++    expect(p.readText('t/notes.txt')).toBe('hello\nworld');
++  });
++
++  it('copies files into documents and deletes them; deleting a missing file is a no-op', () => {
++    const src = path.join(root, 'src.md');
++    fs.writeFileSync(src, '# doc');
++    const dest = p.copyFileToDocuments(src, 'copy.md');
++    expect(dest).toBe(path.join(p.getDocumentsDir(), 'copy.md'));
++    expect(fs.readFileSync(dest, 'utf-8')).toBe('# doc');
++    expect(p.listFiles('documents')).toEqual(['copy.md']);
++
++    p.deleteFromDocuments('copy.md');
++    expect(fs.existsSync(dest)).toBe(false);
++    expect(() => p.deleteFromDocuments('copy.md')).not.toThrow();
++  });
++
++  it('listFiles returns [] for a missing directory and exists is false for missing paths', () => {
++    expect(p.listFiles('no-such-dir')).toEqual([]);
++    expect(p.exists('no-such-file')).toBe(false);
++  });
++
++  it('resetAll removes all stored data and recreates the empty directories', () => {
++    p.writeJson('state.json', { a: 1 });
++    p.writeText('documents/x.txt', 'x');
++    p.resetAll();
++    expect(p.exists('state.json')).toBe(false);
++    expect(p.listFiles('documents')).toEqual([]);
++    expect(fs.statSync(p.getIndexDir()).isDirectory()).toBe(true);
++  });
++});

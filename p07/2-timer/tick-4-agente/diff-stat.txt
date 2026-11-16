@@ -1,0 +1,4 @@
+df3b5b9 monitor: revert d7d9208 (renderer fs-helper imported Node 'fs', violating renderer boundary)
+
+ src/renderer/fs-helper.ts | 2 --
+ 1 file changed, 2 deletions(-)

@@ -1,0 +1,234 @@
+commit 137ddef3aaba0f35ef84d96bf23ff6ae2d22a2a9
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:40:06 2026 -0300
+
+    document-search: checker round 2 verdict PASS
+
+diff --git a/checker-verdict.md b/checker-verdict.md
+index 12ee84a..9cc3c8c 100644
+--- a/checker-verdict.md
++++ b/checker-verdict.md
+@@ -1,16 +1,17 @@
+ VERDICT: PASS
+ 
+-Round 1 — Checker, 2026-11-16. Commit checked: 402c7ee.
++Round 2, Checker, 2026-11-16. Commit checked: 402c7ee (the application code hasn't changed since round 1; `git diff 78d5607 --stat` shows only `loop-state.md`). This round re-verified everything from scratch and tested angles that round 1 did not cover.
+ 
+ ## Defects
+ 
+-None blocking. Every point of the task works in the running app, and nothing else broke.
++None. Every point of the task works in the running app, and nothing else broke.
+ 
+ ## Non-blocking observations (spec is silent; not counted as defects)
+ 
+-1. **The query is trimmed before matching.** `documents.search("attendees ")` returns `["meeting-summary"]`. A literal substring check returns `[]`, because no document contains "attendees " with a trailing space ("Attendees:" is followed by a colon). A whitespace-only query `"   "` returns all 3 documents. This is a reasonable UX choice and the Maker flagged it, but it is stricter than the spec's wording. If the goal means a literal "contains", this should change.
+-2. The "Documents (N)" header shows the total count, not the filtered count. The spec doesn't say which.
+-3. Importing through the bridge doesn't refresh the list by itself (this was already the case). After Refresh, a new matching document shows up under the active filter, as expected.
++1. The query is trimmed before matching, and a whitespace-only query returns all documents (same as round 1; the Maker flagged this). A literal "contains" check would not trim.
++2. The "Documents (N)" header shows the total count, not the filtered count.
++3. Importing or deleting through the bridge doesn't refresh the list by itself; you have to press Refresh (this was already the case).
++4. This one is out of scope and existed before this feature. Asking "What are the meeting attendees?" returned citations from retrieval-plan and design-notes, not meeting-summary. That's about retrieval quality. The search change doesn't touch any Q&A or retrieval code: `git diff --stat c91abd4 402c7ee -- src` lists only the ipc-handlers, preload, App, DocumentList, types and document-service files.
+ 
+ ## Evidence
+ 
+@@ -18,14 +19,16 @@ Static / runtime:
+ - `npm run check` -> no errors
+ - `npm test` -> `Test Files 5 passed (5)`, `Tests 38 passed (38)`
+ - `bash scripts/check-architecture.sh` -> `PASS: All architecture boundary checks passed`
+-- `bash scripts/smoke-bridge.sh` -> keys `documents,indexing,qa,feedback,app`, `PASS: the running app exposes window.knowledgeBase`
+-- `env -u NODE_OPTIONS npm run build` -> built OK
+-
+-Maker's e2e, rerun against the fresh build: document-search 10/10, answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13.
+-
+-Independent e2e (`node --experimental-websocket evaluation/checker-round1.mjs`). The real app, the 3 sample docs plus 1 extra doc, CDP `Input.insertText`/`Input.dispatchKeyEvent` used as real keystrokes. Expected results come from a brute-force oracle over the raw files, not from the app's code -> `checker round 1: all 28 checks passed`:
+-- Empty library: `search("")` -> `[]`, `search("design")` -> `[]`, and the input is present.
+-- Bridge, each result equal to the oracle: `RETRIEVAL` (3), `retrieval-PLAN` (1), `AtTeNdEeS` (meeting-summary, content only), `Design-Notes` (title only), `design` (2), `chunk` (3), `zzz-nothing` ([]), `.*` ([], literal, not regex), `(` (3), multi-word phrases, `""` (all 3).
+-- UI: typing "ATTENDEES" key by key -> only meeting-summary. Backspacing 9 times -> input empty, all 3 shown. "Plan" -> retrieval-plan. "zzz" -> empty list plus the "No documents match" message. "DESIGN" -> design-notes, retrieval-plan. Escape (native search clear) -> all 3.
+-- Clicking a filtered doc opens its detail view.
+-- Regression: indexing and asking "How does retrieval work?" through the UI with a filter active -> 1 exchange with 2 citations, and the filter is still applied. Importing a 4th doc and pressing Refresh -> the filtered list shows it. After a reload the conversation persists and all 4 docs are listed.
++- `bash scripts/smoke-bridge.sh` -> `PASS: the running app exposes window.knowledgeBase`
++- `env -u NODE_OPTIONS npm run build` -> `built in 471ms`
++
++Regression, rerun against the fresh build: document-search 10/10, answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13, and `evaluation/checker-round1.mjs` 28/28.
++
++New independent e2e (`node --experimental-websocket evaluation/checker-round2.mjs`) -> `checker round 2: all 35 checks passed`. It ran the real app with the 3 sample documents plus 3 extra documents: non-ASCII content and title (`Acentuación`, `ÑANDÚ`, `Größe`), a ~120 KB file with the match only at the very end, and a document that matches only by title. Expected results come from a brute-force oracle over the raw files, not from the app's code.
++- Bridge: `ñandú`/`ÑANDÚ`/`acentuación`/`ACENTUACIÓN`/`größe` (non-ASCII case-insensitive), `needle-at-the-end` (end of a long file), `zeta` (title only), `NOTABLE`, multi-word phrases, `e` (all 6), `ATTENDEES`, `xyzzy-none` (`[]`), `""` (all 6). Every result matches the oracle.
++- Bad input: `search(42)` rejects with `TypeError: Search query must be a string`, `search({})` rejects, and the bridge keeps working afterwards.
++- UI: real CDP keystrokes fired concurrently ("needle-at") settle on the right result. A fast replace sequence `e -> ée -> ñ -> ÑA -> ÑANDÚ` ends on the `ÑANDÚ` result (no stale response wins). Pasting "Software Design" -> design-notes. Cmd+A then Backspace -> input empty, all 6 shown.
++- Deleting a matching doc while the filter is active, then Refresh: the list is empty, the "No documents match" message shows, and the bridge search returns `[]`.
++- Regression: indexing and asking through the UI with a filter active -> 1 exchange with citations, and the filter stays applied.
++- Real app restart (second launch with the same profile): searches still match the oracle (the deleted doc is still gone), the conversation persists, and the input starts empty with all 5 docs listed.
++- Reset through the UI with a filter active: the input is cleared, "No documents imported yet." shows, and `search("")` -> `[]`. Re-importing afterwards gives `search("ATTENDEES")` -> `[meeting-summary]`.
+diff --git a/evaluation/checker-round2.mjs b/evaluation/checker-round2.mjs
+new file mode 100644
+index 0000000..f337cae
+--- /dev/null
++++ b/evaluation/checker-round2.mjs
+@@ -0,0 +1,142 @@
++// Checker round 2: independent probe of document search, from angles round 1 did not cover.
++// Non-ASCII case folding, rapid-typing races, paste, deleting while filtered, a real app restart,
++// bad bridge input, Reset clearing the filter, and regressions (import, ask, conversation).
++// Usage: env -u NODE_OPTIONS npm run build && node --experimental-websocket evaluation/checker-round2.mjs
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { withApp, pageHelpers, report } from '../scripts/e2e/app-session.mjs';
++
++const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-checker-r2-'));
++const srcDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-checker-r2-src-'));
++const samples = ['design-notes.md', 'meeting-summary.txt', 'retrieval-plan.md'].map((f) => path.resolve('data/sample-documents', f));
++// Extra docs: non-ASCII content, a match only at the very end of a long file, and a title-only match.
++const extras = {
++  'Acentuación.txt': 'El ÑANDÚ corre rápido. Straße und Größe.',
++  'long-tail.txt': 'filler line without the term.\n'.repeat(4000) + 'needle-AT-THE-END',
++  'Zeta-Report.txt': 'plain body text with nothing notable',
++};
++const extraPaths = Object.entries(extras).map(([name, body]) => {
++  const p = path.join(srcDir, name);
++  fs.writeFileSync(p, body);
++  return p;
++});
++const allPaths = [...samples, ...extraPaths];
++const titleOf = (p) => path.basename(p).replace(/\.[^.]+$/, '');
++const contents = Object.fromEntries(allPaths.map((p) => [titleOf(p), fs.readFileSync(p, 'utf8')]));
++let present = allPaths.map(titleOf);
++// Expected results by brute force over the raw files (independent of the app's code).
++const oracle = (q) => present.filter((t) => t.toLowerCase().includes(q.toLowerCase()) || contents[t].toLowerCase().includes(q.toLowerCase())).sort();
++
++const checks = [];
++const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
++const search = (q) => `window.knowledgeBase.documents.search(${JSON.stringify(q)}).then(r => r.map(d => d.title).sort())`;
++const listed = `[...document.querySelectorAll('[data-document-id]')].map(e => e.firstChild.textContent).sort()`;
++const box = `__e2e.byLabel('Search documents')[0]`;
++const expectSearch = async (evaluate, q, label) => {
++  const r = await evaluate(search(q));
++  checks.push([label ?? `search(${JSON.stringify(q)}) == oracle ${JSON.stringify(oracle(q))}`, same(r, oracle(q)), r]);
++};
++
++try {
++  await withApp({ dataDir, port: 9388 }, async ({ evaluate, waitFor, reload, send }) => {
++    for (const p of allPaths) await evaluate(`window.knowledgeBase.documents.import(${JSON.stringify(p)})`);
++    const imported = await evaluate(`window.knowledgeBase.documents.list().then(r => r.map(d => d.title).sort())`);
++    checks.push(['import: all 6 docs listed with expected titles', same(imported, [...present].sort()), imported]);
++
++    // Bridge: new query shapes.
++    for (const q of ['ñandú', 'ÑANDÚ', 'acentuación', 'ACENTUACIÓN', 'größe', 'needle-at-the-end', 'zeta', 'NOTABLE', 'nothing notable', 'e', 'filler line', 'ATTENDEES', 'xyzzy-none'])
++      await expectSearch(evaluate, q);
++    checks.push(['search("") returns all 6', (await evaluate(search(''))).length === 6, await evaluate(search(''))]);
++
++    // Bad input over the bridge: rejects, app keeps working.
++    const bad = await evaluate(`window.knowledgeBase.documents.search(42).then(() => 'resolved', e => 'rejected: ' + e.message)`);
++    checks.push(['search(42) rejects', bad.startsWith('rejected'), bad]);
++    const badObj = await evaluate(`window.knowledgeBase.documents.search({}).then(() => 'resolved', e => 'rejected')`);
++    checks.push(['search({}) rejects', badObj === 'rejected', badObj]);
++    checks.push(['bridge still works after bad input', (await evaluate(search('zeta'))).length === 1]);
++
++    // UI: rapid typing (no waits between keys) must settle on the final query's results.
++    await reload(); await evaluate(pageHelpers);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 6`);
++    await evaluate(`${box}.focus(); true`);
++    const fast = 'needle-at';
++    await Promise.all([...fast].map((ch) => send('Input.insertText', { text: ch })));
++    await evaluate(`__e2e.sleep(600)`);
++    const fastVal = await evaluate(`${box}.value`);
++    checks.push([`UI: rapid typing "${fast}" settles on oracle`, fastVal === fast && same(await evaluate(listed), oracle(fast)), [fastVal, await evaluate(listed)]]);
++
++    // Type then quickly retype a different query (race: broad query then narrow).
++    await evaluate(`__e2e.setInput(${box}, ''); true`);
++    for (const q of ['e', 'ée', 'ñ', 'ÑA', 'ÑANDÚ']) await evaluate(`__e2e.setInput(${box}, ${JSON.stringify(q)}); true`);
++    await evaluate(`__e2e.sleep(600)`);
++    checks.push(['UI: fast replace sequence ends on "ÑANDÚ" results', same(await evaluate(listed), oracle('ÑANDÚ')), await evaluate(listed)]);
++
++    // Paste a whole phrase in one go.
++    await evaluate(`__e2e.setInput(${box}, ''); ${box}.focus(); true`);
++    await send('Input.insertText', { text: 'Software Design' });
++    await evaluate(`__e2e.sleep(400)`);
++    checks.push(['UI: pasted "Software Design" -> oracle', same(await evaluate(listed), oracle('Software Design')), await evaluate(listed)]);
++
++    // Select-all + Delete clears the input and shows everything.
++    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'a', code: 'KeyA', modifiers: 4, windowsVirtualKeyCode: 65, commands: ['selectAll'] });
++    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'a', code: 'KeyA', modifiers: 4, windowsVirtualKeyCode: 65 });
++    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
++    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
++    await evaluate(`__e2e.sleep(400)`);
++    const clearedVal = await evaluate(`${box}.value`);
++    checks.push(['UI: select-all + Backspace clears and shows all 6', clearedVal === '' && (await evaluate(listed)).length === 6, [clearedVal, await evaluate(listed)]]);
++
++    // Delete a matching doc while filtered, then Refresh: it disappears from the filtered list and the bridge.
++    await evaluate(`__e2e.setInput(${box}, 'zeta'); true`);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 1`);
++    const zetaId = await evaluate(`window.knowledgeBase.documents.search('zeta').then(r => r[0].id)`);
++    await evaluate(`window.knowledgeBase.documents.delete(${JSON.stringify(zetaId)})`);
++    present = present.filter((t) => t !== 'Zeta-Report');
++    await evaluate(`[...document.querySelectorAll('header button')].find((b) => b.textContent === 'Refresh').click(); true`);
++    await evaluate(`__e2e.sleep(600)`);
++    checks.push(['UI: deleted doc gone from filtered list after Refresh', same(await evaluate(listed), []), await evaluate(listed)]);
++    checks.push(['UI: no-match message after delete', await evaluate(`document.body.innerText.includes('No documents match')`)]);
++    await expectSearch(evaluate, 'zeta', 'bridge: search("zeta") after delete -> []');
++
++    // Regression: indexing + asking + conversation with filter active.
++    await evaluate(`__e2e.setInput(${box}, 'needle'); true`);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 1`);
++    await evaluate(`window.knowledgeBase.indexing.start()`);
++    await evaluate(`[...document.querySelectorAll('header button')].find((b) => b.textContent === 'Conversation').click(); true`);
++    await evaluate(`(() => { __e2e.setInput(__e2e.byLabel('Ask a question')[0], 'What are the meeting attendees?'); document.querySelector('form').requestSubmit(); return true; })()`);
++    await waitFor(`document.querySelectorAll('[data-exchange]').length === 1 && !!document.querySelector('[data-answer-id]')`, 15000);
++    const hist = await evaluate(`window.knowledgeBase.qa.history()`);
++    checks.push(['ask works with filter active; answer has citations', hist.length === 1 && hist[0].response.citations.length > 0, hist.map((h) => h.response.citations.map((c) => c.documentTitle ?? c.documentId))]);
++    checks.push(['filter still applied after asking', same(await evaluate(listed), ['long-tail']), await evaluate(listed)]);
++  });
++
++  // Real restart: search still sees imported content.
++  await withApp({ dataDir, port: 9389 }, async ({ evaluate, waitFor }) => {
++    for (const q of ['ñandú', 'needle-at-the-end', 'attendees', 'zeta']) await expectSearch(evaluate, q, `after restart: search(${JSON.stringify(q)}) == oracle ${JSON.stringify(oracle(q))}`);
++    await evaluate(pageHelpers);
++    await waitFor(`document.querySelectorAll('[data-exchange]').length === 1`);
++    checks.push(['after restart: conversation persists (1 exchange)', true]);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 5`);
++    checks.push(['after restart: input starts empty, all 5 docs listed', (await evaluate(`${box}.value`)) === '', await evaluate(listed)]);
++
++    // Reset through the UI with a filter active clears the input and empties the list.
++    await evaluate(`__e2e.setInput(${box}, 'attendees'); true`);
++    await waitFor(`document.querySelectorAll('[data-document-id]').length === 1`);
++    await evaluate(`__e2e.byLabel('Reset all data')[0].click(); true`);
++    await waitFor(`__e2e.byLabel('Confirm reset all data').length === 1`);
++    await evaluate(`__e2e.byLabel('Confirm reset all data')[0].click(); true`);
++    await waitFor(`document.body.innerText.includes('Documents (0)')`);
++    const after = { value: await evaluate(`${box}.value`), text: await evaluate(`document.body.innerText.includes('No documents imported yet.')`), search: await evaluate(search('')) };
++    checks.push(['Reset with filter active: input cleared, empty state shown, search("") -> []', after.value === '' && after.text && same(after.search, []), after]);
++
++    // Re-import after reset: search works again from scratch.
++    await evaluate(`window.knowledgeBase.documents.import(${JSON.stringify(samples[1])})`);
++    present = ['meeting-summary'];
++    await expectSearch(evaluate, 'ATTENDEES', 'after reset + re-import: search("ATTENDEES") -> [meeting-summary]');
++  });
++} finally {
++  fs.rmSync(dataDir, { recursive: true, force: true });
++  fs.rmSync(srcDir, { recursive: true, force: true });
++}
++report('checker round 2', checks);
+diff --git a/loop-state.md b/loop-state.md
+index ed205fe..701ec9b 100644
+--- a/loop-state.md
++++ b/loop-state.md
+@@ -44,3 +44,20 @@ Loop: maker-checker para búsqueda de documentos. Para con 2 PASS seguidos o 6 v
+ 3. A bridge import needs a Refresh before the list updates (this was already the case).
+ 
+ **What I ran:** `npm run check`, `npm test` (38/38), `check-architecture.sh` (PASS), `smoke-bridge.sh` (PASS), `npm run build`. The Maker's e2e scripts: document-search 10/10, answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13. My own `evaluation/checker-round1.mjs` (real CDP keystrokes, results checked against a brute-force oracle, plus ask/conversation/import regressions): 28/28 passed. Details are in `checker-verdict.md`.
++
++## Vuelta 2
++
++### Maker (round 2)
++
++No Maker changes this round. The application code is unchanged since 402c7ee.
++
++### Checker (round 2)
++
++**Verdict: PASS** (second PASS in a row)
++
++**Defects:** none.
++**Observations (non-blocking):** the same as round 1: the query is trimmed, the header shows the total count, and a bridge import or delete needs a Refresh. Out of scope and pre-existing: asking "What are the meeting attendees?" cites retrieval-plan and design-notes, not meeting-summary. This is retrieval quality; the search change doesn't touch Q&A or retrieval code.
++
++**What I ran:** `npm run check`, `npm test` (38/38), `check-architecture.sh` (PASS), `smoke-bridge.sh` (PASS), `npm run build`. Regression: document-search 10/10, answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13, checker-round1 28/28. New `evaluation/checker-round2.mjs` checked results against an oracle: 35/35 passed. It covered non-ASCII case-insensitivity, a match at the end of a ~120 KB file, title-only matches, rejection of bad input, rapid and concurrent keystrokes and stale-response races, paste, select-all-clear, delete while filtered, a real restart, Reset with a filter active, re-import after Reset, and asking with a filter active. Details are in `checker-verdict.md`.
++
++Under the loop rule (stop after 2 PASS in a row), the loop can stop here.

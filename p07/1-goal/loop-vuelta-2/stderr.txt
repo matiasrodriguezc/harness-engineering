@@ -1,0 +1,2 @@
+/Users/matiasrodriguezc/Desktop/harness-portfolio/scripts/run-session.sh: line 12: claude: command not found
+exit=127

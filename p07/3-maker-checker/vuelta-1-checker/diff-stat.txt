@@ -1,0 +1,6 @@
+78d5607 document-search: checker round 1 verdict PASS
+
+ checker-verdict.md            |  31 ++++++++++++
+ evaluation/checker-round1.mjs | 107 ++++++++++++++++++++++++++++++++++++++++++
+ loop-state.md                 |  12 +++++
+ 3 files changed, 150 insertions(+)

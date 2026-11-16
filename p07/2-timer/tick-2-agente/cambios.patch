@@ -1,0 +1,19 @@
+commit fc811086067e3c94414866e1b508d2147bb07ab5
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:19:44 2026 -0300
+
+    monitor: revert d29cb1e (invalid brokenCount export broke type check)
+    
+    init.sh failed at step 3/6: qa-service.ts(180) TS2322, string assigned to
+    number. The export was unused anywhere. After the revert, init.sh passes all 6 steps.
+
+diff --git a/src/services/qa-service.ts b/src/services/qa-service.ts
+index 620dc3b..efd0e3d 100644
+--- a/src/services/qa-service.ts
++++ b/src/services/qa-service.ts
+@@ -176,5 +176,3 @@ export class QaService {
+     this.persistence.writeJson(QA_HISTORY_FILE, history);
+   }
+ }
+-
+-export const brokenCount: number = 'not a number';

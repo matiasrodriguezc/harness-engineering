@@ -1,0 +1,6 @@
+137ddef document-search: checker round 2 verdict PASS
+
+ checker-verdict.md            |  35 ++++++-----
+ evaluation/checker-round2.mjs | 142 ++++++++++++++++++++++++++++++++++++++++++
+ loop-state.md                 |  17 +++++
+ 3 files changed, 178 insertions(+), 16 deletions(-)

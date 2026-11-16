@@ -1,0 +1,108 @@
+commit 9bc28c759680ea8af73d48628a34f820dff09e26
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:14:53 2026 -0300
+
+    goal round 3: unit tests for indexing-service (lines 96.47->99.01%, GOAL PASS)
+
+diff --git a/loop-state.md b/loop-state.md
+index ec15b2b..5fe88f2 100644
+--- a/loop-state.md
++++ b/loop-state.md
+@@ -21,3 +21,14 @@
+ 
+ ### Next
+ 1. `indexing-service.ts` (87.61%) — the only remaining blocker. Run coverage with a text/json reporter (only `coverage-summary.json` is written to `.coverage-goal/`) to find the uncovered lines, then add `tests/services/indexing-service.test.ts` for those branches.
++
++## Round 3
++
++- Added `tests/services/indexing-service.test.ts` (5 tests): empty status/chunk lookups, single-document indexing with missing content -> `error` status, single-document indexing writes chunks (content + metadata) but does not update `index-meta.json` (current behavior, documented as-is), ~500-char chunking at paragraph boundaries, batch indexing (skips missing content and already-indexed docs, idle -> indexing -> ready).
++- No changes to `src/`.
++- Coverage before: lines 96.47% / functions 98.3%; below 90%: indexing-service 87.61.
++- Coverage after: lines 99.01% / functions 98.3%; below 90%: none.
++- `check-goal.sh`: tests_exit=0 types_exit=0 arch_exit=0 — **GOAL: PASS**.
++
++### Next
++- Goal met; nothing required. Possible observation (not a test task): single-document `startIndexing(id)` never records the doc in `index-meta.json`, so `getAllChunks()`/status ignore it until a batch run.
+diff --git a/tests/services/indexing-service.test.ts b/tests/services/indexing-service.test.ts
+new file mode 100644
+index 0000000..6189c11
+--- /dev/null
++++ b/tests/services/indexing-service.test.ts
+@@ -0,0 +1,77 @@
++import { beforeEach, describe, expect, it } from 'vitest';
++import { PersistenceService } from '../../src/services/persistence-service';
++import { IndexingService } from '../../src/services/indexing-service';
++import { quietLogs, tempDir } from '../helpers';
++
++let persistence: PersistenceService;
++let service: IndexingService;
++
++function addDoc(id: string, content: string | null) {
++  const meta = persistence.readJson<{ id: string }[]>('documents-meta.json') ?? [];
++  persistence.writeJson('documents-meta.json', [...meta, { id }]);
++  if (content !== null) persistence.writeText(`content/${id}.txt`, content);
++}
++
++beforeEach(() => {
++  quietLogs();
++  persistence = new PersistenceService(tempDir());
++  service = new IndexingService(persistence);
++});
++
++describe('IndexingService', () => {
++  it('reports idle with no documents and no chunks', () => {
++    const s = service.getStatus();
++    expect(s).toMatchObject({ status: 'idle', currentIndexed: 0, totalDocuments: 0 });
++    expect(service.getAllChunks()).toEqual([]);
++    expect(service.getChunksForDocument('nope')).toEqual([]);
++  });
++
++  it('single-document indexing returns error status when content is missing', async () => {
++    addDoc('d1', null);
++    const s = await service.startIndexing('d1');
++    expect(s.status).toBe('error');
++    expect(service.getChunksForDocument('d1')).toEqual([]);
++  });
++
++  it('single-document indexing writes chunks but does not touch the index meta', async () => {
++    addDoc('d1', 'First paragraph.\n\nSecond paragraph.');
++    const s = await service.startIndexing('d1');
++    const chunks = service.getChunksForDocument('d1');
++    expect(chunks).toHaveLength(1);
++    expect(chunks[0]).toMatchObject({
++      documentId: 'd1',
++      index: 0,
++      content: 'First paragraph.\n\nSecond paragraph.',
++      metadata: { charCount: '35', wordCount: '4' },
++    });
++    // index-meta.json is not updated by the single-document path
++    expect(s).toMatchObject({ status: 'idle', currentIndexed: 0, totalDocuments: 1 });
++    expect(service.getAllChunks()).toEqual([]);
++  });
++
++  it('splits long content into ~500 char chunks at paragraph boundaries', async () => {
++    const para = (c: string) => c.repeat(300);
++    addDoc('d1', [para('a'), para('b'), para('c')].join('\n\n'));
++    await service.startIndexing('d1');
++    const chunks = service.getChunksForDocument('d1');
++    expect(chunks.map(c => c.index)).toEqual([0, 1, 2]);
++    expect(chunks.map(c => c.content)).toEqual([para('a'), para('b'), para('c')]);
++  });
++
++  it('batch indexing indexes new docs, skips missing content and already-indexed docs', async () => {
++    addDoc('d1', 'one');
++    addDoc('d2', null);
++    let s = await service.startIndexing();
++    expect(s).toMatchObject({ status: 'indexing', currentIndexed: 1, totalDocuments: 2 });
++    const firstChunks = service.getAllChunks();
++    expect(firstChunks.map(c => c.content)).toEqual(['one']);
++
++    persistence.writeText('content/d2.txt', 'two');
++    s = await service.startIndexing();
++    expect(s).toMatchObject({ status: 'ready', currentIndexed: 2, totalDocuments: 2 });
++    const all = service.getAllChunks();
++    expect(all.map(c => c.content)).toEqual(['one', 'two']);
++    // d1 was not re-chunked: same chunk id survives
++    expect(all[0].id).toBe(firstChunks[0].id);
++  });
++});

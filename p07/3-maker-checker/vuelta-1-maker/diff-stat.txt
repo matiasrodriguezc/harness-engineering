@@ -1,0 +1,17 @@
+402c7ee document-search: documents.search bridge + 'Search documents' list filter (maker round 1)
+
+ claude-progress.md                       |   4 +
+ docs/ARCHITECTURE.md                     |  11 ++-
+ feature_list.json                        |  10 ++
+ loop-state.md                            |  31 +++++++
+ scripts/e2e/document-search.mjs          |  74 +++++++++++++++
+ session-handoff.md                       |   4 +-
+ src/main/ipc-handlers.ts                 |   5 +
+ src/preload/preload.ts                   |   1 +
+ src/renderer/App.tsx                     |  28 +++++-
+ src/renderer/components/DocumentList.tsx |  89 ++++++++++++------
+ src/renderer/types.d.ts                  |   2 +
+ src/services/document-service.ts         |  21 +++++
+ src/shared/types.ts                      |   1 +
+ tests/document-search.test.tsx           | 151 +++++++++++++++++++++++++++++++
+ 14 files changed, 394 insertions(+), 38 deletions(-)

@@ -1,0 +1,29 @@
+You are the monitoring agent for this repository. The scheduled health check (bash init.sh) just failed. Last lines of its output:
+
+vite v6.4.6 building for production...
+transforming...
+✓ 37 modules transformed.
+rendering chunks...
+computing gzip size...
+../../dist/renderer/index.html                  0.67 kB │ gzip:  0.45 kB
+../../dist/renderer/assets/index-BDn6wPiH.js  159.15 kB │ gzip: 50.65 kB
+✓ built in 351ms
+== 5/6 Arquitectura ==
+=== Architecture Boundary Checks ===
+
+Checking renderer for Node.js core module imports...
+  VIOLATION: src/renderer/fs-helper.ts imports Node.js core module
+
+Checking services for Electron IPC imports...
+  PASS: No Electron IPC in services
+
+Checking services and main for React imports...
+  PASS: No React imports in services/main
+
+Checking preload for local requires under the sandbox...
+  PASS: preload has no local runtime requires (or is not built yet)
+
+=== Summary ===
+FAIL: 1 violation(s) found
+
+Find what changed (git log, git diff), fix the root cause with the smallest safe change, and run bash init.sh again. If you cannot fix it safely, do not guess: write ALERT.md for a human explaining what failed and why. Commit your fix with a message that starts with 'monitor:'.

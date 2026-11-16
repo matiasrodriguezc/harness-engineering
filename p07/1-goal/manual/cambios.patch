@@ -1,0 +1,19 @@
+commit b694fd85551103171ffff9c8c536ddb011367b87
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:11:27 2026 -0300
+
+    docs: session handoff for services coverage goal
+
+diff --git a/session-handoff.md b/session-handoff.md
+index 33651de..ff6e5fd 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -7,6 +7,8 @@
+ 
+ ## Changed This Session
+ 
++- 2026-11-16 (goal.md, services coverage): added `tests/services/*.test.ts`, one per service. `bash scripts/check-goal.sh` -> 'GOAL: PASS' (lines 100%, functions 100%, every file 100%); `npm test` -> 'Tests 75 passed (75)'; `bash init.sh` -> 'init.sh OK'. No source changes. Found (not changed): `indexing.startIndexing(documentId)` writes chunks but not `index-meta.json`, so a single-document index is invisible to Q&A and status. See `loop-state.md`.
++
+ - Cleanup pass (latest): added `.gitignore` (`node_modules/`, `dist/`; before, these were only ignored via `.git/info/exclude`, so a fresh clone would see them as untracked). `docs/RELIABILITY.md` now says `scripts/benchmark.sh` and `scripts/cleanup-scanner.sh` are not implemented (the doc described them as existing). No source or feature changes.
+ 
+ Earlier in the session:

@@ -1,0 +1,6 @@
+15bec9b goal round 2: unit tests for logger and persistence-service (lines 89.8->96.47%)
+
+ loop-state.md                              | 15 ++++--
+ tests/services/logger.test.ts              | 86 ++++++++++++++++++++++++++++++
+ tests/services/persistence-service.test.ts | 67 +++++++++++++++++++++++
+ 3 files changed, 165 insertions(+), 3 deletions(-)

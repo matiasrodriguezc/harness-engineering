@@ -1,0 +1,2 @@
+tests_exit=0 coverage_lines=100 coverage_functions=100 files_below_90=none types_exit=0 arch_exit=0
+GOAL: PASS

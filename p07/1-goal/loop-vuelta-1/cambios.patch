@@ -1,0 +1,107 @@
+commit 9785c22f99140a9aea8d29be1e1ae77ea4418bf4
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:12:42 2026 -0300
+
+    goal round 1: unit tests for document-service (lines 83.13->89.8%)
+
+diff --git a/loop-state.md b/loop-state.md
+new file mode 100644
+index 0000000..84b3b98
+--- /dev/null
++++ b/loop-state.md
+@@ -0,0 +1,14 @@
++# Loop state
++
++## Round 1
++
++- Added `tests/services/document-service.test.ts` (8 tests): list on empty store, import (title/filename/size/status/content), missing file throws, unknown id lookups, update + persistence across a new service instance, update unknown, delete keeps others, delete unknown.
++- No changes to `src/`.
++- Coverage before: lines 83.13% / functions 74.07%; below 90%: document-service 63.23, indexing-service 87.61, logger 70.11, persistence-service 77.33.
++- Coverage after: lines 89.8% / functions 85.18%; below 90%: indexing-service 87.61, logger 74.71, persistence-service 84. document-service no longer below the bar.
++- tests, types and architecture checks all pass (`check-goal.sh` exit fields = 0).
++
++### Next
++1. `logger.ts` (74.71%) — least covered now.
++2. `persistence-service.ts` (84%) — direct unit tests for its read/write/copy/delete helpers, including missing-file paths.
++3. `indexing-service.ts` (87.61%) — uncovered branches (see `.coverage-goal/coverage-summary.json`).
+diff --git a/tests/services/document-service.test.ts b/tests/services/document-service.test.ts
+new file mode 100644
+index 0000000..b82c34b
+--- /dev/null
++++ b/tests/services/document-service.test.ts
+@@ -0,0 +1,75 @@
++import { beforeEach, describe, expect, it } from 'vitest';
++import * as fs from 'fs';
++import * as path from 'path';
++import { PersistenceService } from '../../src/services/persistence-service';
++import { DocumentService } from '../../src/services/document-service';
++import { quietLogs, tempDir } from '../helpers';
++
++let dataDir: string;
++let srcDir: string;
++let persistence: PersistenceService;
++let service: DocumentService;
++
++function writeSource(name: string, content: string): string {
++  const p = path.join(srcDir, name);
++  fs.writeFileSync(p, content);
++  return p;
++}
++
++beforeEach(() => {
++  quietLogs();
++  dataDir = tempDir();
++  srcDir = tempDir();
++  persistence = new PersistenceService(dataDir);
++  service = new DocumentService(persistence);
++});
++
++describe('DocumentService', () => {
++  it('lists no documents on a fresh data dir', () => {
++    expect(service.listDocuments()).toEqual([]);
++  });
++
++  it('imports a file: metadata, stored content, copied original', () => {
++    const doc = service.importDocument(writeSource('notes.v2.md', 'hello world'));
++    expect(doc.title).toBe('notes.v2');
++    expect(doc.filename).toBe('notes.v2.md');
++    expect(doc.size).toBe(11);
++    expect(doc.status).toBe('imported');
++    expect(Number.isNaN(Date.parse(doc.importedAt))).toBe(false);
++    expect(service.listDocuments()).toEqual([doc]);
++    expect(service.getDocument(doc.id)).toEqual(doc);
++    expect(service.getDocumentContent(doc.id)).toBe('hello world');
++  });
++
++  it('throws when the file does not exist and stores nothing', () => {
++    expect(() => service.importDocument(path.join(srcDir, 'missing.txt'))).toThrow(/File not found/);
++    expect(service.listDocuments()).toEqual([]);
++  });
++
++  it('returns null for unknown documents and content', () => {
++    expect(service.getDocument('nope')).toBeNull();
++    expect(service.getDocumentContent('nope')).toBeNull();
++  });
++
++  it('updates metadata of an existing document and persists it', () => {
++    const doc = service.importDocument(writeSource('a.txt', 'x'));
++    const updated = service.updateDocument(doc.id, { status: 'indexed' });
++    expect(updated).toEqual({ ...doc, status: 'indexed' });
++    expect(new DocumentService(new PersistenceService(dataDir)).getDocument(doc.id)?.status).toBe('indexed');
++  });
++
++  it('returns null when updating an unknown document', () => {
++    expect(service.updateDocument('nope', { status: 'indexed' })).toBeNull();
++  });
++
++  it('deletes a document and keeps the others', () => {
++    const a = service.importDocument(writeSource('a.txt', 'a'));
++    const b = service.importDocument(writeSource('b.txt', 'b'));
++    expect(service.deleteDocument(a.id)).toBe(true);
++    expect(service.listDocuments().map(d => d.id)).toEqual([b.id]);
++  });
++
++  it('returns false when deleting an unknown document', () => {
++    expect(service.deleteDocument('nope')).toBe(false);
++  });
++});

@@ -1,0 +1,3 @@
+tests_exit=0 coverage_lines=96.47 coverage_functions=98.3 files_below_90=indexing-service.ts:87.61 types_exit=0 arch_exit=0
+GOAL: FAIL
+WHY: files below 90% lines: indexing-service.ts:87.61. FIX: add tests for those files first
