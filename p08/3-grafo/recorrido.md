@@ -1,0 +1,14 @@
+# Recorrido del grafo
+- 00:42:46 · start
+- 00:42:46 · nodo plan (ronda 1)
+- 00:43:40 · nodo implement (ronda 1)
+- 00:47:35 · verificación secuencial (ronda 1, solo para medir contra el paralelo)
+- 00:50:41 · fan-in (secuencial): 186 s de reloj · funcional=VERDICT: PASS · revisión=VERDICT: PASS
+- 00:50:42 · fan-out: verify-functional ∥ verify-review (ronda 1, worktrees separados)
+- 00:52:45 · fan-in (paralelo): 123 s de reloj · funcional=VERDICT: PASS · revisión=VERDICT: PASS
+- 00:52:45 · route → approval
+- 00:52:45 · nodo approval: el grafo se detiene y espera una decisión humana en state.md
+- 00:53:50 · resume: approval=pending (timeout 0 min)
+- 00:53:50 · timeout: 1 min ≥ 0 → escalado (ESCALATION.md), sin aprobar
+- 00:53:50 · resume: approval=pending (timeout 1440 min)
+- 00:53:50 · sigue pendiente (1 min < 1440): no hace nada

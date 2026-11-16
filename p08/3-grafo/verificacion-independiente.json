@@ -1,0 +1,37 @@
+{
+  "app": "/Users/matiasrodriguezc/harness-runs/p08-graph",
+  "passed": 6,
+  "total": 6,
+  "results": [
+    {
+      "name": "1. La interfaz tiene el puente",
+      "ok": true,
+      "detail": "object"
+    },
+    {
+      "name": "2. export() con la conversación vacía devuelve Markdown",
+      "ok": true,
+      "detail": "{\"value\":{\"type\":\"string\",\"len\":41,\"txt\":\"# Conversation export\\n\\nNo questions yet.\\n\"}}"
+    },
+    {
+      "name": "3. export() incluye la pregunta",
+      "ok": true,
+      "detail": "{\"value\":{\"hasQ\":true,\"hasTitle\":true,\"hasExcerpt\":true}}"
+    },
+    {
+      "name": "4. export() incluye el título del documento citado",
+      "ok": true,
+      "detail": "{\"value\":{\"hasQ\":true,\"hasTitle\":true,\"hasExcerpt\":true}}"
+    },
+    {
+      "name": "5. export() incluye el extracto de la cita",
+      "ok": true,
+      "detail": "{\"value\":{\"hasQ\":true,\"hasTitle\":true,\"hasExcerpt\":true}}"
+    },
+    {
+      "name": "6. La interfaz tiene el botón \"Export conversation\"",
+      "ok": true,
+      "detail": "{\"value\":1}"
+    }
+  ]
+}

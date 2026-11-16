@@ -1,0 +1,4 @@
+1d8a496 plan: spec.md for conversation Markdown export
+
+ spec.md | 102 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 102 insertions(+)

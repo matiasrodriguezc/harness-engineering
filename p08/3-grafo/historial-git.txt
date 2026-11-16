@@ -1,0 +1,10 @@
+27ea488 approval request
+4bba42a state: approval requested
+03e2774 verdicts r1
+05b15a9 verdicts r1
+3e0bddf state: implement r1
+1c69c13 conversation-export: Markdown export of the conversation (bridge, IPC, save dialog, UI button, tests, e2e)
+5aacc50 state: plan r1
+1d8a496 plan: spec.md for conversation Markdown export
+6d8afc4 state: round 1
+fed1bb9 base P08

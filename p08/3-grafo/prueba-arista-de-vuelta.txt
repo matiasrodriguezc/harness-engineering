@@ -1,0 +1,4 @@
+ambos PASS (esperado: approval) → approval
+funcional falla por implementación (esperado: implement) → implement
+revisión: el spec malinterpreta la función (esperado: plan) → plan
+las dos fallan, una por requisitos (esperado: plan) → plan

@@ -1,0 +1,888 @@
+commit 1c69c13fe705ba4038eb691f11208c1d9d881b86
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Mon Nov 16 00:47:22 2026 -0300
+
+    conversation-export: Markdown export of the conversation (bridge, IPC, save dialog, UI button, tests, e2e)
+
+diff --git a/claude-progress.md b/claude-progress.md
+index 9496173..501878c 100644
+--- a/claude-progress.md
++++ b/claude-progress.md
+@@ -14,3 +14,4 @@ Log de sesiones: qué se hizo, qué se verificó y con qué comando.
+ ## 2026-11-16
+ 
+ - Maker-checker loop round 1 (Maker): document-search implemented (service, `documents:search` IPC, preload, 'Search documents' input). Verified: init.sh OK, npm test 38/38, check-architecture PASS, smoke-bridge PASS, scripts/e2e/document-search.mjs 10/10, regression e2e 7/7, 6/6, 13/13. Feature left `active` pending the Checker.
++- Graph round 1, implement node: conversation-export (spec.md). `ConversationExportService` + `buildConversationMarkdown`, IPC `conversation:export` and `conversation:save-export`, preload `conversation.{export,saveExport}`, save dialog in main.ts with `KB_EXPORT_SAVE_PATH` override, 'Export conversation' button in QuestionPanel. Verified: init.sh OK, npm test 50/50, check-architecture PASS, smoke-bridge PASS (keys include conversation), scripts/e2e/conversation-export.mjs 18/18, regression e2e 7/7, 6/6, 13/13, 10/10. Feature `active` pending verifiers.
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index 225b116..dd31e25 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -18,13 +18,13 @@ This is the capstone project combining all features from the Learn Harness Engin
+ +-----------------------------------------------------------+
+ |                     Preload Script                         |
+ |  contextBridge.exposeInMainWorld ->                       |
+-|    documents, indexing, qa, feedback, app                  |
++|    documents, indexing, qa, feedback, conversation, app    |
+ +-----------------------------------------------------------+
+          |  ipcRenderer.invoke(IPC_CHANNELS.*)
+ +-----------------------------------------------------------+
+ |                     Main Process                           |
+ |  main.ts -> createWindow(), initializeServices()          |
+-|  ipc-handlers.ts -> registerIpcHandlers() (15 channels)   |
++|  ipc-handlers.ts -> registerIpcHandlers() (17 channels)   |
+ +-----------------------------------------------------------+
+          |  Service method calls
+ +-----------------------------------------------------------+
+@@ -40,7 +40,7 @@ This is the capstone project combining all features from the Learn Harness Engin
+ ### Main Process (`src/main/`)
+ 
+ - **Window management**: Creates `BrowserWindow` instances with secure web preferences.
+-- **IPC registration**: Maps 15 IPC channel names to service methods via `registerIpcHandlers()`.
++- **IPC registration**: Maps 17 IPC channel names to service methods via `registerIpcHandlers()`.
+ - **Service initialization**: Constructs all services with dependency injection.
+ - **Logging**: Logs application lifecycle events (ready, shutdown).
+ 
+@@ -54,6 +54,7 @@ window.knowledgeBase = {
+   indexing:   { start, status, chunks },
+   qa:         { ask, history, clearHistory },
+   feedback:   { submit, list },
++  conversation: { export, saveExport },
+   app:        { reset },
+ }
+ ```
+@@ -66,7 +67,7 @@ React 18 application bundled by Vite:
+ - `DocumentList` -- Sidebar listing of imported documents with status and chunk counts, and a 'Search documents' input. App calls `documents.search(query)` as the user types (only the latest response is applied); a blank query shows all documents.
+ - `DocumentDetail` -- Shows metadata, chunks, indexing controls, and delete button.
+ - `ImportPanel` -- File input for importing .txt and .md documents.
+-- `QuestionPanel` -- Text input for asking questions.
++- `QuestionPanel` -- Text input for asking questions, and the 'Export conversation' button (`ExportConversationButton`, `type=button`): calls `conversation.export()` then `conversation.saveExport(markdown)`; shows a `role=status` message with the saved path, a `role=alert` error if the write fails, nothing on cancel.
+ - `ConversationHistory` -- Chat-style Q&A history with expandable citations, confidence indicators, feedback buttons, and clear history.
+ - `StatusBar` -- Shows index status, document count, indexed count, and last activity.
+ 
+@@ -76,6 +77,7 @@ React 18 application bundled by Vite:
+ - `PersistenceService` -- Low-level JSON/text file I/O with atomic writes and reset capability.
+ - `DocumentService` -- Document CRUD with validation, content storage, and cleanup.
+ - `IndexingService` -- Paragraph-aware chunking (~500 chars), index management, and metrics.
++- `ConversationExportService` -- `buildConversationMarkdown(history)` (pure: `# Conversation export`, `## Question N`, `### Answer`, `### Citations` with every excerpt line quoted `> `; empty history -> `No questions yet.`) and `writeToFile(path, content)` (UTF-8, no directory creation).
+ - `QaService` -- Mock Q&A with keyword retrieval, citations, feedback, and duration tracking.
+ 
+ ## Full Data Flow
+@@ -146,7 +148,7 @@ React 18 application bundled by Vite:
+ 6. refreshDocuments() reloads empty state
+ ```
+ 
+-## IPC Channels (15 total)
++## IPC Channels (17 total)
+ 
+ | Channel | Direction | Handler | Purpose |
+ |---------|-----------|---------|---------|
+@@ -163,9 +165,23 @@ React 18 application bundled by Vite:
+ | `qa:clear-history` | R -> M | QaService.clearHistory | Clear history |
+ | `feedback:submit` | R -> M | FeedbackService.submit | Submit feedback |
+ | `feedback:list` | R -> M | FeedbackService.list | Get all feedback |
++| `conversation:export` | R -> M | ConversationExportService.exportMarkdown | Markdown of the current Q&A history |
++| `conversation:save-export` | R -> M | chooseExportPath + ConversationExportService.writeToFile | Save dialog (`.md` default name), write the given Markdown; `{saved:false}` on cancel |
+ | `app:reset` | R -> M | PersistenceService.resetAll | Reset all data |
+ | `app:status` | R -> M | IndexingService.getStatus | Get app status |
+ 
++### Conversation Export Flow
++
++```
++1. User clicks 'Export conversation' in the question panel
++2. Renderer: markdown = await window.knowledgeBase.conversation.export()   (conversation:export, reads qa-history.json)
++3. Renderer: await window.knowledgeBase.conversation.saveExport(markdown)  (conversation:save-export)
++4. Main (main.ts chooseExportPath): native save dialog with a conversation-YYYY-MM-DD.md default name.
++   If KB_EXPORT_SAVE_PATH is set, the dialog is skipped: its value is the chosen path, 'cancel' = cancelled
++   (used by scripts/e2e/conversation-export.mjs, since a native dialog cannot be driven over CDP)
++5. ConversationExportService.writeToFile writes UTF-8; result {saved:true, filePath} or {saved:false}; write errors reject
++```
++
+ ## Data Storage
+ 
+ ```
+diff --git a/docs/PRODUCT.md b/docs/PRODUCT.md
+index 468c53f..13efbdd 100644
+--- a/docs/PRODUCT.md
++++ b/docs/PRODUCT.md
+@@ -39,6 +39,13 @@ A desktop application for managing a personal knowledge base. Users import text
+ - Timestamps on each exchange.
+ - Clear history with confirmation dialog.
+ 
++### Conversation Export
++- 'Export conversation' button in the question panel (always enabled, does not ask a question).
++- Saves the whole conversation as Markdown to a file chosen in a save dialog (default name `conversation-YYYY-MM-DD.md`).
++- Each question numbered (`## Question N`) with its answer and citations (document title and quoted excerpt); an empty conversation exports "No questions yet."
++- Shows the saved path on success, an error if the file cannot be written, nothing on cancel.
++- Also available as `window.knowledgeBase.conversation.export()` (returns the Markdown string).
++
+ ### Feedback Collection
+ - Thumbs up/down buttons on each Q&A response in conversation history.
+ - Thumbs up/down buttons on the latest response in document view.
+diff --git a/feature_list.json b/feature_list.json
+index 4a888f2..60bf559 100644
+--- a/feature_list.json
++++ b/feature_list.json
+@@ -50,6 +50,20 @@
+         "date": "2026-11-16",
+         "note": "Maker round 1 evidence is in loop-state.md; state stays 'active' until the Checker returns PASS."
+       }
++    },
++    {
++      "id": "conversation-export",
++      "behavior": "window.knowledgeBase.conversation.export() returns the Q&A history as Markdown (## Question N, answer, citations with title and quoted excerpt; empty -> 'No questions yet.'). The question panel has a button with aria-label 'Export conversation' that saves that Markdown to a file chosen in a save dialog. Full criteria in spec.md.",
++      "verification": "npm test (tests/conversation-export.test.tsx) + bash scripts/smoke-bridge.sh (keys include 'conversation') + npm run build && node --experimental-websocket scripts/e2e/conversation-export.mjs; graph verify-functional and verify-review verdicts",
++      "state": "active",
++      "evidence": {
++        "date": "2026-11-16",
++        "note": "Implement node round 1. State stays 'active' until verify-functional and verify-review return PASS.",
++        "static": "npm run check -> no errors; bash scripts/check-architecture.sh -> 'PASS: All architecture boundary checks passed'",
++        "tests": "npm test -> 'Test Files 6 passed (6), Tests 50 passed (50)' (+12 in tests/conversation-export.test.tsx)",
++        "smoke": "bash scripts/smoke-bridge.sh -> keys 'documents,indexing,qa,feedback,conversation,app', 'PASS: the running app exposes window.knowledgeBase'",
++        "e2e": "node --experimental-websocket scripts/e2e/conversation-export.mjs -> 'conversation-export e2e: all 18 checks passed'; regression answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13, document-search 10/10"
++      }
+     }
+   ]
+ }
+diff --git a/scripts/e2e/app-session.mjs b/scripts/e2e/app-session.mjs
+index fad67f0..f317d5b 100644
+--- a/scripts/e2e/app-session.mjs
++++ b/scripts/e2e/app-session.mjs
+@@ -1,6 +1,6 @@
+ // Drives the real Electron app over the Chrome DevTools Protocol.
+ // withApp() launches the built app (dist/) with a given user-data dir, waits until the
+-// renderer has window.knowledgeBase, runs `fn({ evaluate, waitFor, reload, send })` (send = raw CDP call), then quits the app.
++// renderer has window.knowledgeBase (optional `env` adds environment variables), runs `fn({ evaluate, waitFor, reload, send })` (send = raw CDP call), then quits the app.
+ // Calling withApp() twice with the same dataDir is a real app restart.
+ // Requires Node's WebSocket: run scenarios with `node --experimental-websocket`.
+ import { spawn } from 'node:child_process';
+@@ -31,8 +31,8 @@ async function connect(port) {
+   throw new Error(`No Electron page on port ${port}`);
+ }
+ 
+-export async function withApp({ dataDir, port = 9361 }, fn) {
+-  const env = { ...process.env };
++export async function withApp({ dataDir, port = 9361, env: extraEnv = {} }, fn) {
++  const env = { ...process.env, ...extraEnv };
+   delete env.NODE_OPTIONS; // Electron rejects --openssl-legacy-provider
+   const electronBin = path.join(root, 'node_modules', '.bin', 'electron');
+   const child = spawn(electronBin, ['.', `--remote-debugging-port=${port}`, `--user-data-dir=${dataDir}`], {
+diff --git a/scripts/e2e/conversation-export.mjs b/scripts/e2e/conversation-export.mjs
+new file mode 100644
+index 0000000..ea7742b
+--- /dev/null
++++ b/scripts/e2e/conversation-export.mjs
+@@ -0,0 +1,125 @@
++// E2E for conversation Markdown export, against the built app (run `npm run build` first).
++// KB_EXPORT_SAVE_PATH replaces the native save dialog (a path, or 'cancel').
++// Usage: node --experimental-websocket scripts/e2e/conversation-export.mjs
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import { withApp, pageHelpers, report } from './app-session.mjs';
++
++const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-e2e-export-'));
++const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-e2e-export-out-'));
++const outFile = path.join(outDir, 'conversation.md');
++const docsDir = path.resolve('data/sample-documents');
++const docs = fs.readdirSync(docsDir).map((f) => path.join(docsDir, f));
++const questions = ['What is the architecture design?', 'How does retrieval work?', 'Anything about zebras?'];
++const checks = [];
++const kb = 'window.knowledgeBase';
++
++/** Checks criteria 3-5 of spec.md against an export string and the history. */
++function checkStructure(md, history, label) {
++  const headings = md.match(/^## Question \d+$/gm) ?? [];
++  checks.push([`${label}: ${history.length} numbered question headings`, JSON.stringify(headings) === JSON.stringify(history.map((_, i) => `## Question ${i + 1}`)), headings]);
++  let ok = true;
++  const problems = [];
++  history.forEach((h, i) => {
++    const start = md.indexOf(`## Question ${i + 1}\n\n${h.question}\n`);
++    const end = i + 1 < history.length ? md.indexOf(`## Question ${i + 2}\n`) : md.length;
++    if (start < 0) { ok = false; problems.push(`q${i + 1} missing`); return; }
++    const section = md.slice(start, end);
++    let pos = section.indexOf(h.response.answer);
++    if (pos < 0) { ok = false; problems.push(`a${i + 1} missing`); return; }
++    if (h.response.citations.length === 0 && !section.includes('No citations.')) { ok = false; problems.push(`q${i + 1} no-citation text`); }
++    for (const c of h.response.citations) {
++      const t = section.indexOf(`**${c.documentTitle}**`, pos);
++      if (t < 0) { ok = false; problems.push(`q${i + 1} title ${c.documentTitle}`); continue; }
++      pos = t;
++      for (const line of c.excerpt.split(/\r?\n/)) {
++        const l = section.indexOf(`> ${line}`, pos);
++        if (l < 0) { ok = false; problems.push(`q${i + 1} excerpt line`); } else pos = l;
++      }
++    }
++  });
++  checks.push([`${label}: each question, answer and citation (title + quoted excerpt) in its own section, in order`, ok, problems.length ? problems : undefined]);
++}
++
++try {
++  // Session 1: export to a file.
++  await withApp({ dataDir, env: { KB_EXPORT_SAVE_PATH: outFile } }, async ({ evaluate, waitFor }) => {
++    await evaluate(pageHelpers);
++    const keys = await evaluate(`Object.keys(${kb}).join(',')`);
++    checks.push(['conversation.export is a function; other namespaces unchanged', keys === 'documents,indexing,qa,feedback,conversation,app' && (await evaluate(`typeof ${kb}.conversation.export`)) === 'function', keys]);
++
++    const empty = await evaluate(`${kb}.conversation.export()`);
++    checks.push(['empty history -> "# Conversation export" + "No questions yet.", no "## Question"', empty.includes('# Conversation export') && empty.includes('No questions yet.') && !empty.includes('## Question'), empty]);
++
++    // Button with an empty conversation.
++    const btn = await evaluate(`(() => { const b = __e2e.byLabel('Export conversation'); const f = document.querySelector('[aria-label="Ask a question"]').form;
++      return b.map(x => ({ tag: x.tagName, type: x.type, disabled: x.disabled, inForm: f.contains(x), visible: x.offsetParent !== null })); })()`);
++    checks.push(['one enabled, visible, non-submit Export button in the question form (empty conversation)', btn.length === 1 && btn[0].tag === 'BUTTON' && btn[0].type !== 'submit' && !btn[0].disabled && btn[0].inForm && btn[0].visible, btn]);
++
++    await evaluate(`(async () => { for (const d of ${JSON.stringify(docs)}) await ${kb}.documents.import(d); await ${kb}.indexing.start(); return true; })()`);
++    for (const q of questions) {
++      await evaluate(`__e2e.setInput(document.querySelector('[aria-label="Ask a question"]'), ${JSON.stringify(q)}); document.querySelector('[aria-label="Ask a question"]').form.requestSubmit(); true`);
++      await waitFor(`document.querySelectorAll('[data-answer-id]').length === ${questions.indexOf(q) + 1} && !document.querySelector('[aria-label="Ask a question"]').form.querySelector('button[type=submit]').disabled`);
++    }
++    const history = await evaluate(`${kb}.qa.history()`);
++    checks.push(['3 questions asked, at least one answer with citations', history.length === 3 && history.some((h) => h.response.citations.length > 0), history.map((h) => h.response.citations.length)]);
++    const md = await evaluate(`${kb}.conversation.export()`);
++    checkStructure(md, history, 'bridge');
++    const after = await evaluate(`${kb}.qa.history()`);
++    checks.push(['export() does not change qa.history()', JSON.stringify(after) === JSON.stringify(history)]);
++
++    // Clicking the button does not ask a question, saves the file, and shows a status with the path.
++    await evaluate(`__e2e.byLabel('Export conversation')[0].click(); true`);
++    await waitFor(`!!document.querySelector('[role=status][data-export-message]')`);
++    const status = await evaluate(`document.querySelector('[role=status][data-export-message]').textContent`);
++    checks.push(['status message includes the saved path', status.includes(outFile), status]);
++    const fileText = fs.readFileSync(outFile, 'utf8');
++    checks.push(['saved file equals conversation.export() (UTF-8)', fileText === (await evaluate(`${kb}.conversation.export()`))]);
++    checks.push(['clicking the button did not ask a question', (await evaluate(`${kb}.qa.history()`)).length === 3]);
++
++    // Another question adds Question 4.
++    await evaluate(`${kb}.qa.ask('How are documents imported?')`);
++    const md4 = await evaluate(`${kb}.conversation.export()`);
++    checks.push(['a new question adds "## Question 4"', md4.includes('## Question 4\n\nHow are documents imported?')]);
++  });
++
++  const savedBeforeRestart = fs.readFileSync(outFile, 'utf8');
++
++  // Session 2: restart with same data dir; cancel; failure.
++  await withApp({ dataDir, env: { KB_EXPORT_SAVE_PATH: 'cancel' } }, async ({ evaluate, waitFor }) => {
++    await evaluate(pageHelpers);
++    const history = await evaluate(`${kb}.qa.history()`);
++    const md = await evaluate(`${kb}.conversation.export()`);
++    checks.push(['after restart: export has the same 4 questions, answers and citations', history.length === 4]);
++    checkStructure(md, history, 'after restart');
++
++    await waitFor(`__e2e.byLabel('Export conversation').length === 1`);
++    await evaluate(`__e2e.byLabel('Export conversation')[0].click(); true`);
++    await evaluate(`__e2e.sleep(800)`);
++    const msgs = await evaluate(`[...document.querySelectorAll('[role=alert],[role=status][data-export-message]')].map(e => e.textContent)`);
++    checks.push(['cancel: no message, no error, file untouched', msgs.length === 0 && fs.readFileSync(outFile, 'utf8') === savedBeforeRestart, msgs]);
++
++    await evaluate(`${kb}.qa.clearHistory()`);
++    const cleared = await evaluate(`${kb}.conversation.export()`);
++    checks.push(['after qa.clearHistory() export is the empty document', cleared.includes('No questions yet.') && !cleared.includes('## Question')]);
++  });
++
++  // Session 3: unwritable path -> role=alert, app keeps working.
++  const badPath = path.join(outDir, 'no-such-dir', 'x.md');
++  await withApp({ dataDir, env: { KB_EXPORT_SAVE_PATH: badPath } }, async ({ evaluate, waitFor }) => {
++    await evaluate(pageHelpers);
++    await evaluate(`__e2e.byLabel('Export conversation')[0].click(); true`);
++    await waitFor(`!!document.querySelector('[role=alert]')`);
++    const alert = await evaluate(`document.querySelector('[role=alert]').textContent`);
++    checks.push(['write failure shows a role=alert error', alert.length > 0 && !fs.existsSync(badPath), alert]);
++    await evaluate(`__e2e.setInput(document.querySelector('[aria-label="Ask a question"]'), 'What is the architecture design?'); document.querySelector('[aria-label="Ask a question"]').form.requestSubmit(); true`);
++    await waitFor(`document.querySelectorAll('[data-answer-id]').length === 1`);
++    checks.push(['a question can still be asked after the failure', (await evaluate(`${kb}.qa.history()`)).length === 1]);
++  });
++} finally {
++  fs.rmSync(dataDir, { recursive: true, force: true });
++  fs.rmSync(outDir, { recursive: true, force: true });
++}
++
++report('conversation-export e2e', checks);
+diff --git a/session-handoff.md b/session-handoff.md
+index 9cf616f..c5a7dfe 100644
+--- a/session-handoff.md
++++ b/session-handoff.md
+@@ -2,6 +2,8 @@
+ 
+ ## Verified Now
+ 
++- 2026-11-16 (graph round 1, implement node): `conversation-export` implemented per spec.md. Verified: `npm run check` clean, `npm test` 50/50, check-architecture PASS, smoke-bridge PASS (keys `documents,indexing,qa,feedback,conversation,app`), `scripts/e2e/conversation-export.mjs` 18/18 (all 11 spec criteria incl. restart, cancel, write failure), regression e2e 7/7, 6/6, 13/13, 10/10. State `active` until verify-functional and verify-review PASS. Not verifiable automatically: the real native save dialog (e2e uses `KB_EXPORT_SAVE_PATH`; dialog code in `src/main/main.ts` `chooseExportPath`).
++
+ - 2026-11-16 (maker-checker loop, round 1, Maker): `document-search` implemented and verified by the Maker (npm test 38/38, smoke PASS, `scripts/e2e/document-search.mjs` 10/10, regression e2e 7/7, 6/6, 13/13). State is `active` until the Checker's verdict (`checker-verdict.md`). Details in `loop-state.md`.
+ 
+ - What is currently working: all three features in feature_list.json are `passing`: answer-feedback, reset-all-data, conversation-history. The UI reaches `window.knowledgeBase` (documents, indexing, qa, feedback, app).
+@@ -34,7 +36,7 @@ Earlier in the session:
+ - Highest-priority unfinished feature: none in feature_list.json. Suggested: fix the StatusBar/indexing status shape mismatch, then a real import file picker.
+ - Why it is next: both are visible to the user in the running app.
+ - What counts as passing: same three layers as AGENTS.md; add an e2e script under `scripts/e2e/`.
+-- What must not change: `documents.search` (channel `documents:search`) and the aria-label 'Search documents'; the preload bundling and the sandbox; the bridge names `feedback.submit/list`, `app.reset`, `qa.ask` returning `id`; the aria-labels 'Mark answer helpful', 'Mark answer not helpful', 'Reset all data'.
++- What must not change: `conversation.export`/`conversation.saveExport` (channels `conversation:export`, `conversation:save-export`), the `KB_EXPORT_SAVE_PATH` test override, aria-label 'Export conversation'; `documents.search` (channel `documents:search`) and the aria-label 'Search documents'; the preload bundling and the sandbox; the bridge names `feedback.submit/list`, `app.reset`, `qa.ask` returning `id`; the aria-labels 'Mark answer helpful', 'Mark answer not helpful', 'Reset all data'.
+ 
+ ## Commands
+ 
+diff --git a/src/main/ipc-handlers.ts b/src/main/ipc-handlers.ts
+index 62260f5..b7fc625 100644
+--- a/src/main/ipc-handlers.ts
++++ b/src/main/ipc-handlers.ts
+@@ -1,10 +1,11 @@
+-import { IpcMain } from 'electron';
++import { IpcMain, IpcMainInvokeEvent } from 'electron';
+ import { DocumentService } from '../services/document-service';
+ import { IndexingService } from '../services/indexing-service';
+ import { QaService } from '../services/qa-service';
+ import { PersistenceService } from '../services/persistence-service';
+ import { FeedbackService } from '../services/feedback-service';
+-import { IPC_CHANNELS } from '../shared/types';
++import { ConversationExportService } from '../services/conversation-export-service';
++import { ExportSaveResult, IPC_CHANNELS } from '../shared/types';
+ import { logger } from '../services/logger';
+ 
+ const SERVICE = 'ipc-handlers';
+@@ -15,10 +16,22 @@ export interface Services {
+   qaService: QaService;
+   feedbackService: FeedbackService;
+   persistence: PersistenceService;
++  conversationExportService: ConversationExportService;
++  /**
++   * Asks where to save a conversation export (main.ts: native save dialog, or KB_EXPORT_SAVE_PATH).
++   * Resolves the chosen path, or null when the user cancels.
++   */
++  chooseExportPath?: (defaultFileName: string, event: IpcMainInvokeEvent) => Promise<string | null>;
++}
++
++/** Default file name offered by the save dialog, e.g. conversation-2026-11-16.md. */
++export function defaultExportFileName(now: Date = new Date()): string {
++  return `conversation-${now.toISOString().slice(0, 10)}.md`;
+ }
+ 
+ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+-  const { documentService, indexingService, qaService, feedbackService, persistence } = services;
++  const { documentService, indexingService, qaService, feedbackService, persistence, conversationExportService } =
++    services;
+ 
+   // Document operations
+   ipcMain.handle(IPC_CHANNELS.LIST_DOCUMENTS, async () => {
+@@ -87,6 +100,28 @@ export function registerIpcHandlers(ipcMain: IpcMain, services: Services) {
+     return feedbackService.list();
+   });
+ 
++  // Conversation export
++  ipcMain.handle(IPC_CHANNELS.EXPORT_CONVERSATION, async () => {
++    logger.debug(SERVICE, 'IPC: EXPORT_CONVERSATION');
++    return conversationExportService.exportMarkdown();
++  });
++
++  ipcMain.handle(
++    IPC_CHANNELS.SAVE_CONVERSATION_EXPORT,
++    async (event, markdown: unknown): Promise<ExportSaveResult> => {
++      logger.info(SERVICE, 'IPC: SAVE_CONVERSATION_EXPORT');
++      if (typeof markdown !== 'string') throw new TypeError('Export content must be a string');
++      if (!services.chooseExportPath) throw new Error('No save dialog is available');
++      const filePath = await services.chooseExportPath(defaultExportFileName(), event);
++      if (!filePath) {
++        logger.info(SERVICE, 'Conversation export cancelled');
++        return { saved: false };
++      }
++      conversationExportService.writeToFile(filePath, markdown);
++      return { saved: true, filePath };
++    },
++  );
++
+   // App status
+   ipcMain.handle(IPC_CHANNELS.GET_STATUS, async () => {
+     return indexingService.getStatus();
+diff --git a/src/main/main.ts b/src/main/main.ts
+index fd19ffd..8a75ec5 100644
+--- a/src/main/main.ts
++++ b/src/main/main.ts
+@@ -1,4 +1,4 @@
+-import { app, BrowserWindow, ipcMain } from 'electron';
++import { app, BrowserWindow, dialog, ipcMain, IpcMainInvokeEvent } from 'electron';
+ import * as path from 'path';
+ import { registerIpcHandlers } from './ipc-handlers';
+ import { DocumentService } from '../services/document-service';
+@@ -6,6 +6,7 @@ import { QaService } from '../services/qa-service';
+ import { IndexingService } from '../services/indexing-service';
+ import { PersistenceService } from '../services/persistence-service';
+ import { FeedbackService } from '../services/feedback-service';
++import { ConversationExportService } from '../services/conversation-export-service';
+ import { logger } from '../services/logger';
+ 
+ let mainWindow: BrowserWindow | null = null;
+@@ -39,6 +40,26 @@ function createWindow() {
+   logger.info('main', 'BrowserWindow created', { isDev });
+ }
+ 
++/**
++ * Where to save a conversation export. KB_EXPORT_SAVE_PATH (for automated tests, since a native dialog cannot be
++ * driven over CDP) skips the dialog: its value is the chosen path, and 'cancel' simulates a cancelled dialog.
++ */
++async function chooseExportPath(defaultFileName: string, event: IpcMainInvokeEvent): Promise<string | null> {
++  const override = process.env.KB_EXPORT_SAVE_PATH;
++  if (override !== undefined && override !== '') {
++    logger.info('main', 'Export save dialog skipped (KB_EXPORT_SAVE_PATH)', { cancelled: override === 'cancel' });
++    return override === 'cancel' ? null : override;
++  }
++  const options: Electron.SaveDialogOptions = {
++    title: 'Export conversation',
++    defaultPath: path.join(app.getPath('documents'), defaultFileName),
++    filters: [{ name: 'Markdown', extensions: ['md'] }],
++  };
++  const parent = BrowserWindow.fromWebContents(event.sender);
++  const result = parent ? await dialog.showSaveDialog(parent, options) : await dialog.showSaveDialog(options);
++  return result.canceled || !result.filePath ? null : result.filePath;
++}
++
+ function initializeServices() {
+   const dataDir = path.join(app.getPath('userData'), 'knowledge-base-data');
+   const persistence = new PersistenceService(dataDir);
+@@ -46,6 +67,7 @@ function initializeServices() {
+   const indexingService = new IndexingService(persistence);
+   const qaService = new QaService(persistence, indexingService);
+   const feedbackService = new FeedbackService(persistence, answerId => qaService.hasAnswer(answerId));
++  const conversationExportService = new ConversationExportService(() => qaService.getHistory());
+ 
+   registerIpcHandlers(ipcMain, {
+     documentService,
+@@ -53,6 +75,8 @@ function initializeServices() {
+     qaService,
+     feedbackService,
+     persistence,
++    conversationExportService,
++    chooseExportPath,
+   });
+ 
+   logger.info('main', 'Services initialized', { dataDir });
+diff --git a/src/preload/preload.ts b/src/preload/preload.ts
+index fd62065..28f6ee4 100644
+--- a/src/preload/preload.ts
++++ b/src/preload/preload.ts
+@@ -24,6 +24,10 @@ const api = {
+       ipcRenderer.invoke(IPC_CHANNELS.SUBMIT_FEEDBACK, answerId, rating),
+     list: () => ipcRenderer.invoke(IPC_CHANNELS.LIST_FEEDBACK),
+   },
++  conversation: {
++    export: () => ipcRenderer.invoke(IPC_CHANNELS.EXPORT_CONVERSATION),
++    saveExport: (markdown: string) => ipcRenderer.invoke(IPC_CHANNELS.SAVE_CONVERSATION_EXPORT, markdown),
++  },
+   app: {
+     reset: () => ipcRenderer.invoke(IPC_CHANNELS.RESET_ALL_DATA),
+   },
+diff --git a/src/renderer/components/ExportConversationButton.tsx b/src/renderer/components/ExportConversationButton.tsx
+new file mode 100644
+index 0000000..cd79172
+--- /dev/null
++++ b/src/renderer/components/ExportConversationButton.tsx
+@@ -0,0 +1,69 @@
++import { useState } from 'react';
++
++type Message = { kind: 'status' | 'error'; text: string } | null;
++
++/**
++ * Button (aria-label 'Export conversation') that gets the conversation as Markdown from
++ * window.knowledgeBase.conversation.export() and saves it to a file the user picks.
++ * Shows a role=status confirmation with the path, or a role=alert error. Cancelling shows nothing.
++ */
++export function ExportConversationButton() {
++  const [busy, setBusy] = useState(false);
++  const [message, setMessage] = useState<Message>(null);
++
++  const handleExport = async () => {
++    if (busy) return;
++    setBusy(true);
++    setMessage(null);
++    try {
++      const markdown = await window.knowledgeBase.conversation.export();
++      const result = await window.knowledgeBase.conversation.saveExport(markdown);
++      if (result.saved) setMessage({ kind: 'status', text: `Conversation exported to ${result.filePath}` });
++    } catch (err) {
++      console.error('Conversation export failed:', err);
++      const detail = err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': /, '') : '';
++      setMessage({ kind: 'error', text: `Could not export the conversation.${detail ? ` ${detail}` : ''}` });
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  return (
++    <>
++      <button
++        type="button"
++        aria-label="Export conversation"
++        title="Export conversation as Markdown"
++        onClick={handleExport}
++        aria-busy={busy}
++        style={{
++          marginLeft: '10px',
++          padding: '10px 14px',
++          background: '#0f3460',
++          color: '#e0e0e0',
++          border: '1px solid #1a1a4e',
++          borderRadius: '6px',
++          cursor: busy ? 'wait' : 'pointer',
++          fontSize: '14px',
++        }}
++      >
++        Export
++      </button>
++      {message && (
++        <div
++          role={message.kind === 'error' ? 'alert' : 'status'}
++          data-export-message={message.kind}
++          style={{
++            flexBasis: '100%',
++            marginTop: '8px',
++            fontSize: '12px',
++            color: message.kind === 'error' ? '#ff6b6b' : '#7bd389',
++            wordBreak: 'break-all',
++          }}
++        >
++          {message.text}
++        </div>
++      )}
++    </>
++  );
++}
+diff --git a/src/renderer/components/QuestionPanel.tsx b/src/renderer/components/QuestionPanel.tsx
+index 30cd343..609db0c 100644
+--- a/src/renderer/components/QuestionPanel.tsx
++++ b/src/renderer/components/QuestionPanel.tsx
+@@ -1,4 +1,5 @@
+ import React, { useState } from 'react';
++import { ExportConversationButton } from './ExportConversationButton';
+ 
+ interface Props {
+   onAsk: (question: string) => void;
+@@ -21,6 +22,7 @@ export function QuestionPanel({ onAsk, disabled = false }: Props) {
+       onSubmit={handleSubmit}
+       style={{
+         display: 'flex',
++        flexWrap: 'wrap',
+         padding: '12px 20px',
+         borderTop: '1px solid #0f3460',
+         background: '#16213e',
+@@ -61,6 +63,7 @@ export function QuestionPanel({ onAsk, disabled = false }: Props) {
+       >
+         Ask
+       </button>
++      <ExportConversationButton />
+     </form>
+   );
+ }
+diff --git a/src/renderer/types.d.ts b/src/renderer/types.d.ts
+index 627e48b..4306135 100644
+--- a/src/renderer/types.d.ts
++++ b/src/renderer/types.d.ts
+@@ -29,6 +29,15 @@ declare global {
+         ) => Promise<import('../shared/types').FeedbackEntry>;
+         list: () => Promise<import('../shared/types').FeedbackEntry[]>;
+       };
++      conversation: {
++        /** Markdown of the current Q&A history (oldest first), each answer with its citations. */
++        export: () => Promise<string>;
++        /**
++         * Asks the user for a file (native save dialog, .md default name) and writes `markdown` to it as UTF-8.
++         * Resolves `{ saved: false }` when the user cancels; rejects when the write fails.
++         */
++        saveExport: (markdown: string) => Promise<import('../shared/types').ExportSaveResult>;
++      };
+       app: {
+         /** Deletes all documents, chunks, Q&A history and feedback. */
+         reset: () => Promise<void>;
+diff --git a/src/services/conversation-export-service.ts b/src/services/conversation-export-service.ts
+new file mode 100644
+index 0000000..2952688
+--- /dev/null
++++ b/src/services/conversation-export-service.ts
+@@ -0,0 +1,61 @@
++import * as fs from 'fs';
++import { QAHistory } from '../shared/types';
++import { logger } from './logger';
++
++const SERVICE = 'conversation-export';
++
++/**
++ * Builds the Markdown export of a conversation (Q&A history, oldest first).
++ * Text is copied as stored; Markdown is not escaped. Every excerpt line is quoted with "> ".
++ */
++export function buildConversationMarkdown(history: QAHistory[]): string {
++  const parts: string[] = ['# Conversation export'];
++  if (history.length === 0) {
++    parts.push('No questions yet.');
++    return parts.join('\n\n') + '\n';
++  }
++  history.forEach((entry, i) => {
++    parts.push(`## Question ${i + 1}`);
++    parts.push(entry.question);
++    parts.push('### Answer');
++    parts.push(entry.response.answer);
++    parts.push('### Citations');
++    const citations = entry.response.citations ?? [];
++    if (citations.length === 0) {
++      parts.push('No citations.');
++    } else {
++      citations.forEach((c, j) => {
++        const quoted = String(c.excerpt ?? '')
++          .split(/\r?\n/)
++          .map(line => `   > ${line}`);
++        parts.push([`${j + 1}. **${c.documentTitle}**`, ...quoted].join('\n'));
++      });
++    }
++  });
++  return parts.join('\n\n') + '\n';
++}
++
++/** Exports the current conversation as Markdown and writes exports to files. */
++export class ConversationExportService {
++  constructor(private getHistory: () => QAHistory[]) {}
++
++  /** Markdown for the current history; reads the history on every call and changes nothing. */
++  exportMarkdown(): string {
++    const history = this.getHistory();
++    logger.debug(SERVICE, 'Conversation exported', { entries: history.length });
++    return buildConversationMarkdown(history);
++  }
++
++  /** Writes `content` to `filePath` as UTF-8. Does not create directories; throws if the write fails. */
++  writeToFile(filePath: string, content: string): void {
++    if (typeof filePath !== 'string' || filePath.trim() === '') throw new TypeError('A file path is required');
++    if (typeof content !== 'string') throw new TypeError('Export content must be a string');
++    try {
++      fs.writeFileSync(filePath, content, { encoding: 'utf8' });
++    } catch (err) {
++      logger.error(SERVICE, 'Writing conversation export failed', { filePath, error: String(err) });
++      throw err;
++    }
++    logger.info(SERVICE, 'Conversation export saved', { filePath, bytes: Buffer.byteLength(content, 'utf8') });
++  }
++}
+diff --git a/src/shared/types.ts b/src/shared/types.ts
+index 36ec2ba..c007560 100644
+--- a/src/shared/types.ts
++++ b/src/shared/types.ts
+@@ -59,6 +59,9 @@ export interface ConversationMessage {
+   followUpSuggestions?: string[];
+ }
+ 
++/** Outcome of saving a conversation export: the chosen path, or cancelled (nothing written). */
++export type ExportSaveResult = { saved: true; filePath: string } | { saved: false };
++
+ export interface AppStatus {
+   documentsLoaded: number;
+   indexStatus: 'idle' | 'indexing' | 'ready' | 'error';
+@@ -90,6 +93,8 @@ export const IPC_CHANNELS = {
+ 
+   // Conversation
+   GET_CONVERSATION: 'conversation:get',
++  EXPORT_CONVERSATION: 'conversation:export',
++  SAVE_CONVERSATION_EXPORT: 'conversation:save-export',
+ 
+   // App status
+   GET_STATUS: 'app:status',
+diff --git a/tests/conversation-export.test.tsx b/tests/conversation-export.test.tsx
+new file mode 100644
+index 0000000..c9b7f8c
+--- /dev/null
++++ b/tests/conversation-export.test.tsx
+@@ -0,0 +1,180 @@
++import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
++import * as fs from 'fs';
++import * as path from 'path';
++import { renderToStaticMarkup } from 'react-dom/server';
++import { IPC_CHANNELS, QAHistory } from '../src/shared/types';
++import { buildConversationMarkdown } from '../src/services/conversation-export-service';
++import { defaultExportFileName, registerIpcHandlers, Services } from '../src/main/ipc-handlers';
++import { QuestionPanel } from '../src/renderer/components/QuestionPanel';
++import { makeServices, quietLogs, SAMPLE_DOCS, tempDir } from './helpers';
++
++const exposed: Record<string, any> = {};
++const invoke = vi.fn(async (..._args: unknown[]) => undefined);
++vi.mock('electron', () => ({
++  contextBridge: { exposeInMainWorld: (key: string, api: unknown) => { exposed[key] = api; } },
++  ipcRenderer: { invoke: (...args: unknown[]) => invoke(...args) },
++}));
++
++beforeAll(async () => {
++  await import('../src/preload/preload');
++});
++
++beforeEach(() => {
++  quietLogs();
++  vi.spyOn(Math, 'random').mockReturnValue(0);
++});
++
++const entry = (question: string, answer: string, citations: QAHistory['response']['citations']): QAHistory => ({
++  question,
++  response: { id: question, answer, citations, confidence: 0.5, timestamp: '2026-11-16T10:00:00.000Z' },
++});
++
++describe('buildConversationMarkdown', () => {
++  it('empty conversation says there are no questions yet', () => {
++    const md = buildConversationMarkdown([]);
++    expect(md).toBe('# Conversation export\n\nNo questions yet.\n');
++    expect(md).not.toContain('## Question');
++  });
++
++  it('numbers questions in history order, each followed by its answer and citations', () => {
++    const md = buildConversationMarkdown([
++      entry('First question?', 'First answer.', [
++        { documentId: 'd1', documentTitle: 'design-notes', chunkIndex: 0, excerpt: 'Layers everywhere' },
++        { documentId: 'd2', documentTitle: 'retrieval-plan', chunkIndex: 1, excerpt: 'Keyword overlap' },
++      ]),
++      entry('Second question?', 'Second answer.', []),
++    ]);
++    expect(md).toBe(
++      [
++        '# Conversation export',
++        '## Question 1',
++        'First question?',
++        '### Answer',
++        'First answer.',
++        '### Citations',
++        '1. **design-notes**\n   > Layers everywhere',
++        '2. **retrieval-plan**\n   > Keyword overlap',
++        '## Question 2',
++        'Second question?',
++        '### Answer',
++        'Second answer.',
++        '### Citations',
++        'No citations.',
++      ].join('\n\n') + '\n',
++    );
++  });
++
++  it('quotes every line of a multi-line excerpt so it stays inside its citation', () => {
++    const md = buildConversationMarkdown([
++      entry('q', 'a', [{ documentId: 'd', documentTitle: 'notes', chunkIndex: 0, excerpt: 'line one\nline two\r\n\nline four' }]),
++    ]);
++    expect(md).toContain('1. **notes**\n   > line one\n   > line two\n   > \n   > line four\n');
++  });
++
++  it('copies text as stored (no Markdown escaping)', () => {
++    const md = buildConversationMarkdown([entry('What is *bold* and `code`?', '# not a heading', [])]);
++    expect(md).toContain('What is *bold* and `code`?');
++    expect(md).toContain('# not a heading');
++  });
++});
++
++describe('ConversationExportService with real history', () => {
++  it('reflects the current history, survives a restart and does not change the history', async () => {
++    const dir = tempDir();
++    const s = makeServices(dir);
++    s.documentService.importDocument(path.join(SAMPLE_DOCS, 'design-notes.md'));
++    await s.indexingService.startIndexing();
++    expect(s.conversationExportService.exportMarkdown()).toContain('No questions yet.');
++
++    await s.qaService.ask('What is the architecture design?');
++    await s.qaService.ask('Anything about zebras?');
++    const before = JSON.stringify(s.qaService.getHistory());
++    const md = s.conversationExportService.exportMarkdown();
++    expect(JSON.stringify(s.qaService.getHistory())).toBe(before);
++    expect(md.match(/^## Question \d+$/gm)).toEqual(['## Question 1', '## Question 2']);
++    const history = s.qaService.getHistory();
++    expect(md.indexOf(history[0].response.answer)).toBeGreaterThan(md.indexOf('What is the architecture design?'));
++    for (const c of history[0].response.citations) expect(md).toContain(`**${c.documentTitle}**`);
++
++    expect(makeServices(dir).conversationExportService.exportMarkdown()).toBe(md);
++
++    s.qaService.clearHistory();
++    expect(s.conversationExportService.exportMarkdown()).toBe('# Conversation export\n\nNo questions yet.\n');
++  });
++
++  it('writeToFile writes UTF-8 and throws for a missing directory', () => {
++    const s = makeServices(tempDir());
++    const file = path.join(tempDir(), 'out.md');
++    s.conversationExportService.writeToFile(file, 'héllo ✓\n');
++    expect(fs.readFileSync(file, 'utf8')).toBe('héllo ✓\n');
++    expect(() => s.conversationExportService.writeToFile(path.join(tempDir(), 'nope', 'x.md'), 'x')).toThrow();
++  });
++});
++
++describe('conversation export bridge and IPC', () => {
++  function wire(chooseExportPath?: Services['chooseExportPath']) {
++    const handlers = new Map<string, (...args: any[]) => any>();
++    const services = makeServices(tempDir());
++    registerIpcHandlers({ handle: (c: string, fn: any) => handlers.set(c, fn) } as any, {
++      ...services,
++      chooseExportPath,
++    } as Services);
++    const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!({ sender: {} }, ...args);
++    return { call, services };
++  }
++
++  it('preload exposes conversation.export and conversation.saveExport on their channels', async () => {
++    const kb = exposed.knowledgeBase;
++    expect(Object.keys(kb)).toEqual(['documents', 'indexing', 'qa', 'feedback', 'conversation', 'app']);
++    expect(typeof kb.conversation.export).toBe('function');
++    await kb.conversation.export();
++    expect(invoke).toHaveBeenLastCalledWith(IPC_CHANNELS.EXPORT_CONVERSATION);
++    await kb.conversation.saveExport('# md');
++    expect(invoke).toHaveBeenLastCalledWith(IPC_CHANNELS.SAVE_CONVERSATION_EXPORT, '# md');
++  });
++
++  it('conversation:export returns the Markdown of the history', async () => {
++    const { call } = wire();
++    expect(await call(IPC_CHANNELS.EXPORT_CONVERSATION)).toContain('No questions yet.');
++    await call(IPC_CHANNELS.ASK_QUESTION, 'How does retrieval work?');
++    expect(await call(IPC_CHANNELS.EXPORT_CONVERSATION)).toContain('## Question 1\n\nHow does retrieval work?');
++  });
++
++  it('conversation:save-export writes to the chosen .md path, and writes nothing when cancelled', async () => {
++    const file = path.join(tempDir(), 'export.md');
++    const choose = vi.fn(async () => file);
++    const { call } = wire(choose);
++    expect(await call(IPC_CHANNELS.SAVE_CONVERSATION_EXPORT, '# Conversation export\n')).toEqual({ saved: true, filePath: file });
++    expect(choose.mock.calls[0][0]).toMatch(/\.md$/);
++    expect(fs.readFileSync(file, 'utf8')).toBe('# Conversation export\n');
++
++    const cancelled = wire(async () => null);
++    const write = vi.spyOn(cancelled.services.conversationExportService, 'writeToFile');
++    expect(await cancelled.call(IPC_CHANNELS.SAVE_CONVERSATION_EXPORT, 'x')).toEqual({ saved: false });
++    expect(write).not.toHaveBeenCalled();
++  });
++
++  it('conversation:save-export rejects a failed write and non-string content', async () => {
++    const { call } = wire(async () => path.join(tempDir(), 'missing-dir', 'x.md'));
++    await expect(call(IPC_CHANNELS.SAVE_CONVERSATION_EXPORT, 'x')).rejects.toThrow();
++    await expect(call(IPC_CHANNELS.SAVE_CONVERSATION_EXPORT, 42)).rejects.toThrow(/string/);
++  });
++
++  it('default file name ends in .md', () => {
++    expect(defaultExportFileName(new Date('2026-11-16T12:00:00Z'))).toBe('conversation-2026-11-16.md');
++  });
++});
++
++describe('QuestionPanel export button', () => {
++  it('renders an enabled, non-submit "Export conversation" button inside the question form', () => {
++    for (const disabled of [false, true]) {
++      const html = renderToStaticMarkup(<QuestionPanel onAsk={() => {}} disabled={disabled} />);
++      const form = html.slice(html.indexOf('<form'), html.indexOf('</form>'));
++      expect(form).toContain('aria-label="Ask a question"');
++      const button = form.match(/<button[^>]*aria-label="Export conversation"[^>]*>/)?.[0];
++      expect(button).toBeDefined();
++      expect(button).toContain('type="button"');
++      expect(button).not.toContain('disabled');
++    }
++  });
++});
+diff --git a/tests/helpers.ts b/tests/helpers.ts
+index b60b2d0..779cbdb 100644
+--- a/tests/helpers.ts
++++ b/tests/helpers.ts
+@@ -7,6 +7,7 @@ import { DocumentService } from '../src/services/document-service';
+ import { IndexingService } from '../src/services/indexing-service';
+ import { QaService } from '../src/services/qa-service';
+ import { FeedbackService } from '../src/services/feedback-service';
++import { ConversationExportService } from '../src/services/conversation-export-service';
+ 
+ const tempDirs: string[] = [];
+ 
+@@ -28,7 +29,8 @@ export function makeServices(dataDir: string) {
+   const indexingService = new IndexingService(persistence);
+   const qaService = new QaService(persistence, indexingService);
+   const feedbackService = new FeedbackService(persistence, id => qaService.hasAnswer(id));
+-  return { persistence, documentService, indexingService, qaService, feedbackService };
++  const conversationExportService = new ConversationExportService(() => qaService.getHistory());
++  return { persistence, documentService, indexingService, qaService, feedbackService, conversationExportService };
+ }
+ 
+ export const SAMPLE_DOCS = path.resolve(__dirname, '..', 'data', 'sample-documents');

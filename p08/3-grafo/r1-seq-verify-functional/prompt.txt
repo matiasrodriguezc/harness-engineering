@@ -1,0 +1,1 @@
+Follow the section '## verify-functional' of nodes.md.

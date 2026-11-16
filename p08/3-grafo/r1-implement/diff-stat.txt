@@ -1,0 +1,20 @@
+1c69c13 conversation-export: Markdown export of the conversation (bridge, IPC, save dialog, UI button, tests, e2e)
+
+ claude-progress.md                                 |   1 +
+ docs/ARCHITECTURE.md                               |  26 ++-
+ docs/PRODUCT.md                                    |   7 +
+ feature_list.json                                  |  14 ++
+ scripts/e2e/app-session.mjs                        |   6 +-
+ scripts/e2e/conversation-export.mjs                | 125 ++++++++++++++
+ session-handoff.md                                 |   4 +-
+ src/main/ipc-handlers.ts                           |  41 ++++-
+ src/main/main.ts                                   |  26 ++-
+ src/preload/preload.ts                             |   4 +
+ .../components/ExportConversationButton.tsx        |  69 ++++++++
+ src/renderer/components/QuestionPanel.tsx          |   3 +
+ src/renderer/types.d.ts                            |   9 ++
+ src/services/conversation-export-service.ts        |  61 +++++++
+ src/shared/types.ts                                |   5 +
+ tests/conversation-export.test.tsx                 | 180 +++++++++++++++++++++
+ tests/helpers.ts                                   |   4 +-
+ 17 files changed, 571 insertions(+), 14 deletions(-)

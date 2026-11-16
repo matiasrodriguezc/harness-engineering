@@ -1,0 +1,67 @@
+{
+  "app": "/Users/matiasrodriguezc/harness-runs/p08-graph",
+  "passed": 12,
+  "total": 12,
+  "results": [
+    {
+      "name": "1. La interfaz tiene el puente (window.knowledgeBase)",
+      "ok": true,
+      "detail": "object"
+    },
+    {
+      "name": "2. Importar los 3 documentos de muestra",
+      "ok": true,
+      "detail": "{\"value\":3}"
+    },
+    {
+      "name": "3. Preguntar devuelve una respuesta con citas no vacías",
+      "ok": true,
+      "detail": "{\"value\":{\"id\":\"ce58d0a6-c022-4b96-93e4-823150e8ba44\",\"n\":2,\"ex\":200}}"
+    },
+    {
+      "name": "4. La respuesta tiene un id",
+      "ok": true,
+      "detail": "ce58d0a6-c022-4b96-93e4-823150e8ba44"
+    },
+    {
+      "name": "5. Calificar la respuesta y verla en feedback.list()",
+      "ok": true,
+      "detail": "{\"value\":true}"
+    },
+    {
+      "name": "6. El historial tiene la pregunta",
+      "ok": true,
+      "detail": "{\"value\":1}"
+    },
+    {
+      "name": "7. La interfaz muestra los botones de calificar",
+      "ok": true,
+      "detail": "{\"up\":1,\"down\":1,\"reset\":1}"
+    },
+    {
+      "name": "8. La interfaz tiene el botón \"Reset all data\"",
+      "ok": true,
+      "detail": "{\"up\":1,\"down\":1,\"reset\":1}"
+    },
+    {
+      "name": "9. Tras reiniciar, la calificación persiste",
+      "ok": true,
+      "detail": "{\"value\":{\"fb\":true,\"docs\":3,\"hist\":1}}"
+    },
+    {
+      "name": "10. Tras reiniciar, documentos e historial persisten",
+      "ok": true,
+      "detail": "{\"value\":{\"fb\":true,\"docs\":3,\"hist\":1}}"
+    },
+    {
+      "name": "11. Reset deja documentos, historial y calificaciones en cero",
+      "ok": true,
+      "detail": "{\"value\":{\"docs\":0,\"hist\":0,\"fb\":0}}"
+    },
+    {
+      "name": "12. Tras reiniciar, el reset se mantiene",
+      "ok": true,
+      "detail": "{\"value\":{\"docs\":0,\"hist\":0,\"fb\":0}}"
+    }
+  ]
+}
