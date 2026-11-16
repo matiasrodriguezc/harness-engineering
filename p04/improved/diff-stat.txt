@@ -1,0 +1,6 @@
+6034f67 Fix empty chunk content for documents over 1000 chars
+
+ src/services/indexing-service.ts |  6 ++--
+ tests/qa-citations.test.ts       | 60 ++++++++++++++++++++++++++++++++++++++++
+ vitest.config.ts                 | 11 ++++++++
+ 3 files changed, 73 insertions(+), 4 deletions(-)

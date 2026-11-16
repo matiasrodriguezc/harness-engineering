@@ -1,0 +1,117 @@
+commit c173e9c1081acc45e1f06a3c8f388fed72aa0942
+Author: run <run@local>
+Date:   Sun Nov 15 21:49:55 2026 -0300
+
+    fin de sesión: baseline
+
+diff --git a/src/services/indexing-service.ts b/src/services/indexing-service.ts
+index e27c1c0..e4c357b 100644
+--- a/src/services/indexing-service.ts
++++ b/src/services/indexing-service.ts
+@@ -39,7 +39,9 @@ export class IndexingService {
+     const chunksMeta = this.persistence.readJson<Record<string, string[]>>(INDEX_META) ?? {};
+ 
+     for (const doc of docsMeta) {
+-      if (chunksMeta[doc.id]) continue;
++      // Skip documents with a valid index; rebuild ones whose stored chunks are
++      // missing or empty (e.g. produced by an earlier chunking bug).
++      if (chunksMeta[doc.id] && this.hasValidChunks(doc.id)) continue;
+ 
+       const content = this.persistence.readText(`content/${doc.id}.txt`);
+       if (!content) continue;
+@@ -75,6 +77,12 @@ export class IndexingService {
+     return this.persistence.readJson<Chunk[]>(`${CHUNKS_DIR}/${documentId}.json`) ?? [];
+   }
+ 
++  /** True if the document has stored chunks and none of them are empty. */
++  private hasValidChunks(documentId: string): boolean {
++    const chunks = this.getChunksForDocument(documentId);
++    return chunks.length > 0 && chunks.every(c => c.content.trim().length > 0);
++  }
++
+   /** Get all chunks across all documents. */
+   getAllChunks(): Chunk[] {
+     const chunksMeta = this.persistence.readJson<Record<string, string[]>>(INDEX_META) ?? {};
+@@ -103,8 +111,7 @@ export class IndexingService {
+ 
+     for (const para of paragraphs) {
+       if (buffer.length + para.length > CHUNK_SIZE && buffer.length > 0) {
+-        const chunkContent = content.length > 1000 ? '' : buffer.trim();
+-        chunks.push(this.createChunk(documentId, chunkIndex++, chunkContent));
++        chunks.push(this.createChunk(documentId, chunkIndex++, buffer.trim()));
+         buffer = para;
+       } else {
+         buffer += (buffer ? '\n\n' : '') + para;
+@@ -112,8 +119,7 @@ export class IndexingService {
+     }
+ 
+     if (buffer.trim()) {
+-      const chunkContent = content.length > 1000 ? '' : buffer.trim();
+-      chunks.push(this.createChunk(documentId, chunkIndex, chunkContent));
++      chunks.push(this.createChunk(documentId, chunkIndex, buffer.trim()));
+     }
+ 
+     console.log(`[IndexingService] chunkDocument produced ${chunks.length} chunks for ${documentId}`);
+diff --git a/tests/indexing-service.test.ts b/tests/indexing-service.test.ts
+new file mode 100644
+index 0000000..89f5c63
+--- /dev/null
++++ b/tests/indexing-service.test.ts
+@@ -0,0 +1,57 @@
++import * as fs from 'fs';
++import * as os from 'os';
++import * as path from 'path';
++import { afterEach, beforeEach, describe, expect, it } from 'vitest';
++import { PersistenceService } from '../src/services/persistence-service';
++import { DocumentService } from '../src/services/document-service';
++import { IndexingService } from '../src/services/indexing-service';
++import { QaService } from '../src/services/qa-service';
++
++describe('indexing + Q&A on large documents', () => {
++  let dir: string;
++  let persistence: PersistenceService;
++
++  beforeEach(() => {
++    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-test-'));
++    persistence = new PersistenceService(path.join(dir, 'data'));
++  });
++  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
++
++  function importLargeDoc(): string {
++    const paragraphs = Array.from({ length: 10 }, (_, i) =>
++      `Paragraph ${i} explains the retrieval pipeline and how chunk ranking works in detail. `.repeat(3));
++    const file = path.join(dir, 'big.md');
++    fs.writeFileSync(file, paragraphs.join('\n\n'));
++    return new DocumentService(persistence).importDocument(file).id;
++  }
++
++  it('keeps chunk content for documents over 1000 characters', async () => {
++    const id = importLargeDoc();
++    const indexing = new IndexingService(persistence);
++    await indexing.startIndexing();
++    const chunks = indexing.getChunksForDocument(id);
++    expect(chunks.length).toBeGreaterThan(1);
++    for (const c of chunks) expect(c.content.trim().length).toBeGreaterThan(0);
++  });
++
++  it('returns citations with non-empty excerpts', async () => {
++    importLargeDoc();
++    const indexing = new IndexingService(persistence);
++    await indexing.startIndexing();
++    const res = await new QaService(persistence, indexing).ask('How does retrieval ranking work?');
++    expect(res.citations.length).toBeGreaterThan(0);
++    for (const c of res.citations) expect(c.excerpt.length).toBeGreaterThan(0);
++  });
++
++  it('rebuilds previously indexed documents whose chunks are empty', async () => {
++    const id = importLargeDoc();
++    persistence.writeJson(`chunks/${id}.json`, [
++      { id: 'x', documentId: id, content: '', index: 0, metadata: {} },
++    ]);
++    persistence.writeJson('index-meta.json', { [id]: ['x'] });
++    const indexing = new IndexingService(persistence);
++    await indexing.startIndexing();
++    const chunks = indexing.getChunksForDocument(id);
++    expect(chunks.every(c => c.content.length > 0)).toBe(true);
++  });
++});

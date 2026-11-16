@@ -1,0 +1,6 @@
+c173e9c fin de sesión: baseline
+
+ package-lock.json                | 4092 ++++++++++++++++++++++++++++++++++++++
+ src/services/indexing-service.ts |   16 +-
+ tests/indexing-service.test.ts   |   57 +
+ 3 files changed, 4160 insertions(+), 5 deletions(-)

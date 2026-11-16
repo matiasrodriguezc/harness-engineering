@@ -1,0 +1,126 @@
+commit 6034f67b81af7d127160fe3b045b182d441cf904
+Author: matiasrodriguezc01 <matiasrodriguezc01@gmail.com>
+Date:   Sun Nov 15 21:51:52 2026 -0300
+
+    Fix empty chunk content for documents over 1000 chars
+    
+    IndexingService.chunkDocument replaced every chunk's content with ''
+    when the source document exceeded 1000 characters. Q&A scores chunks
+    by keyword overlap, so these documents never matched (or produced
+    empty excerpts), giving fallback answers with no useful citations.
+    
+    Chunks now always keep their paragraph text. Adds a vitest regression
+    test covering import -> index -> ask on the sample documents (fails
+    before the fix, passes after) and a vitest.config.ts so tests run from
+    the repo root instead of vite.config.ts's src/renderer root.
+    
+    Note: previously indexed documents keep their empty chunk files until
+    reindexed (startIndexing skips docs already listed in index-meta.json).
+
+diff --git a/src/services/indexing-service.ts b/src/services/indexing-service.ts
+index 7439a2f..35c5bd3 100644
+--- a/src/services/indexing-service.ts
++++ b/src/services/indexing-service.ts
+@@ -105,8 +105,7 @@ export class IndexingService {
+ 
+     for (const para of paragraphs) {
+       if (buffer.length + para.length > CHUNK_SIZE && buffer.length > 0) {
+-        const chunkContent = content.length > 1000 ? '' : buffer.trim();
+-        chunks.push(this.createChunk(documentId, chunkIndex++, chunkContent));
++        chunks.push(this.createChunk(documentId, chunkIndex++, buffer.trim()));
+         buffer = para;
+       } else {
+         buffer += (buffer ? '\n\n' : '') + para;
+@@ -114,8 +113,7 @@ export class IndexingService {
+     }
+ 
+     if (buffer.trim()) {
+-      const chunkContent = content.length > 1000 ? '' : buffer.trim();
+-      chunks.push(this.createChunk(documentId, chunkIndex, chunkContent));
++      chunks.push(this.createChunk(documentId, chunkIndex, buffer.trim()));
+     }
+ 
+     this.log.info('chunkDocument complete', { documentId, totalChunks: chunks.length, totalChars: chunks.reduce((sum, c) => sum + c.content.length, 0) });
+diff --git a/tests/qa-citations.test.ts b/tests/qa-citations.test.ts
+new file mode 100644
+index 0000000..ab4c10e
+--- /dev/null
++++ b/tests/qa-citations.test.ts
+@@ -0,0 +1,60 @@
++import { describe, it, expect, beforeEach, afterEach } from 'vitest';
++import * as fs from 'fs';
++import * as os from 'os';
++import * as path from 'path';
++import { PersistenceService } from '../src/services/persistence-service';
++import { DocumentService } from '../src/services/document-service';
++import { IndexingService } from '../src/services/indexing-service';
++import { QaService } from '../src/services/qa-service';
++
++const SAMPLES = path.resolve(__dirname, '../data/sample-documents');
++
++describe('import -> index -> ask pipeline', () => {
++  let dataDir: string;
++  let persistence: PersistenceService;
++  let documents: DocumentService;
++  let indexing: IndexingService;
++  let qa: QaService;
++
++  beforeEach(() => {
++    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-test-'));
++    persistence = new PersistenceService(dataDir);
++    documents = new DocumentService(persistence);
++    indexing = new IndexingService(persistence);
++    qa = new QaService(persistence, indexing);
++  });
++
++  afterEach(() => {
++    fs.rmSync(dataDir, { recursive: true, force: true });
++  });
++
++  it('keeps chunk content for documents longer than 1000 characters', async () => {
++    const file = path.join(SAMPLES, 'design-notes.md');
++    const source = fs.readFileSync(file, 'utf-8');
++    expect(source.length).toBeGreaterThan(1000);
++
++    const doc = documents.importDocument(file);
++    await indexing.startIndexing();
++
++    const chunks = indexing.getChunksForDocument(doc.id);
++    expect(chunks.length).toBeGreaterThan(1);
++    for (const chunk of chunks) {
++      expect(chunk.content.trim().length).toBeGreaterThan(0);
++      expect(source).toContain(chunk.content.split('\n\n')[0]);
++    }
++  });
++
++  it('returns non-empty citation excerpts for imported sample documents', async () => {
++    for (const name of fs.readdirSync(SAMPLES)) {
++      documents.importDocument(path.join(SAMPLES, name));
++    }
++    await indexing.startIndexing();
++
++    const response = await qa.ask('What does the retrieval plan say about chunks?');
++    expect(response.citations.length).toBeGreaterThan(0);
++    for (const c of response.citations) {
++      expect(c.excerpt.trim().length).toBeGreaterThan(0);
++    }
++    expect(response.confidence).toBeGreaterThan(0.5);
++  });
++});
+diff --git a/vitest.config.ts b/vitest.config.ts
+new file mode 100644
+index 0000000..56b1d19
+--- /dev/null
++++ b/vitest.config.ts
+@@ -0,0 +1,11 @@
++import { defineConfig } from 'vitest/config';
++
++// Separate from vite.config.ts, whose root is src/renderer (the UI bundle).
++// Service tests run from the repo root in a Node environment.
++export default defineConfig({
++  test: {
++    root: '.',
++    include: ['tests/**/*.test.ts'],
++    environment: 'node',
++  },
++});
