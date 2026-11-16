@@ -199,7 +199,7 @@ tr:last-child td { border-bottom: 0; }
       <h1>Mismo motor,<br><span class="cu">distinto mazo de cables</span></h1>
       <p class="lead">Ocho proyectos y <span class="num">48</span> sesiones de Claude Code medidas para ver qué cambia el harness, las instrucciones, la verificación y el estado alrededor del agente, en lo que entrega el mismo modelo.</p>
       <div class="actions">
-        <a class="btn primary" href="https://github.com/matiasrodriguezc01/harness-portfolio" target="_blank" rel="noopener">Ver el repositorio</a>
+        <a class="btn primary" href="https://github.com/matiasrodriguezc/harness-engineering" target="_blank" rel="noopener">Ver el repositorio</a>
         <a class="btn" href="#hallazgos">Leer los hallazgos</a>
       </div>
     </div>
@@ -330,7 +330,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="body"><h3>Solo prompt contra harness mínimo</h3>
           <p class="q">¿Cuánto cambia un <code>AGENTS.md</code>, un <code>init.sh</code> y una lista de funciones?</p>
           <p class="finding">Las dos corridas cumplieron las 4 funciones. Con harness fue un 21% más rápida, un 30% más barata, escribió un test de punta a punta y dejó el estado listo para seguir. Sin harness, el agente rediseñó componentes y sumó una integración con una API externa que nadie pidió.</p>
-          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p01/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+          <a class="more" href="https://github.com/matiasrodriguezc/harness-engineering/blob/main/p01/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
         <dl class="vs"><dt>Débil</dt><dd>4/4 · 11:40 · 54 turnos</dd><dt>Fuerte</dt><dd>4/4 · 9:13 · 31 turnos</dd><dt>Lectura</dt><dd><span class="state mid">cómo, no si</span></dd></dl>
       </article>
       <article class="proj">
@@ -339,7 +339,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="body"><h3>Repo legible y retomable</h3>
           <p class="q">¿Una sesión nueva puede retomar el trabajo leyendo solo el repo?</p>
           <p class="finding">Las dos sesiones nuevas se ubicaron en 3 acciones. Sin traspaso, la segunda sesión hizo una de las dos funciones pendientes y dejó lo que descubrió solo en el chat; con traspaso, terminó las dos y volvió a dejarlo escrito.</p>
-          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p02/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+          <a class="more" href="https://github.com/matiasrodriguezc/harness-engineering/blob/main/p02/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
         <dl class="vs"><dt>Débil</dt><dd>2/3 funciones · US$1,85</dd><dt>Fuerte</dt><dd>3/3 funciones · US$2,04</dd><dt>Lectura</dt><dd><span class="state mid">el chat no es estado</span></dd></dl>
       </article>
       <article class="proj">
@@ -348,7 +348,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="body"><h3>Continuidad con reinicios</h3>
           <p class="q">Con sesiones cortadas a mitad de trabajo, ¿se pierde el estado? ¿Se marca como terminado algo sin evidencia?</p>
           <p class="finding">Una función a la vez con commit por función sobrevivió a un corte real sin perder nada. Pero las dos corridas marcaron las 4 funciones como terminadas con la interfaz desconectada: la evidencia que pedían (tipos, build, tests de servicios) era del tipo equivocado.</p>
-          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p03/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+          <a class="more" href="https://github.com/matiasrodriguezc/harness-engineering/blob/main/p03/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
         <dl class="vs"><dt>Débil</dt><dd>4/4 "pass" · <span class="state bad">UI cortada</span></dd><dt>Fuerte</dt><dd>4/4 "pass" · <span class="state bad">UI cortada</span></dd><dt>Lectura</dt><dd><span class="state bad">falsos pass</span></dd></dl>
       </article>
       <article class="proj">
@@ -357,7 +357,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="body"><h3>Feedback de runtime con un bug sembrado</h3>
           <p class="q">¿Los logs estructurados ayudan a encontrar un bug más rápido?</p>
           <p class="finding">El bug se veía leyendo el código, así que los logs no hicieron falta: la corrida débil lo encontró en 2 acciones. El harness cambió la disciplina: la fuerte arregló primero el typecheck roto, en un commit aparte, y terminó todo en verde.</p>
-          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p04/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+          <a class="more" href="https://github.com/matiasrodriguezc/harness-engineering/blob/main/p04/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
         <dl class="vs"><dt>Débil</dt><dd>arreglado · 59 s · con errores</dd><dt>Fuerte</dt><dd>arreglado · 92 s · todo en verde</dd><dt>Lectura</dt><dd><span class="state mid">límite del diseño</span></dd></dl>
       </article>
       <article class="proj">
@@ -366,7 +366,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="body"><h3>Separar al que hace del que revisa</h3>
           <p class="q">Un solo rol, generador + evaluador, o planificador + generador + evaluador: ¿cuánto suma cada rol?</p>
           <p class="finding">Calificadas por el mismo juez independiente: el evaluador separado subió la nota de 3,9 a 4,5 encontrando 6 defectos reales; sumar un planificador no mejoró (4,0) y fue lo más caro. El solo rol se autoevaluó con precisión.</p>
-          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p05/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+          <a class="more" href="https://github.com/matiasrodriguezc/harness-engineering/blob/main/p05/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
         <dl class="vs"><dt>Un rol</dt><dd>juez 3,9 · US$2,54</dd><dt>Gen + eval</dt><dd>juez <b>4,5</b> · US$7,05</dd><dt>+ planif.</dt><dd>juez 4,0 · US$8,60</dd></dl>
       </article>
       <article class="proj">
@@ -375,7 +375,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="body"><h3>Harness completo, benchmark y ablación</h3>
           <p class="q">Con todo lo aprendido, ¿qué componentes importan de verdad?</p>
           <p class="finding">Las cinco variantes pasaron 12/12 en la suite oculta: con una tarea bien especificada, el modelo entrega software que funciona con cualquier harness. La diferencia está en el repo: mi harness dejó 22 tests, un commit por función y el estado completo; el débil, cero tests, cero commits y el sandbox desactivado. En la ablación, lo que más pesó fueron las instrucciones.</p>
-          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p06/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+          <a class="more" href="https://github.com/matiasrodriguezc/harness-engineering/blob/main/p06/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
         <dl class="vs"><dt>Débil</dt><dd>12/12 · US$1,19 · 0 tests</dd><dt>Mío</dt><dd>12/12 · US$2,74 · 22 tests</dd><dt>Ablación</dt><dd>sin instrucciones: 0 commits</dd></dl>
       </article>
       <article class="proj">
@@ -384,7 +384,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="body"><h3>Loops: objetivo, timer y maker-checker</h3>
           <p class="q">¿Qué pasa cuando el agente corre solo, sin nadie en el loop?</p>
           <p class="finding">El loop con timer fue el más claro: chequeo determinista primero y agente solo si falla; detectó y revirtió las dos fallas inyectadas por US$0,23 sin romper nada. El loop de objetivo llegó a la meta de cobertura en 4 vueltas, pero una sola pasada llegó más lejos por el mismo costo. Los tropiezos fueron del harness: un objetivo que ya estaba cumplido y una herramienta que el propio <code>init.sh</code> borraba.</p>
-          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p07/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+          <a class="more" href="https://github.com/matiasrodriguezc/harness-engineering/blob/main/p07/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
         <dl class="vs"><dt>Objetivo</dt><dd>99% en 4 vueltas · US$0,74</dd><dt>Timer</dt><dd><span class="state ok">2/2 fallas</span> · US$0,23</dd><dt>Maker-checker</dt><dd>PASS · confirmado 7/7</dd></dl>
       </article>
       <article class="proj">
@@ -393,7 +393,7 @@ tr:last-child td { border-bottom: 0; }
         <div class="body"><h3>El flujo como grafo</h3>
           <p class="q">¿Qué aparece al dibujar el loop como nodos, aristas y estado compartido?</p>
           <p class="finding">Dibujar el loop del P07 encontró cuatro decisiones que no estaban escritas, entre ellas observaciones del checker que nadie recibía. El grafo ejecutable verifica en paralelo (funcional y revisión, cada uno en su worktree), vuelve atrás según la capa del problema y se detiene en un nodo humano que escala si nadie responde, sin aprobar solo.</p>
-          <a class="more" href="https://github.com/matiasrodriguezc01/harness-portfolio/blob/main/p08/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
+          <a class="more" href="https://github.com/matiasrodriguezc/harness-engineering/blob/main/p08/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>
         <dl class="vs"><dt>Paralelo</dt><dd>123 s contra 186 s (−34%)</dd><dt>Función</dt><dd><span class="state ok">6/6</span> · regresión 12/12</dd><dt>Aprobación</dt><dd><span class="state mid">espera a una persona</span></dd></dl>
       </article>
     </div>
@@ -473,7 +473,7 @@ tr:last-child td { border-bottom: 0; }
     <div><small>Revisión</small><strong>2026-11</strong></div>
     <div><small>Basado en</small><strong><a href="https://github.com/walkinglabs/learn-harness-engineering" target="_blank" rel="noopener">Learn Harness Engineering</a> (WalkingLabs, MIT)</strong></div>
     <div><small>Sesiones</small><strong>48 · US$53,86</strong></div>
-    <div><small>Repositorio</small><strong><a href="https://github.com/matiasrodriguezc01/harness-portfolio" target="_blank" rel="noopener">GitHub</a></strong></div>
+    <div><small>Repositorio</small><strong><a href="https://github.com/matiasrodriguezc/harness-engineering" target="_blank" rel="noopener">GitHub</a></strong></div>
     <div><small>Hoja</small><strong>1 de 1</strong></div>
   </footer>
 </div>
