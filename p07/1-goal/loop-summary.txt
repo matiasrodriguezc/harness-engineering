@@ -1,0 +1,5 @@
+round 1: coverage 83.13 -> 89.8 GOAL: FAIL
+round 2: coverage 89.8 -> 89.8 GOAL: FAIL
+round 3: coverage 89.8 -> 96.47 GOAL: FAIL
+round 4: coverage 96.47 -> 99.01 GOAL: PASS
+STOP: goal met in round 4

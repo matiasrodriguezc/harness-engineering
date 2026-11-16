@@ -1,7 +1,0 @@
-5981c1f sesion-2: verify P03 features with service tests, add handoff
-
- feature_list.json      | 26 ++++++++++++-------------
- package.json           |  2 +-
- session-handoff.md     | 12 ++++++++++++
- tests/services.test.ts | 51 ++++++++++++++++++++++++++++++++++++++++++++++++++
- 4 files changed, 77 insertions(+), 14 deletions(-)

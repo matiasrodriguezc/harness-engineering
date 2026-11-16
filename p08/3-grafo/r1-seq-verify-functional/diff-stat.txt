@@ -1,5 +1,0 @@
-b22ccea fin de sesión: r1-seq-verify-functional
-
- node_modules          |  1 +
- verdict-functional.md | 41 +++++++++++++++++++++++++++++++++++++++++
- 2 files changed, 42 insertions(+)

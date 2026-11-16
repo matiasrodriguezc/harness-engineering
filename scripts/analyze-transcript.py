@@ -1,9 +1,9 @@
-"""Resume un transcript de `claude -p --output-format stream-json`.
+"""Summarizes a `claude -p --output-format stream-json` transcript.
 
-Uso: python3 analyze-transcript.py <transcript.jsonl>
+Usage: python3 analyze-transcript.py <transcript.jsonl>
 
-Imprime duración, turnos, costo, cuántas acciones hizo el agente antes de su primera
-edición de código (costo de redescubrimiento) y qué archivos leyó antes de editar.
+Prints duration, turns, cost, how many actions the agent took before its first
+code edit (rediscovery cost) and which files it read before editing.
 """
 import json
 import sys
@@ -31,10 +31,10 @@ before = tool_uses[:first_edit]
 reads = [c["input"].get("file_path", "") for c in before if c["name"] == "Read"]
 bash_before = [c["input"].get("command", "")[:90] for c in before if c["name"] == "Bash"]
 
-print(f"resultado: {result.get('subtype')}  turnos: {result.get('num_turns')}  "
-      f"duración: {result.get('duration_ms', 0) / 1000:.0f} s  costo: US${result.get('total_cost_usd', 0):.2f}")
-print(f"acciones totales: {len(tool_uses)}  acciones antes de la primera edición: {first_edit}")
-print("archivos leídos antes de editar:", [r.split("/")[-1] for r in reads])
-print("comandos antes de editar:")
+print(f"result: {result.get('subtype')}  turns: {result.get('num_turns')}  "
+      f"duration: {result.get('duration_ms', 0) / 1000:.0f} s  cost: US${result.get('total_cost_usd', 0):.2f}")
+print(f"total actions: {len(tool_uses)}  actions before the first edit: {first_edit}")
+print("files read before editing:", [r.split("/")[-1] for r in reads])
+print("commands before editing:")
 for b in bash_before:
     print("  -", b)

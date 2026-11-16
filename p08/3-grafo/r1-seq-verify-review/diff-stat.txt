@@ -1,5 +1,0 @@
-9bf5411 fin de sesión: r1-seq-verify-review
-
- node_modules      |  1 +
- verdict-review.md | 34 ++++++++++++++++++++++++++++++++++
- 2 files changed, 35 insertions(+)

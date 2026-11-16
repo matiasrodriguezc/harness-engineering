@@ -1,0 +1,14 @@
+e91e0eb end of session: 4-evaluator
+
+ evaluation/p10-malformed.png                  | Bin 220784 -> 120398 bytes
+ evaluation/p11-corrupt.png                    | Bin 217751 -> 203327 bytes
+ evaluation/p6-citation.png                    | Bin 207503 -> 297616 bytes
+ evaluation/p8-clear-pending.png               | Bin 241322 -> 92890 bytes
+ evaluation/probe-conversation.mjs             |  22 +--
+ evaluation/probe-round2.mjs                   | 231 +++++++++++++++++++++++
+ evaluation/round2/r2-clear-failed.png         | Bin 0 -> 320532 bytes
+ evaluation/round2/r3-clear-failed-pending.png | Bin 0 -> 320541 bytes
+ evaluation/round2/r4-missing-chunk.png        | Bin 0 -> 297589 bytes
+ evaluation/round2/r6-sidebar-corrupt.png      | Bin 0 -> 134411 bytes
+ evaluator-rubric.md                           | 262 ++++++++++++--------------
+ 11 files changed, 367 insertions(+), 148 deletions(-)

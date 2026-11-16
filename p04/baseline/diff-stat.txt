@@ -1,4 +1,4 @@
-c173e9c fin de sesión: baseline
+c173e9c end of session: baseline
 
  package-lock.json                | 4092 ++++++++++++++++++++++++++++++++++++++
  src/services/indexing-service.ts |   16 +-

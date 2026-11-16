@@ -1,1 +1,0 @@
-(la sesión no corrió: claude: command not found)

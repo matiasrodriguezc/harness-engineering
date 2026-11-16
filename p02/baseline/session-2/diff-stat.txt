@@ -1,0 +1,13 @@
+07a547b end of session: session-2
+
+ docs/ARCHITECTURE.md                       |   6 +-
+ feature_list.json                          |   6 +-
+ src/main/ipc-handlers.ts                   |  14 ++-
+ src/preload/preload.ts                     |   2 +
+ src/renderer/components/DocumentDetail.tsx | 179 ++++++++++++++++++++---------
+ src/renderer/types.d.ts                    |   1 +
+ src/services/document-detail.test.ts       |  72 ++++++++++++
+ src/services/document-service.ts           |   8 +-
+ src/services/indexing-service.ts           |  10 ++
+ src/shared/types.ts                        |   1 +
+ 10 files changed, 238 insertions(+), 61 deletions(-)

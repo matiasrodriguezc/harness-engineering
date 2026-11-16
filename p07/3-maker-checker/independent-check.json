@@ -1,0 +1,42 @@
+{
+  "app": "/Users/matiasrodriguezc/harness-runs/p07-maker-checker",
+  "passed": 7,
+  "total": 7,
+  "results": [
+    {
+      "name": "1. The UI has the bridge",
+      "ok": true,
+      "detail": "object"
+    },
+    {
+      "name": "2. search() finds documents by content",
+      "ok": true,
+      "detail": "{\"value\":{\"all\":3,\"vector\":1,\"upper\":1,\"none\":0,\"empty\":3}}"
+    },
+    {
+      "name": "3. search() is case-insensitive",
+      "ok": true,
+      "detail": "{\"value\":{\"all\":3,\"vector\":1,\"upper\":1,\"none\":0,\"empty\":3}}"
+    },
+    {
+      "name": "4. search() with no matches returns empty",
+      "ok": true,
+      "detail": "{\"value\":{\"all\":3,\"vector\":1,\"upper\":1,\"none\":0,\"empty\":3}}"
+    },
+    {
+      "name": "5. search('') returns all",
+      "ok": true,
+      "detail": "{\"value\":{\"all\":3,\"vector\":1,\"upper\":1,\"none\":0,\"empty\":3}}"
+    },
+    {
+      "name": "6. The UI has the \"Search documents\" field",
+      "ok": true,
+      "detail": "{\"value\":1}"
+    },
+    {
+      "name": "7. Asking still works (no regression)",
+      "ok": true,
+      "detail": "{\"value\":2}"
+    }
+  ]
+}

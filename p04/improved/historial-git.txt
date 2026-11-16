@@ -1,3 +1,0 @@
-6034f67 Fix empty chunk content for documents over 1000 chars
-5883db4 Fix failing type-check baseline
-d4ba5c6 starter P04 + harness fuerte

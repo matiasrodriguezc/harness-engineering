@@ -1,5 +1,0 @@
-f56664c fin de sesión: r1-verify-review
-
- node_modules      |  1 +
- verdict-review.md | 46 ++++++++++++++++++++++++++++------------------
- 2 files changed, 29 insertions(+), 18 deletions(-)

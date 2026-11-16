@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>48 hilos · Harness Engineering</title>
-<meta name="description" content="Las 48 sesiones de agente de un portfolio de harness engineering, dibujadas como hilos trenzados en un mismo arnés.">
+<title>48 threads · Harness Engineering</title>
+<meta name="description" content="The 48 agent sessions of a harness engineering portfolio, drawn as threads braided into one harness.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Monoton&family=Syne:wght@600;700;800&family=Inter:wght@400;500;600&display=swap">
 <style>
-/* Layout: un telar de noche. Cada sesión de agente es un hilo con datos reales; arriba se trenzan en un solo arnés,
-   abajo cada proyecto es una muestra de tejido hecha solo con sus hilos. Columna de lectura de 1100px. */
+/* Layout: a loom at night. Each agent session is a thread drawn from real data; at the top they braid into one harness,
+   below each project is a swatch woven only from its own threads. 1100px reading column. */
 :root {
   --bg: #eef0f2; --panel: #ffffff; --ink: #18202b; --muted: #5b6573; --line: #d4d9df; --bone: #18202b; --weft: #c3c9d1;
   --d1: #b8432c; --d2: #b38a14; --d3: #2f5fb3; --d4: #a8346a; --d5: #1f8a72; --d6: #c96a12; --d7: #6f8a24; --d8: #6e4fc0;
@@ -42,14 +42,21 @@ p { margin: 0; max-width: 64ch; }
 section { padding-block: 72px; }
 .stack { display: flex; flex-direction: column; gap: 16px; }
 
-/* Hero: el arnés */
+/* Top bar: signature and language toggle */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 18px 0; position: relative; z-index: 6; }
+.lang { display: inline-flex; border: 1.5px solid var(--ink); border-radius: 999px; padding: 2px; background: var(--bg); }
+.lang button { appearance: none; border: 0; background: transparent; color: var(--ink); font: 700 0.76rem/1 var(--head); letter-spacing: 0.1em; padding: 7px 11px; border-radius: 999px; cursor: pointer; }
+.lang button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+/* Hero: the harness */
 .hero { position: relative; }
 .loom { position: relative; height: clamp(520px, 72vw, 680px); }
 #rope { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; }
-.hero-copy { position: absolute; left: 0; top: 40px; display: flex; flex-direction: column; gap: 14px; max-width: 30rem; pointer-events: none; padding: 18px 20px 20px 0; background: radial-gradient(120% 100% at 0% 40%, var(--bg) 62%, color-mix(in srgb, var(--bg) 0%, transparent) 100%); }
+.hero-copy { position: absolute; left: 0; top: 16px; display: flex; flex-direction: column; gap: 14px; max-width: 30rem; pointer-events: none; padding: 18px 20px 20px 0; background: radial-gradient(120% 100% at 0% 40%, var(--bg) 62%, color-mix(in srgb, var(--bg) 0%, transparent) 100%); }
 .hero-copy > * { pointer-events: auto; }
 .hero h1 { display: flex; flex-direction: column; gap: 6px; }
 .hero h1 .big { font: 400 clamp(3.4rem, 10vw, 7.4rem)/0.9 var(--display); letter-spacing: 0.02em; }
+html[lang="en"] .hero h1 .big { font-size: clamp(3rem, 8.2vw, 6rem); }
 .hero h1 .sub { font: 700 clamp(1.15rem, 2.3vw, 1.6rem)/1.15 var(--head); letter-spacing: -0.01em; }
 .hero .lead { color: var(--muted); max-width: 26rem; font-size: 1.02rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -60,7 +67,7 @@ section { padding-block: 72px; }
 .tip b { font-family: var(--head); }
 .tip span { color: var(--muted); font-variant-numeric: tabular-nums; }
 
-/* Cómo leer los hilos */
+/* How to read the threads */
 .key { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-top: 28px; }
 .key > div { background: var(--panel); padding: 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .key canvas { width: 100%; height: 46px; display: block; }
@@ -70,7 +77,7 @@ section { padding-block: 72px; }
 .dye i { width: 26px; height: 5px; border-radius: 3px; flex: none; }
 .dye small { color: var(--muted); display: block; }
 
-/* El arnés: cinco cabos */
+/* The harness: five plies */
 .plies { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 40px; align-items: center; }
 .plies svg { width: 100%; height: auto; display: block; }
 .plies svg path { fill: none; stroke-linecap: round; }
@@ -80,7 +87,7 @@ section { padding-block: 72px; }
 .ply-list b { font: 700 1rem/1.3 var(--head); }
 .ply-list span { color: var(--muted); font-size: 0.92rem; }
 
-/* Muestras de tejido */
+/* Weave swatches */
 .swatches { display: grid; gap: 20px; margin-top: 32px; }
 .sw { display: grid; grid-template-columns: 13rem minmax(0, 1fr) 15rem; gap: 26px; padding: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; align-items: start; }
 .sw canvas { width: 100%; height: 150px; display: block; border-radius: 6px; }
@@ -95,7 +102,7 @@ section { padding-block: 72px; }
 .sw dd { margin: 0; font-variant-numeric: tabular-nums; }
 .sw a.more { font-size: 0.88rem; font-weight: 600; }
 
-/* Hallazgos */
+/* Findings */
 .claims { display: grid; gap: 0; margin-top: 28px; }
 .claim { display: grid; grid-template-columns: 14rem minmax(0, 1fr); gap: 28px; padding-block: 26px; border-top: 1px solid var(--line); }
 .claim:last-child { border-bottom: 1px solid var(--line); }
@@ -104,7 +111,7 @@ section { padding-block: 72px; }
 .claim p { color: var(--muted); }
 .claim .tag { font: 700 0.74rem/1.4 var(--head); text-transform: uppercase; letter-spacing: 0.12em; color: var(--c, var(--d6)); }
 
-/* Piezas y herramientas */
+/* Pieces and tooling */
 .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; margin-top: 28px; }
 .parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .parts li { display: grid; gap: 2px; padding-left: 18px; position: relative; }
@@ -126,7 +133,7 @@ footer .sign { font: 400 1.6rem/1 var(--display); color: var(--ink); }
 }
 @media (max-width: 640px) {
   .loom { height: 640px; }
-  .hero-copy { top: 24px; max-width: 100%; }
+  .hero-copy { top: 8px; max-width: 100%; }
   .hint { display: none; }
   .ply-list li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }
@@ -136,142 +143,246 @@ footer .sign { font: 400 1.6rem/1 var(--display); color: var(--ink); }
 <div class="wrap">
 
   <header class="hero">
+    <div class="topbar">
+      <span class="label">Harness Engineering · Matías Rodríguez</span>
+      <div class="lang" role="group" aria-label="Language / Idioma">
+        <button type="button" data-lang="en" aria-pressed="true" aria-label="English">EN</button>
+        <button type="button" data-lang="es" aria-pressed="false" aria-label="Español">ES</button>
+      </div>
+    </div>
     <div class="loom">
-      <canvas id="rope" aria-label="48 hilos de colores, uno por sesión de agente, que entran desde la izquierda, se trenzan en una cuerda en el centro y se separan a la derecha en ocho haces, uno por proyecto." role="img"></canvas>
+      <canvas id="rope" role="img" data-i18n-aria="rope.aria" aria-label="48 colored threads, one per agent session, that enter from the left, braid into a rope in the middle and split on the right into eight bundles, one per project."></canvas>
       <div class="hero-copy">
-        <span class="label">Harness Engineering · Matías Rodríguez</span>
-        <h1><span class="big">48 hilos</span><span class="sub">trenzados en un mismo arnés</span></h1>
-        <p class="lead">Cada hilo es una sesión real de Claude Code. El mismo modelo en todas; lo único que cambia es el harness: las instrucciones, la verificación y el estado que lo rodean.</p>
+        <h1><span class="big" data-i18n="hero.big">48 threads</span><span class="sub" data-i18n="hero.sub">braided into one harness</span></h1>
+        <p class="lead" data-i18n="hero.lead">Each thread is a real Claude Code session. The same model in all of them; the only thing that changes is the harness: the instructions, verification and state around it.</p>
         <div class="actions">
-          <a class="btn primary" href="https://github.com/matiasrodriguezc/harness-engineering" target="_blank" rel="noopener">Ver el repositorio</a>
-          <a class="btn" href="#leer">Cómo leer los hilos</a>
+          <a class="btn primary" href="https://github.com/matiasrodriguezc/harness-engineering" target="_blank" rel="noopener" data-i18n="hero.repo">View the repository</a>
+          <a class="btn" href="#read" data-i18n="hero.read">How to read the threads</a>
         </div>
       </div>
-      <p class="hint">Pasá el mouse por un hilo para ver qué sesión es.</p>
+      <p class="hint" data-i18n="hero.hint">Hover over a thread to see which session it is.</p>
       <div class="tip" id="tip" hidden></div>
     </div>
   </header>
 
-  <section id="leer">
+  <section id="read">
     <div class="stack">
-      <span class="label">Leyenda</span>
-      <h2>Cómo leer los hilos</h2>
-      <p class="muted">Ningún trazo es decorativo. Cada uno sale de un transcript guardado en el repositorio.</p>
+      <span class="label" data-i18n="read.label">Legend</span>
+      <h2 data-i18n="read.h">How to read the threads</h2>
+      <p class="muted" data-i18n="read.p">No stroke is decorative. Each one comes from a transcript saved in the repository.</p>
     </div>
     <div class="key">
-      <div><span class="label">Color</span><canvas data-key="color"></canvas><p>El proyecto. Ocho tintes, uno por proyecto, del P01 al P08.</p></div>
-      <div><span class="label">Grosor</span><canvas data-key="width"></canvas><p>Lo que costó la sesión: de US$0,11 a US$3,28.</p></div>
-      <div><span class="label">Ondulación</span><canvas data-key="wave"></canvas><p>Los turnos del agente: más idas y vueltas, más ondas.</p></div>
-      <div><span class="label">Nudo</span><canvas data-key="knot"></canvas><p>Una sesión cortada a mitad de trabajo por el tope de gasto (P03).</p></div>
-      <div><span class="label">Hilo cortado</span><canvas data-key="cut"></canvas><p>Una sesión que no llegó a correr: Claude Code se actualizó en ese momento (P07).</p></div>
-      <div><span class="label">Deshilachado</span><canvas data-key="fray"></canvas><p>Funciones marcadas como terminadas con la interfaz desconectada (P03).</p></div>
+      <div><span class="label" data-i18n="k.color">Color</span><canvas data-key="color"></canvas><p data-i18n="k.color.p">The project. Eight dyes, one per project, from P01 to P08.</p></div>
+      <div><span class="label" data-i18n="k.width">Thickness</span><canvas data-key="width"></canvas><p data-i18n="k.width.p">What the session cost: from US$0.11 to US$3.28.</p></div>
+      <div><span class="label" data-i18n="k.wave">Waviness</span><canvas data-key="wave"></canvas><p data-i18n="k.wave.p">The agent's turns: more back-and-forth, more waves.</p></div>
+      <div><span class="label" data-i18n="k.knot">Knot</span><canvas data-key="knot"></canvas><p data-i18n="k.knot.p">A session cut off mid-work by the spending cap (P03).</p></div>
+      <div><span class="label" data-i18n="k.cut">Cut thread</span><canvas data-key="cut"></canvas><p data-i18n="k.cut.p">A session that never ran: Claude Code updated itself at that moment (P07).</p></div>
+      <div><span class="label" data-i18n="k.fray">Frayed end</span><canvas data-key="fray"></canvas><p data-i18n="k.fray.p">Features marked as done with the UI disconnected (P03).</p></div>
     </div>
     <div class="dyes" id="dyes"></div>
   </section>
 
-  <section id="arnes">
+  <section id="harness">
     <div class="plies">
-      <svg viewBox="0 0 420 260" role="img" aria-label="Una cuerda de cinco cabos retorcidos: instrucciones, herramientas, entorno, estado y verificación.">
+      <svg viewBox="0 0 420 260" role="img" data-i18n-aria="plies.aria" aria-label="A rope of five twisted plies: instructions, tools, environment, state and verification.">
         <g id="ply-g"></g>
       </svg>
       <div class="stack">
-        <span class="label">El concepto</span>
-        <h2>Agente = modelo + arnés</h2>
-        <p class="muted">El modelo tira; el arnés decide hacia dónde va esa fuerza. La idea del curso es que, cuando un agente falla, primero hay que revisar el arnés y recién después el modelo. Lo puse a prueba en ocho proyectos, cambiando solo el arnés y midiendo qué pasaba. Un arnés tiene cinco cabos:</p>
+        <span class="label" data-i18n="h.label">The concept</span>
+        <h2 data-i18n="h.h">Agent = model + harness</h2>
+        <p class="muted" data-i18n="h.p">The model pulls; the harness decides where that force goes. The course's idea is that when an agent fails, you check the harness first and the model only after. I put it to the test in eight projects, changing only the harness and measuring what happened. A harness has five plies:</p>
         <ul class="ply-list">
-          <li><b>Instrucciones</b><span><code>AGENTS.md</code> corto que enruta a la documentación, con reglas de inicio y de cierre.</span></li>
-          <li><b>Herramientas</b><span>Shell, archivos, tests y scripts de verificación, con mínimo privilegio.</span></li>
-          <li><b>Entorno</b><span><code>init.sh</code> que confirma que el proyecto compila y arranca antes de trabajar.</span></li>
-          <li><b>Estado</b><span>Lista de funciones, traspaso y log de progreso para la próxima sesión.</span></li>
-          <li><b>Verificación</b><span>Tipos, tests y una prueba de punta a punta en la app real.</span></li>
+          <li><b data-i18n="ply1">Instructions</b><span data-i18n="ply1.p">A short <code>AGENTS.md</code> that routes to the docs, with startup and wrap-up rules.</span></li>
+          <li><b data-i18n="ply2">Tools</b><span data-i18n="ply2.p">Shell, files, tests and verification scripts, with least privilege.</span></li>
+          <li><b data-i18n="ply3">Environment</b><span data-i18n="ply3.p">An <code>init.sh</code> that confirms the project builds and starts before any work.</span></li>
+          <li><b data-i18n="ply4">State</b><span data-i18n="ply4.p">Feature list, handoff and progress log for the next session.</span></li>
+          <li><b data-i18n="ply5">Verification</b><span data-i18n="ply5.p">Types, tests and an end-to-end test in the real app.</span></li>
         </ul>
       </div>
     </div>
   </section>
 
-  <section id="muestras">
+  <section id="swatches-section">
     <div class="stack">
-      <span class="label">Ocho muestras</span>
-      <h2>Cada proyecto, tejido con sus propios hilos</h2>
-      <p class="muted">La urdimbre de cada muestra son las sesiones de ese proyecto, en orden. Lo que dicen, con la misma tarea y el mismo modelo en las dos versiones:</p>
+      <span class="label" data-i18n="sw.label">Eight swatches</span>
+      <h2 data-i18n="sw.h">Each project, woven from its own threads</h2>
+      <p class="muted" data-i18n="sw.p">Each swatch's warp is that project's sessions, in order. What they show, with the same task and the same model in both versions:</p>
     </div>
     <div class="swatches" id="swatches"></div>
   </section>
 
-  <section id="hallazgos">
+  <section id="findings">
     <div class="stack">
-      <span class="label">Lo que dejó el tejido</span>
-      <h2>Hallazgos</h2>
+      <span class="label" data-i18n="fi.label">What the weave left</span>
+      <h2 data-i18n="fi.h">Findings</h2>
     </div>
     <div class="claims">
-      <div class="claim" style="--c:var(--d6)"><span class="tag">El principal</span><div class="stack"><h3>Con modelos actuales, el arnés cambia <em>cómo se trabaja</em> más que si se termina.</h3><p>En casi todos los proyectos las dos versiones entregaron la tarea. El arnés movió el costo, la verificación, los tests, los commits y lo que queda escrito para la próxima sesión.</p></div></div>
-      <div class="claim" style="--c:var(--d3)"><span class="tag">Verificación · P03</span><div class="stack"><h3>La evidencia del tipo equivocado produce <em>falsos "terminado"</em>.</h3><p>Dos agentes marcaron cuatro funciones como terminadas con la interfaz desconectada. Cumplieron la regla de no marcar sin evidencia, pero la evidencia era el build y tests de servicios. Solo una prueba en la app real lo detecta.</p></div></div>
-      <div class="claim" style="--c:var(--d1)"><span class="tag">El curso</span><div class="stack"><h3>Las soluciones del propio curso <em>repiten un defecto</em>.</h3><p>El preload importa un archivo local con el sandbox de Electron activo y la interfaz queda sin acceso a la app, incluso en la solución del proyecto final que su rúbrica califica 5/5. Lo convertí en una regla ejecutable.</p></div></div>
-      <div class="claim" style="--c:var(--d6)"><span class="tag">Especificación · P06</span><div class="stack"><h3>Una tarea bien especificada <em>hizo buena parte del trabajo</em>.</h3><p>Con nombres de API fijos y "tiene que funcionar en la app real", las cinco variantes pasaron la suite oculta de 12 chequeos, incluido el arnés débil.</p></div></div>
-      <div class="claim" style="--c:var(--d5)"><span class="tag">Roles · P05</span><div class="stack"><h3>Un evaluador independiente <em>suma</em>; un planificador, no siempre.</h3><p>Según el mismo juez, el evaluador que usaba la app subió la nota de 3,9 a 4,5. El planificador amplió el trabajo, costó más y quedó en 4,0.</p></div></div>
-      <div class="claim" style="--c:var(--d7)"><span class="tag">Loops y grafos · P07, P08</span><div class="stack"><h3>Un loop vale <em>lo que su condición de parada</em>.</h3><p>El loop con timer chequeaba primero sin agente y solo lo despertaba si algo fallaba: revirtió dos fallas por US$0,23. Dibujar el loop como grafo mostró cuatro decisiones que nadie había escrito.</p></div></div>
+      <div class="claim" style="--c:var(--d6)"><span class="tag" data-i18n="c1.tag">The main one</span><div class="stack"><h3 data-i18n="c1.h">With current models, the harness changes <em>how the work gets done</em> more than whether it gets finished.</h3><p data-i18n="c1.p">In almost every project both versions delivered the task. The harness shifted the cost, the verification, the tests, the commits and what gets written down for the next session.</p></div></div>
+      <div class="claim" style="--c:var(--d3)"><span class="tag" data-i18n="c2.tag">Verification · P03</span><div class="stack"><h3 data-i18n="c2.h">The wrong kind of evidence produces <em>false "done"</em>.</h3><p data-i18n="c2.p">Two agents marked four features as done with the UI disconnected. They followed the rule of never marking without evidence, but the evidence was the build and service tests. Only a test in the real app catches it.</p></div></div>
+      <div class="claim" style="--c:var(--d1)"><span class="tag" data-i18n="c3.tag">The course</span><div class="stack"><h3 data-i18n="c3.h">The course's own solutions <em>repeat a bug</em>.</h3><p data-i18n="c3.p">The preload imports a local file with Electron's sandbox on, and the UI is left without access to the app, even in the final project's solution that its own rubric grades 5/5. I turned it into an executable rule.</p></div></div>
+      <div class="claim" style="--c:var(--d6)"><span class="tag" data-i18n="c4.tag">Specification · P06</span><div class="stack"><h3 data-i18n="c4.h">A well-specified task <em>did much of the work</em>.</h3><p data-i18n="c4.p">With fixed API names and "it has to work in the real app", all five variants passed the hidden 12-check suite, including the weak harness.</p></div></div>
+      <div class="claim" style="--c:var(--d5)"><span class="tag" data-i18n="c5.tag">Roles · P05</span><div class="stack"><h3 data-i18n="c5.h">An independent evaluator <em>adds value</em>; a planner, not always.</h3><p data-i18n="c5.p">By the same judge, the evaluator that used the app raised the score from 3.9 to 4.5. The planner widened the work, cost more and ended at 4.0.</p></div></div>
+      <div class="claim" style="--c:var(--d7)"><span class="tag" data-i18n="c6.tag">Loops and graphs · P07, P08</span><div class="stack"><h3 data-i18n="c6.h">A loop is only as good as <em>its stop condition</em>.</h3><p data-i18n="c6.p">The timer loop checked first without an agent and only woke one when something failed: it reverted two failures for US$0.23. Drawing the loop as a graph exposed four decisions nobody had written down.</p></div></div>
     </div>
   </section>
 
-  <section id="piezas">
+  <section id="pieces">
     <div class="grid2">
       <div class="stack">
-        <span class="label">Mi arnés</span>
-        <h2>Cada pieza responde a una falla</h2>
+        <span class="label" data-i18n="pc.label">My harness</span>
+        <h2 data-i18n="pc.h">Each piece answers a failure</h2>
         <ul class="parts">
-          <li><b><code>AGENTS.md</code></b><span>Rutina de inicio y cierre, una función a la vez, commit por función.</span><small>Clases 03–07 · P02, P03</small></li>
-          <li><b>Definición de terminado en tres capas</b><span>Estática, tests y puente, prueba en la app real.</span><small>Clases 09–10 · falsos "terminado" de P03</small></li>
-          <li><b><code>feature_list.json</code> con comando de verificación</b><span>Comportamiento, verificación y estado en cada función.</span><small>Clase 08</small></li>
-          <li><b><code>init.sh</code> que abre la app</b><span>Entorno, tipos, build, arquitectura y el puente de la interfaz.</span><small>Clase 06 · P01–P04</small></li>
-          <li><b>Regla del preload</b><span>Mensaje con qué falló, por qué y cómo arreglarlo.</span><small>Clase 10 · el defecto que se repitió en todos los proyectos</small></li>
+          <li><b><code>AGENTS.md</code></b><span data-i18n="pc1.p">Startup and wrap-up routine, one feature at a time, a commit per feature.</span><small data-i18n="pc1.s">Lectures 03–07 · P02, P03</small></li>
+          <li><b data-i18n="pc2">Three-layer definition of done</b><span data-i18n="pc2.p">Static checks, tests, and the bridge: a test in the real app.</span><small data-i18n="pc2.s">Lectures 09–10 · P03's false "done"</small></li>
+          <li><b data-i18n="pc3"><code>feature_list.json</code> with a verification command</b><span data-i18n="pc3.p">Behavior, verification and status for every feature.</span><small data-i18n="pc3.s">Lecture 08</small></li>
+          <li><b data-i18n="pc4"><code>init.sh</code> that opens the app</b><span data-i18n="pc4.p">Environment, types, build, architecture and the UI bridge.</span><small data-i18n="pc4.s">Lecture 06 · P01–P04</small></li>
+          <li><b data-i18n="pc5">Preload rule</b><span data-i18n="pc5.p">A message with what failed, why, and how to fix it.</span><small data-i18n="pc5.s">Lecture 10 · the bug repeated in every project</small></li>
         </ul>
       </div>
       <div class="stack">
-        <span class="label">Herramental</span>
-        <h2>Para repetir cada experimento</h2>
+        <span class="label" data-i18n="tl.label">Tooling</span>
+        <h2 data-i18n="tl.h">To repeat every experiment</h2>
         <ul class="parts">
-          <li><b><code>run-session.sh</code></b><span>Una sesión no interactiva en una carpeta aislada, con transcript, diff y tiempos.</span></li>
-          <li><b><code>check-bridge.mjs</code></b><span>Pregunta a la app abierta si la interfaz tiene acceso a la API.</span></li>
-          <li><b><code>p06-acceptance.mjs</code></b><span>Suite de punta a punta que los agentes no veían: 12 chequeos y dos reinicios.</span></li>
-          <li><b><code>run-p05.sh</code></b><span>Tres configuraciones de roles y un juez independiente.</span></li>
-          <li><b><code>p07-*.sh</code> · <code>p08-graph.sh</code></b><span>Los loops, y el grafo con verificación en paralelo y aprobación humana.</span></li>
+          <li><b><code>run-session.sh</code></b><span data-i18n="tl1">A non-interactive session in an isolated folder, with transcript, diff and timings.</span></li>
+          <li><b><code>check-bridge.mjs</code></b><span data-i18n="tl2">Asks the open app whether the UI has access to the API.</span></li>
+          <li><b><code>p06-acceptance.mjs</code></b><span data-i18n="tl3">An end-to-end suite the agents never saw: 12 checks and two restarts.</span></li>
+          <li><b><code>run-p05.sh</code></b><span data-i18n="tl4">Three role configurations and an independent judge.</span></li>
+          <li><b><code>p07-*.sh</code> · <code>p08-graph.sh</code></b><span data-i18n="tl5">The loops, and the graph with parallel verification and human approval.</span></li>
         </ul>
       </div>
     </div>
   </section>
 
-  <section id="limites">
+  <section id="limits">
     <div class="stack">
-      <span class="label">Para leer los números</span>
-      <h2>Límites</h2>
+      <span class="label" data-i18n="lm.label">Reading the numbers</span>
+      <h2 data-i18n="lm.h">Limitations</h2>
       <ul class="parts">
-        <li><span>Una corrida por condición: las diferencias de tiempo y costo son indicativas, no estadísticas.</span></li>
-        <li><span>Un solo modelo, Claude Opus 5.5. Con otro, varias conclusiones pueden cambiar.</span></li>
-        <li><span>Sesiones en modo no interactivo, no a mano como propone el curso, para medirlas igual.</span></li>
-        <li><span>Varios protocolos los diseñé yo porque el curso no los define; cada ajuste está en el <code>metricas.md</code> de su proyecto.</span></li>
+        <li><span data-i18n="lm1">One run per condition: differences in time and cost are indicative, not statistical.</span></li>
+        <li><span data-i18n="lm2">A single model, Claude Opus 5.5. With another, several conclusions may change.</span></li>
+        <li><span data-i18n="lm3">Sessions ran in non-interactive mode, not by hand as the course suggests, so they could all be measured the same way.</span></li>
+        <li><span data-i18n="lm4">I designed several protocols myself because the course does not define them; every adjustment is in its project's <code>metrics.md</code>.</span></li>
       </ul>
     </div>
   </section>
 
   <footer>
     <span class="sign">MR</span>
-    <span>Sobre el curso <a href="https://github.com/walkinglabs/learn-harness-engineering" target="_blank" rel="noopener">Learn Harness Engineering</a> (WalkingLabs, MIT)</span>
-    <span><a href="https://github.com/matiasrodriguezc/harness-engineering" target="_blank" rel="noopener">Repositorio en GitHub</a></span>
+    <span data-i18n="ft.course">About the course <a href="https://github.com/walkinglabs/learn-harness-engineering" target="_blank" rel="noopener">Learn Harness Engineering</a> (WalkingLabs, MIT)</span>
+    <span><a href="https://github.com/matiasrodriguezc/harness-engineering" target="_blank" rel="noopener" data-i18n="ft.repo">Repository on GitHub</a></span>
   </footer>
 </div>
 
 <script>
-const SESSIONS = [{"p":"P01","l":"corrida débil","c":3.28,"t":54,"d":697,"ok":true},{"p":"P01","l":"corrida fuerte","c":2.3,"t":31,"d":549,"ok":true},{"p":"P02","l":"corrida débil · sesión 1","c":1.18,"t":24,"d":387,"ok":true},{"p":"P02","l":"corrida débil · sesión 2","c":0.67,"t":12,"d":142,"ok":true},{"p":"P02","l":"corrida fuerte · sesión 1","c":1.25,"t":28,"d":305,"ok":true},{"p":"P02","l":"corrida fuerte · sesión 2","c":0.79,"t":15,"d":167,"ok":true},{"p":"P03","l":"débil sin corte · sesión 1","c":0.91,"t":19,"d":230,"ok":true},{"p":"P03","l":"corrida débil · sesión 1","c":0.49,"t":11,"d":103,"ok":true},{"p":"P03","l":"corrida débil · sesión 2","c":0.29,"t":10,"d":77,"ok":true},{"p":"P03","l":"corrida fuerte · sesión 1","c":0.52,"t":10,"d":130,"ok":false,"stop":true},{"p":"P03","l":"corrida fuerte · sesión 2","c":0.36,"t":11,"d":69,"ok":true},{"p":"P03","l":"corrida fuerte · sesión 3","c":0.39,"t":14,"d":66,"ok":true},{"p":"P04","l":"corrida débil","c":0.29,"t":7,"d":59,"ok":true},{"p":"P04","l":"corrida fuerte","c":0.49,"t":15,"d":92,"ok":true},{"p":"P05","l":"un rol · agente único","c":2.54,"t":46,"d":601,"ok":true},{"p":"P05","l":"un rol · juez independiente","c":1.32,"t":27,"d":230,"ok":true},{"p":"P05","l":"gen + eval · generador","c":2.67,"t":52,"d":588,"ok":true},{"p":"P05","l":"gen + eval · evaluador","c":1.17,"t":20,"d":203,"ok":true},{"p":"P05","l":"gen + eval · generador, corrección","c":1.91,"t":29,"d":355,"ok":true},{"p":"P05","l":"gen + eval · evaluador, reevaluación","c":1.3,"t":26,"d":254,"ok":true},{"p":"P05","l":"gen + eval · juez independiente","c":1.31,"t":23,"d":235,"ok":true},{"p":"P05","l":"plan + gen + eval · planificador","c":0.71,"t":13,"d":173,"ok":true},{"p":"P05","l":"plan + gen + eval · generador","c":2.88,"t":53,"d":548,"ok":true},{"p":"P05","l":"plan + gen + eval · evaluador","c":1.96,"t":36,"d":578,"ok":true},{"p":"P05","l":"plan + gen + eval · generador, corrección","c":1.53,"t":32,"d":334,"ok":true},{"p":"P05","l":"plan + gen + eval · evaluador, reevaluación","c":1.52,"t":31,"d":333,"ok":true},{"p":"P05","l":"plan + gen + eval · juez independiente","c":1.48,"t":36,"d":253,"ok":true},{"p":"P06","l":"sin punta a punta · tarea","c":2.86,"t":53,"d":663,"ok":true},{"p":"P06","l":"sin instrucciones · tarea","c":1.51,"t":31,"d":509,"ok":true},{"p":"P06","l":"sin lista · tarea","c":2.27,"t":38,"d":541,"ok":true},{"p":"P06","l":"harness débil · tarea","c":1.19,"t":21,"d":276,"ok":true},{"p":"P06","l":"mi harness · tarea","c":2.74,"t":41,"d":536,"ok":true},{"p":"P06","l":"mi harness · limpieza","c":0.47,"t":13,"d":85,"ok":true},{"p":"P07","l":"objetivo · vuelta 1","c":0.22,"t":7,"d":59,"ok":true},{"p":"P07","l":"objetivo · vuelta 2","c":0,"t":0,"d":0,"ok":false,"cut":true},{"p":"P07","l":"objetivo · vuelta 3","c":0.27,"t":7,"d":57,"ok":true},{"p":"P07","l":"objetivo · vuelta 4","c":0.25,"t":9,"d":45,"ok":true},{"p":"P07","l":"objetivo · pasada única","c":0.7,"t":11,"d":143,"ok":true},{"p":"P07","l":"timer · tick 2, agente","c":0.12,"t":5,"d":24,"ok":true},{"p":"P07","l":"timer · tick 4, agente","c":0.11,"t":5,"d":24,"ok":true},{"p":"P07","l":"maker-checker · vuelta 1, checker","c":0.5,"t":10,"d":112,"ok":true},{"p":"P07","l":"maker-checker · vuelta 1, maker","c":1.06,"t":23,"d":200,"ok":true},{"p":"P07","l":"maker-checker · vuelta 2, checker","c":0.58,"t":13,"d":128,"ok":true},{"p":"P08","l":"grafo · implement","c":1.17,"t":18,"d":233,"ok":true},{"p":"P08","l":"grafo · plan","c":0.31,"t":7,"d":53,"ok":true},{"p":"P08","l":"grafo · verificación funcional, secuencial","c":0.57,"t":10,"d":132,"ok":true},{"p":"P08","l":"grafo · revisión, secuencial","c":0.43,"t":9,"d":51,"ok":true},{"p":"P08","l":"grafo · verificación funcional, en paralelo","c":0.56,"t":11,"d":122,"ok":true},{"p":"P08","l":"grafo · revisión, en paralelo","c":0.45,"t":10,"d":58,"ok":true}];
+/* Session data: one row per Claude Code session, taken from the saved transcripts (cost in US$, turns, duration in seconds). */
+const SESSIONS = [{"p":"P01","en":"weak run","es":"corrida débil","c":3.28,"t":54,"d":697},{"p":"P01","en":"strong run","es":"corrida fuerte","c":2.3,"t":31,"d":549},{"p":"P02","en":"weak run · session 1","es":"corrida débil · sesión 1","c":1.18,"t":24,"d":387},{"p":"P02","en":"weak run · session 2","es":"corrida débil · sesión 2","c":0.67,"t":12,"d":142},{"p":"P02","en":"strong run · session 1","es":"corrida fuerte · sesión 1","c":1.25,"t":28,"d":305},{"p":"P02","en":"strong run · session 2","es":"corrida fuerte · sesión 2","c":0.79,"t":15,"d":167},{"p":"P03","en":"weak, no cutoff · session 1","es":"débil sin corte · sesión 1","c":0.91,"t":19,"d":230},{"p":"P03","en":"weak run · session 1","es":"corrida débil · sesión 1","c":0.49,"t":11,"d":103},{"p":"P03","en":"weak run · session 2","es":"corrida débil · sesión 2","c":0.29,"t":10,"d":77},{"p":"P03","en":"strong run · session 1","es":"corrida fuerte · sesión 1","c":0.52,"t":10,"d":130,"stop":true},{"p":"P03","en":"strong run · session 2","es":"corrida fuerte · sesión 2","c":0.36,"t":11,"d":69},{"p":"P03","en":"strong run · session 3","es":"corrida fuerte · sesión 3","c":0.39,"t":14,"d":66},{"p":"P04","en":"weak run","es":"corrida débil","c":0.29,"t":7,"d":59},{"p":"P04","en":"strong run","es":"corrida fuerte","c":0.49,"t":15,"d":92},{"p":"P05","en":"single role · single agent","es":"un rol · agente único","c":2.54,"t":46,"d":601},{"p":"P05","en":"single role · independent judge","es":"un rol · juez independiente","c":1.32,"t":27,"d":230},{"p":"P05","en":"gen + eval · generator","es":"gen + eval · generador","c":2.67,"t":52,"d":588},{"p":"P05","en":"gen + eval · evaluator","es":"gen + eval · evaluador","c":1.17,"t":20,"d":203},{"p":"P05","en":"gen + eval · generator, fixes","es":"gen + eval · generador, corrección","c":1.91,"t":29,"d":355},{"p":"P05","en":"gen + eval · evaluator, re-review","es":"gen + eval · evaluador, reevaluación","c":1.3,"t":26,"d":254},{"p":"P05","en":"gen + eval · independent judge","es":"gen + eval · juez independiente","c":1.31,"t":23,"d":235},{"p":"P05","en":"plan + gen + eval · planner","es":"plan + gen + eval · planificador","c":0.71,"t":13,"d":173},{"p":"P05","en":"plan + gen + eval · generator","es":"plan + gen + eval · generador","c":2.88,"t":53,"d":548},{"p":"P05","en":"plan + gen + eval · evaluator","es":"plan + gen + eval · evaluador","c":1.96,"t":36,"d":578},{"p":"P05","en":"plan + gen + eval · generator, fixes","es":"plan + gen + eval · generador, corrección","c":1.53,"t":32,"d":334},{"p":"P05","en":"plan + gen + eval · evaluator, re-review","es":"plan + gen + eval · evaluador, reevaluación","c":1.52,"t":31,"d":333},{"p":"P05","en":"plan + gen + eval · independent judge","es":"plan + gen + eval · juez independiente","c":1.48,"t":36,"d":253},{"p":"P06","en":"no end-to-end · task","es":"sin punta a punta · tarea","c":2.86,"t":53,"d":663},{"p":"P06","en":"no feature list · task","es":"sin lista · tarea","c":2.27,"t":38,"d":541},{"p":"P06","en":"no instructions · task","es":"sin instrucciones · tarea","c":1.51,"t":31,"d":509},{"p":"P06","en":"my harness · task","es":"mi harness · tarea","c":2.74,"t":41,"d":536},{"p":"P06","en":"my harness · cleanup","es":"mi harness · limpieza","c":0.47,"t":13,"d":85},{"p":"P06","en":"weak harness · task","es":"harness débil · tarea","c":1.19,"t":21,"d":276},{"p":"P07","en":"goal · round 1","es":"objetivo · vuelta 1","c":0.22,"t":7,"d":59},{"p":"P07","en":"goal · round 2","es":"objetivo · vuelta 2","c":0,"t":0,"d":0,"cut":true},{"p":"P07","en":"goal · round 3","es":"objetivo · vuelta 3","c":0.27,"t":7,"d":57},{"p":"P07","en":"goal · round 4","es":"objetivo · vuelta 4","c":0.25,"t":9,"d":45},{"p":"P07","en":"goal · single pass","es":"objetivo · pasada única","c":0.7,"t":11,"d":143},{"p":"P07","en":"timer · tick 2, agent","es":"timer · tick 2, agente","c":0.12,"t":5,"d":24},{"p":"P07","en":"timer · tick 4, agent","es":"timer · tick 4, agente","c":0.11,"t":5,"d":24},{"p":"P07","en":"maker-checker · round 1, checker","es":"maker-checker · vuelta 1, checker","c":0.5,"t":10,"d":112},{"p":"P07","en":"maker-checker · round 1, maker","es":"maker-checker · vuelta 1, maker","c":1.06,"t":23,"d":200},{"p":"P07","en":"maker-checker · round 2, checker","es":"maker-checker · vuelta 2, checker","c":0.58,"t":13,"d":128},{"p":"P08","en":"graph · implement","es":"grafo · implement","c":1.17,"t":18,"d":233},{"p":"P08","en":"graph · plan","es":"grafo · plan","c":0.31,"t":7,"d":53},{"p":"P08","en":"graph · functional check, sequential","es":"grafo · verificación funcional, secuencial","c":0.57,"t":10,"d":132},{"p":"P08","en":"graph · review, sequential","es":"grafo · revisión, secuencial","c":0.43,"t":9,"d":51},{"p":"P08","en":"graph · functional check, parallel","es":"grafo · verificación funcional, en paralelo","c":0.56,"t":11,"d":122},{"p":"P08","en":"graph · review, parallel","es":"grafo · revisión, en paralelo","c":0.45,"t":10,"d":58}];
 const PROJECTS = [
-  { id: 'P01', dye: 'Rubia', t: 'Solo prompt contra arnés mínimo', q: '¿Cuánto cambia un AGENTS.md, un init.sh y una lista de funciones?', f: 'Las dos corridas cumplieron las 4 funciones. Con arnés fue un 21% más rápida, un 30% más barata, escribió un test de punta a punta y dejó el estado listo para seguir. Sin arnés, el agente rediseñó componentes y sumó una integración con una API externa que nadie pidió.', m: [['Débil', '4/4 · 11:40 · US$3,28'], ['Fuerte', '4/4 · 9:13 · US$2,30']] },
-  { id: 'P02', dye: 'Gualda', t: 'Repo legible y retomable', q: '¿Una sesión nueva puede retomar el trabajo leyendo solo el repo?', f: 'Las dos sesiones nuevas se ubicaron en 3 acciones. Sin traspaso, la segunda hizo una de las dos funciones pendientes y dejó lo que descubrió solo en el chat; con traspaso, terminó las dos y volvió a dejarlo escrito.', m: [['Débil', '2/3 funciones · US$1,85'], ['Fuerte', '3/3 funciones · US$2,04']] },
-  { id: 'P03', dye: 'Índigo', t: 'Continuidad con reinicios', q: 'Con sesiones cortadas a mitad de trabajo, ¿se pierde el estado?', f: 'Una función a la vez, con commit por función, sobrevivió a un corte real sin perder nada. Pero las dos corridas marcaron las 4 funciones como terminadas con la interfaz desconectada: la evidencia que pedían era del tipo equivocado.', m: [['Débil', '4/4 "terminado" · UI cortada'], ['Fuerte', '4/4 "terminado" · UI cortada']] },
-  { id: 'P04', dye: 'Cochinilla', t: 'Feedback de runtime con un bug sembrado', q: '¿Los logs estructurados ayudan a encontrar un bug más rápido?', f: 'El bug se veía leyendo el código, así que los logs no hicieron falta: la corrida débil lo encontró en 2 acciones. El arnés cambió la disciplina: la fuerte arregló primero el typecheck roto y terminó todo en verde.', m: [['Débil', 'arreglado · 59 s · con errores'], ['Fuerte', 'arreglado · 92 s · en verde']] },
-  { id: 'P05', dye: 'Cardenillo', t: 'Separar al que hace del que revisa', q: 'Un rol, generador + evaluador, o planificador + generador + evaluador: ¿cuánto suma cada rol?', f: 'Con el mismo juez independiente: el evaluador separado subió la nota de 3,9 a 4,5 encontrando 6 defectos reales; sumar un planificador no mejoró (4,0) y fue lo más caro.', m: [['Un rol', 'juez 3,9 · US$2,54'], ['Gen + eval', 'juez 4,5 · US$7,05'], ['+ planif.', 'juez 4,0 · US$8,60']] },
-  { id: 'P06', dye: 'Azafrán', t: 'Arnés completo, benchmark y ablación', q: 'Con todo lo aprendido, ¿qué piezas importan de verdad?', f: 'Las cinco variantes pasaron 12/12 en la suite oculta. La diferencia quedó en el repo: mi arnés dejó 22 tests, un commit por función y el estado completo; el débil, cero tests, cero commits y el sandbox desactivado. Lo que más pesó fueron las instrucciones.', m: [['Débil', '12/12 · US$1,19 · 0 tests'], ['Mío', '12/12 · US$2,74 · 22 tests']] },
-  { id: 'P07', dye: 'Liquen', t: 'Loops: objetivo, timer y maker-checker', q: '¿Qué pasa cuando el agente corre solo, sin nadie en el loop?', f: 'El loop con timer chequeaba sin agente y solo lo despertaba si algo fallaba: revirtió las dos fallas inyectadas por US$0,23. El loop de objetivo llegó a la meta en 4 vueltas, pero una sola pasada llegó más lejos por el mismo costo.', m: [['Timer', '2/2 fallas · US$0,23'], ['Objetivo', '99% en 4 vueltas'], ['Maker-checker', 'PASS · confirmado 7/7']] },
-  { id: 'P08', dye: 'Campeche', t: 'El flujo como grafo', q: '¿Qué aparece al dibujar el loop como nodos, aristas y estado compartido?', f: 'Cuatro decisiones que nadie había escrito. El grafo verifica en paralelo en worktrees (34% más rápido), vuelve atrás según la capa del problema y se detiene en un nodo humano que escala si nadie responde.', m: [['Paralelo', '123 s contra 186 s'], ['Función', '6/6 · regresión 12/12'], ['Aprobación', 'espera a una persona']] }
+  { id: 'P01',
+    en: { dye: 'Madder', t: 'Prompt only vs. a minimal harness', q: 'How much do an AGENTS.md, an init.sh and a feature list change?', f: 'Both runs delivered all 4 features. With the harness it was 21% faster and 30% cheaper, wrote an end-to-end test and left the state ready to continue. Without it, the agent redesigned components and added an external API integration nobody asked for.', m: [['Weak', '4/4 · 11:40 · US$3.28'], ['Strong', '4/4 · 9:13 · US$2.30']] },
+    es: { dye: 'Rubia', t: 'Solo prompt contra arnés mínimo', q: '¿Cuánto cambia un AGENTS.md, un init.sh y una lista de funciones?', f: 'Las dos corridas cumplieron las 4 funciones. Con arnés fue un 21% más rápida, un 30% más barata, escribió un test de punta a punta y dejó el estado listo para seguir. Sin arnés, el agente rediseñó componentes y sumó una integración con una API externa que nadie pidió.', m: [['Débil', '4/4 · 11:40 · US$3,28'], ['Fuerte', '4/4 · 9:13 · US$2,30']] } },
+  { id: 'P02',
+    en: { dye: 'Weld', t: 'A readable, resumable repo', q: 'Can a fresh session pick up the work by reading only the repo?', f: 'Both fresh sessions found their footing in 3 actions. Without a handoff, the second one did one of the two pending features and left what it learned only in the chat; with a handoff, it finished both and wrote it down again.', m: [['Weak', '2/3 features · US$1.85'], ['Strong', '3/3 features · US$2.04']] },
+    es: { dye: 'Gualda', t: 'Repo legible y retomable', q: '¿Una sesión nueva puede retomar el trabajo leyendo solo el repo?', f: 'Las dos sesiones nuevas se ubicaron en 3 acciones. Sin traspaso, la segunda hizo una de las dos funciones pendientes y dejó lo que descubrió solo en el chat; con traspaso, terminó las dos y volvió a dejarlo escrito.', m: [['Débil', '2/3 funciones · US$1,85'], ['Fuerte', '3/3 funciones · US$2,04']] } },
+  { id: 'P03',
+    en: { dye: 'Indigo', t: 'Continuity across restarts', q: 'With sessions cut off mid-work, does the state get lost?', f: 'One feature at a time, with a commit per feature, survived a real cutoff without losing anything. But both runs marked all 4 features as done with the UI disconnected: the evidence they asked for was the wrong kind.', m: [['Weak', '4/4 "done" · UI disconnected'], ['Strong', '4/4 "done" · UI disconnected']] },
+    es: { dye: 'Índigo', t: 'Continuidad con reinicios', q: 'Con sesiones cortadas a mitad de trabajo, ¿se pierde el estado?', f: 'Una función a la vez, con commit por función, sobrevivió a un corte real sin perder nada. Pero las dos corridas marcaron las 4 funciones como terminadas con la interfaz desconectada: la evidencia que pedían era del tipo equivocado.', m: [['Débil', '4/4 "terminado" · UI cortada'], ['Fuerte', '4/4 "terminado" · UI cortada']] } },
+  { id: 'P04',
+    en: { dye: 'Cochineal', t: 'Runtime feedback with a seeded bug', q: 'Do structured logs help find a bug faster?', f: 'The bug was visible from reading the code, so the logs were not needed: the weak run found it in 2 actions. The harness changed the discipline: the strong run fixed the broken typecheck first and finished all green.', m: [['Weak', 'fixed · 59 s · with errors'], ['Strong', 'fixed · 92 s · all green']] },
+    es: { dye: 'Cochinilla', t: 'Feedback de runtime con un bug sembrado', q: '¿Los logs estructurados ayudan a encontrar un bug más rápido?', f: 'El bug se veía leyendo el código, así que los logs no hicieron falta: la corrida débil lo encontró en 2 acciones. El arnés cambió la disciplina: la fuerte arregló primero el typecheck roto y terminó todo en verde.', m: [['Débil', 'arreglado · 59 s · con errores'], ['Fuerte', 'arreglado · 92 s · en verde']] } },
+  { id: 'P05',
+    en: { dye: 'Verdigris', t: 'Separating the doer from the reviewer', q: 'One role, generator + evaluator, or planner + generator + evaluator: how much does each role add?', f: 'With the same independent judge: the separate evaluator raised the score from 3.9 to 4.5 by finding 6 real defects; adding a planner did not improve it (4.0) and was the most expensive.', m: [['One role', 'judge 3.9 · US$2.54'], ['Gen + eval', 'judge 4.5 · US$7.05'], ['+ planner', 'judge 4.0 · US$8.60']] },
+    es: { dye: 'Cardenillo', t: 'Separar al que hace del que revisa', q: 'Un rol, generador + evaluador, o planificador + generador + evaluador: ¿cuánto suma cada rol?', f: 'Con el mismo juez independiente: el evaluador separado subió la nota de 3,9 a 4,5 encontrando 6 defectos reales; sumar un planificador no mejoró (4,0) y fue lo más caro.', m: [['Un rol', 'juez 3,9 · US$2,54'], ['Gen + eval', 'juez 4,5 · US$7,05'], ['+ planif.', 'juez 4,0 · US$8,60']] } },
+  { id: 'P06',
+    en: { dye: 'Saffron', t: 'Full harness, benchmark and ablation', q: 'With everything learned, which pieces really matter?', f: 'All five variants passed 12/12 on the hidden suite. The difference stayed in the repo: my harness left 22 tests, a commit per feature and complete state; the weak one, zero tests, zero commits and the sandbox disabled. Instructions mattered most.', m: [['Weak', '12/12 · US$1.19 · 0 tests'], ['Mine', '12/12 · US$2.74 · 22 tests']] },
+    es: { dye: 'Azafrán', t: 'Arnés completo, benchmark y ablación', q: 'Con todo lo aprendido, ¿qué piezas importan de verdad?', f: 'Las cinco variantes pasaron 12/12 en la suite oculta. La diferencia quedó en el repo: mi arnés dejó 22 tests, un commit por función y el estado completo; el débil, cero tests, cero commits y el sandbox desactivado. Lo que más pesó fueron las instrucciones.', m: [['Débil', '12/12 · US$1,19 · 0 tests'], ['Mío', '12/12 · US$2,74 · 22 tests']] } },
+  { id: 'P07',
+    en: { dye: 'Lichen', t: 'Loops: goal, timer and maker-checker', q: 'What happens when the agent runs on its own, with nobody in the loop?', f: 'The timer loop checked without an agent and only woke one when something failed: it reverted both injected failures for US$0.23. The goal loop reached the target in 4 rounds, but a single pass got further for the same cost.', m: [['Timer', '2/2 failures · US$0.23'], ['Goal', '99% in 4 rounds'], ['Maker-checker', 'PASS · confirmed 7/7']] },
+    es: { dye: 'Liquen', t: 'Loops: objetivo, timer y maker-checker', q: '¿Qué pasa cuando el agente corre solo, sin nadie en el loop?', f: 'El loop con timer chequeaba sin agente y solo lo despertaba si algo fallaba: revirtió las dos fallas inyectadas por US$0,23. El loop de objetivo llegó a la meta en 4 vueltas, pero una sola pasada llegó más lejos por el mismo costo.', m: [['Timer', '2/2 fallas · US$0,23'], ['Objetivo', '99% en 4 vueltas'], ['Maker-checker', 'PASS · confirmado 7/7']] } },
+  { id: 'P08',
+    en: { dye: 'Logwood', t: 'The workflow as a graph', q: 'What shows up when you draw the loop as nodes, edges and shared state?', f: 'Four decisions nobody had written down. The graph verifies in parallel in worktrees (34% faster), rolls back according to the layer of the problem and stops at a human node that escalates if nobody answers.', m: [['Parallel', '123 s vs. 186 s'], ['Feature', '6/6 · regression 12/12'], ['Approval', 'waits for a person']] },
+    es: { dye: 'Campeche', t: 'El flujo como grafo', q: '¿Qué aparece al dibujar el loop como nodos, aristas y estado compartido?', f: 'Cuatro decisiones que nadie había escrito. El grafo verifica en paralelo en worktrees (34% más rápido), vuelve atrás según la capa del problema y se detiene en un nodo humano que escala si nadie responde.', m: [['Paralelo', '123 s contra 186 s'], ['Función', '6/6 · regresión 12/12'], ['Aprobación', 'espera a una persona']] } }
 ];
+
+/* Strings drawn by script */
+const UI = {
+  en: { never: 'never ran', cap: 'cut off by the spending cap', turns: 'turns', threads: 'threads', total: 'total', dye: 'dye', more: 'Metrics and conclusion', swAria: (id, n) => 'Weave swatch for ' + id + ': ' + n + ' threads, one per session', plies: ['Instructions', 'Tools', 'Environment', 'State', 'Verification'] },
+  es: { never: 'no llegó a correr', cap: 'cortada por el tope de gasto', turns: 'turnos', threads: 'hilos', total: 'en total', dye: 'tinte', more: 'Métricas y conclusión', swAria: (id, n) => 'Muestra de tejido del ' + id + ': ' + n + ' hilos, uno por sesión', plies: ['Instrucciones', 'Herramientas', 'Entorno', 'Estado', 'Verificación'] }
+};
+
+/* Spanish text for every element marked with data-i18n (the English text is in the HTML itself) */
+const ES = {
+  'doc.title': '48 hilos · Harness Engineering',
+  'doc.desc': 'Las 48 sesiones de agente de un portfolio de harness engineering, dibujadas como hilos trenzados en un mismo arnés.',
+  'rope.aria': '48 hilos de colores, uno por sesión de agente, que entran desde la izquierda, se trenzan en una cuerda en el centro y se separan a la derecha en ocho haces, uno por proyecto.',
+  'hero.big': '48 hilos',
+  'hero.sub': 'trenzados en un mismo arnés',
+  'hero.lead': 'Cada hilo es una sesión real de Claude Code. El mismo modelo en todas; lo único que cambia es el harness: las instrucciones, la verificación y el estado que lo rodean.',
+  'hero.repo': 'Ver el repositorio',
+  'hero.read': 'Cómo leer los hilos',
+  'hero.hint': 'Pasá el mouse por un hilo para ver qué sesión es.',
+  'read.label': 'Leyenda',
+  'read.h': 'Cómo leer los hilos',
+  'read.p': 'Ningún trazo es decorativo. Cada uno sale de un transcript guardado en el repositorio.',
+  'k.color': 'Color', 'k.color.p': 'El proyecto. Ocho tintes, uno por proyecto, del P01 al P08.',
+  'k.width': 'Grosor', 'k.width.p': 'Lo que costó la sesión: de US$0,11 a US$3,28.',
+  'k.wave': 'Ondulación', 'k.wave.p': 'Los turnos del agente: más idas y vueltas, más ondas.',
+  'k.knot': 'Nudo', 'k.knot.p': 'Una sesión cortada a mitad de trabajo por el tope de gasto (P03).',
+  'k.cut': 'Hilo cortado', 'k.cut.p': 'Una sesión que no llegó a correr: Claude Code se actualizó en ese momento (P07).',
+  'k.fray': 'Deshilachado', 'k.fray.p': 'Funciones marcadas como terminadas con la interfaz desconectada (P03).',
+  'plies.aria': 'Una cuerda de cinco cabos retorcidos: instrucciones, herramientas, entorno, estado y verificación.',
+  'h.label': 'El concepto',
+  'h.h': 'Agente = modelo + arnés',
+  'h.p': 'El modelo tira; el arnés decide hacia dónde va esa fuerza. La idea del curso es que, cuando un agente falla, primero hay que revisar el arnés y recién después el modelo. Lo puse a prueba en ocho proyectos, cambiando solo el arnés y midiendo qué pasaba. Un arnés tiene cinco cabos:',
+  'ply1': 'Instrucciones', 'ply1.p': '<code>AGENTS.md</code> corto que enruta a la documentación, con reglas de inicio y de cierre.',
+  'ply2': 'Herramientas', 'ply2.p': 'Shell, archivos, tests y scripts de verificación, con mínimo privilegio.',
+  'ply3': 'Entorno', 'ply3.p': '<code>init.sh</code> que confirma que el proyecto compila y arranca antes de trabajar.',
+  'ply4': 'Estado', 'ply4.p': 'Lista de funciones, traspaso y log de progreso para la próxima sesión.',
+  'ply5': 'Verificación', 'ply5.p': 'Tipos, tests y una prueba de punta a punta en la app real.',
+  'sw.label': 'Ocho muestras',
+  'sw.h': 'Cada proyecto, tejido con sus propios hilos',
+  'sw.p': 'La urdimbre de cada muestra son las sesiones de ese proyecto, en orden. Lo que dicen, con la misma tarea y el mismo modelo en las dos versiones:',
+  'fi.label': 'Lo que dejó el tejido',
+  'fi.h': 'Hallazgos',
+  'c1.tag': 'El principal', 'c1.h': 'Con modelos actuales, el arnés cambia <em>cómo se trabaja</em> más que si se termina.', 'c1.p': 'En casi todos los proyectos las dos versiones entregaron la tarea. El arnés movió el costo, la verificación, los tests, los commits y lo que queda escrito para la próxima sesión.',
+  'c2.tag': 'Verificación · P03', 'c2.h': 'La evidencia del tipo equivocado produce <em>falsos "terminado"</em>.', 'c2.p': 'Dos agentes marcaron cuatro funciones como terminadas con la interfaz desconectada. Cumplieron la regla de no marcar sin evidencia, pero la evidencia era el build y tests de servicios. Solo una prueba en la app real lo detecta.',
+  'c3.tag': 'El curso', 'c3.h': 'Las soluciones del propio curso <em>repiten un defecto</em>.', 'c3.p': 'El preload importa un archivo local con el sandbox de Electron activo y la interfaz queda sin acceso a la app, incluso en la solución del proyecto final que su rúbrica califica 5/5. Lo convertí en una regla ejecutable.',
+  'c4.tag': 'Especificación · P06', 'c4.h': 'Una tarea bien especificada <em>hizo buena parte del trabajo</em>.', 'c4.p': 'Con nombres de API fijos y "tiene que funcionar en la app real", las cinco variantes pasaron la suite oculta de 12 chequeos, incluido el arnés débil.',
+  'c5.tag': 'Roles · P05', 'c5.h': 'Un evaluador independiente <em>suma</em>; un planificador, no siempre.', 'c5.p': 'Según el mismo juez, el evaluador que usaba la app subió la nota de 3,9 a 4,5. El planificador amplió el trabajo, costó más y quedó en 4,0.',
+  'c6.tag': 'Loops y grafos · P07, P08', 'c6.h': 'Un loop vale <em>lo que su condición de parada</em>.', 'c6.p': 'El loop con timer chequeaba primero sin agente y solo lo despertaba si algo fallaba: revirtió dos fallas por US$0,23. Dibujar el loop como grafo mostró cuatro decisiones que nadie había escrito.',
+  'pc.label': 'Mi arnés',
+  'pc.h': 'Cada pieza responde a una falla',
+  'pc1.p': 'Rutina de inicio y cierre, una función a la vez, commit por función.', 'pc1.s': 'Clases 03–07 · P02, P03',
+  'pc2': 'Definición de terminado en tres capas', 'pc2.p': 'Estática, tests y puente, prueba en la app real.', 'pc2.s': 'Clases 09–10 · falsos "terminado" de P03',
+  'pc3': '<code>feature_list.json</code> con comando de verificación', 'pc3.p': 'Comportamiento, verificación y estado en cada función.', 'pc3.s': 'Clase 08',
+  'pc4': '<code>init.sh</code> que abre la app', 'pc4.p': 'Entorno, tipos, build, arquitectura y el puente de la interfaz.', 'pc4.s': 'Clase 06 · P01–P04',
+  'pc5': 'Regla del preload', 'pc5.p': 'Mensaje con qué falló, por qué y cómo arreglarlo.', 'pc5.s': 'Clase 10 · el defecto que se repitió en todos los proyectos',
+  'tl.label': 'Herramental',
+  'tl.h': 'Para repetir cada experimento',
+  'tl1': 'Una sesión no interactiva en una carpeta aislada, con transcript, diff y tiempos.',
+  'tl2': 'Pregunta a la app abierta si la interfaz tiene acceso a la API.',
+  'tl3': 'Suite de punta a punta que los agentes no veían: 12 chequeos y dos reinicios.',
+  'tl4': 'Tres configuraciones de roles y un juez independiente.',
+  'tl5': 'Los loops, y el grafo con verificación en paralelo y aprobación humana.',
+  'lm.label': 'Para leer los números',
+  'lm.h': 'Límites',
+  'lm1': 'Una corrida por condición: las diferencias de tiempo y costo son indicativas, no estadísticas.',
+  'lm2': 'Un solo modelo, Claude Opus 5.5. Con otro, varias conclusiones pueden cambiar.',
+  'lm3': 'Sesiones en modo no interactivo, no a mano como propone el curso, para medirlas igual.',
+  'lm4': 'Varios protocolos los diseñé yo porque el curso no los define; cada ajuste está en el <code>metrics.md</code> de su proyecto.',
+  'ft.course': 'Sobre el curso <a href="https://github.com/walkinglabs/learn-harness-engineering" target="_blank" rel="noopener">Learn Harness Engineering</a> (WalkingLabs, MIT)',
+  'ft.repo': 'Repositorio en GitHub'
+};
+const EN = {};
+document.querySelectorAll('[data-i18n]').forEach((el) => { EN[el.dataset.i18n] = el.innerHTML; });
+document.querySelectorAll('[data-i18n-aria]').forEach((el) => { EN[el.dataset.i18nAria] = el.getAttribute('aria-label'); });
+const metaDesc = document.querySelector('meta[name="description"]');
+EN['doc.title'] = document.title; EN['doc.desc'] = metaDesc.content;
+const DICT = { en: EN, es: ES };
+let lang = 'en';
+try { const saved = localStorage.getItem('harness-lang'); if (saved === 'en' || saved === 'es') lang = saved; } catch (e) { /* storage unavailable: stay in English */ }
+const L = () => UI[lang];
+const P = (p) => p[lang];
+
 const REPO = 'https://github.com/matiasrodriguezc/harness-engineering/blob/main/';
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let C = {};
@@ -282,12 +393,12 @@ function readColors() {
 }
 const dyeOf = (p) => C['d' + parseInt(p.slice(1), 10)];
 function rng(seed) { let s = seed * 9301 + 49297; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
-const fmtCost = (c) => 'US$' + c.toFixed(2).replace('.', ',');
+const fmtCost = (c) => 'US$' + (lang === 'es' ? c.toFixed(2).replace('.', ',') : c.toFixed(2));
 const fmtDur = (d) => d >= 60 ? Math.floor(d / 60) + ':' + String(d % 60).padStart(2, '0') : d + ' s';
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 function fitCanvas(cv) { const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1); cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); return { ctx, w: r.width, h: r.height }; }
 
-/* ---------- El arnés: los 49 hilos ---------- */
+/* ---------- The harness: one strand per session ---------- */
 const rope = document.getElementById('rope'), tip = document.getElementById('tip');
 let R, strands = [], pointer = null, hover = -1, t0 = performance.now();
 function buildStrands() {
@@ -364,9 +475,9 @@ function nearest(px, py) {
 }
 function showTip(i, px, py) {
   if (i < 0) { tip.hidden = true; return; }
-  const s = strands[i].s, p = PROJECTS.find((x) => x.id === s.p);
-  const state = s.cut ? 'no llegó a correr' : s.stop ? 'cortada por el tope de gasto' : fmtCost(s.c) + ' · ' + s.t + ' turnos · ' + fmtDur(s.d);
-  tip.innerHTML = '<b>' + s.p + ' · ' + s.l + '</b><br><span>' + state + '</span>';
+  const s = strands[i].s;
+  const state = s.cut ? L().never : s.stop ? L().cap : fmtCost(s.c) + ' · ' + s.t + ' ' + L().turns + ' · ' + fmtDur(s.d);
+  tip.innerHTML = '<b>' + s.p + ' · ' + s[lang] + '</b><br><span>' + state + '</span>';
   tip.style.setProperty('--tipc', dyeOf(s.p)); tip.hidden = false;
   const tw = tip.offsetWidth; tip.style.left = Math.min(R.w - tw - 4, Math.max(4, px + 14)) + 'px'; tip.style.top = Math.max(4, py - 54) + 'px';
 }
@@ -375,7 +486,7 @@ function onLeave() { pointer = null; hover = -1; tip.hidden = true; if (reduce) 
 rope.addEventListener('pointermove', onMove); rope.addEventListener('pointerdown', onMove); rope.addEventListener('pointerleave', onLeave);
 function loop(now) { drawRope(now); requestAnimationFrame(loop); }
 
-/* ---------- Leyenda ---------- */
+/* ---------- Legend ---------- */
 function drawKeys() {
   document.querySelectorAll('canvas[data-key]').forEach((cv) => {
     const { ctx, w, h } = fitCanvas(cv); const k = cv.dataset.key, y = h / 2; ctx.clearRect(0, 0, w, h); ctx.lineCap = 'round';
@@ -387,32 +498,32 @@ function drawKeys() {
     if (k === 'cut') { line(y, 1.6, C.d7, 0, 0, w * 0.55); for (let f = -2; f <= 2; f++) { ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(w * 0.55 - 4, y); ctx.lineTo(w * 0.55 + 6 + Math.abs(f) * 2, y + f * 4); ctx.stroke(); } }
     if (k === 'fray') { line(y, 2.4, C.d3, 0, 0, w * 0.7); for (let f = -1; f <= 1; f++) { ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(w * 0.7 - 4, y); ctx.quadraticCurveTo(w * 0.7 + 8, y + f * 3, w * 0.7 + 22, y + f * 9); ctx.stroke(); } }
   });
-  const dyes = document.getElementById('dyes');
-  dyes.innerHTML = PROJECTS.map((p) => '<div class="dye"><i style="background:' + dyeOf(p.id) + '"></i><div><b>' + p.id + '</b> · ' + p.dye + '<small>' + p.t + '</small></div></div>').join('');
+}
+function buildDyes() {
+  document.getElementById('dyes').innerHTML = PROJECTS.map((p) => '<div class="dye"><i style="background:' + dyeOf(p.id) + '"></i><div><b>' + p.id + '</b> · ' + P(p).dye + '<small>' + P(p).t + '</small></div></div>').join('');
 }
 
-/* ---------- Cinco cabos ---------- */
+/* ---------- Five plies ---------- */
 function drawPlies() {
   const g = document.getElementById('ply-g'); let out = '';
-  const names = ['Instrucciones', 'Herramientas', 'Entorno', 'Estado', 'Verificación'];
   for (let j = 0; j < 5; j++) {
     let d = ''; for (let x = 20; x <= 400; x += 4) { const y = 130 + 34 * Math.sin(x * 0.028 + j * (Math.PI * 2 / 5)) * Math.min(1, (x - 20) / 60, (400 - x) / 60); d += (x === 20 ? 'M' : 'L') + x + ' ' + y.toFixed(1) + ' '; }
     const op = (0.35 + j * 0.15).toFixed(2);
     out += '<path d="' + d + '" stroke="' + C.ink + '" stroke-opacity="' + op + '" stroke-width="' + (7 - j * 0.6).toFixed(1) + '"/>';
   }
-  names.forEach((n, j) => { out += '<text x="' + (36 + j * 76) + '" y="248" fill="' + C.muted + '" font-family="Inter, sans-serif" font-size="12">' + n + '</text>'; });
+  L().plies.forEach((n, j) => { out += '<text x="' + (50 + j * 80) + '" y="248" text-anchor="middle" fill="' + C.muted + '" font-family="Inter, sans-serif" font-size="12">' + n + '</text>'; });
   g.innerHTML = out;
 }
 
-/* ---------- Muestras de tejido ---------- */
+/* ---------- Weave swatches ---------- */
 function buildSwatches() {
   const box = document.getElementById('swatches');
   box.innerHTML = PROJECTS.map((p) => {
-    const ss = SESSIONS.filter((s) => s.p === p.id), cost = ss.reduce((a, s) => a + s.c, 0);
-    return '<article class="sw" style="--c:var(--d' + parseInt(p.id.slice(1), 10) + ')"><canvas data-sw="' + p.id + '" role="img" aria-label="Muestra de tejido del ' + p.id + ': ' + ss.length + ' hilos, uno por sesión"></canvas>' +
-      '<div class="body"><div class="head"><span class="n">' + p.id + '</span><h3>' + p.t + '</h3></div><p class="q">' + p.q + '</p><p class="f">' + p.f + '</p>' +
-      '<p class="meta">' + ss.length + ' hilos · ' + fmtCost(cost) + ' en total · tinte: ' + p.dye.toLowerCase() + '</p><a class="more" href="' + REPO + p.id.toLowerCase() + '/metricas.md" target="_blank" rel="noopener">Métricas y conclusión</a></div>' +
-      '<dl>' + p.m.map(([a, b]) => '<dt>' + a + '</dt><dd>' + b + '</dd>').join('') + '</dl></article>';
+    const ss = SESSIONS.filter((s) => s.p === p.id), cost = ss.reduce((a, s) => a + s.c, 0), x = P(p);
+    return '<article class="sw" style="--c:var(--d' + parseInt(p.id.slice(1), 10) + ')"><canvas data-sw="' + p.id + '" role="img" aria-label="' + L().swAria(p.id, ss.length) + '"></canvas>' +
+      '<div class="body"><div class="head"><span class="n">' + p.id + '</span><h3>' + x.t + '</h3></div><p class="q">' + x.q + '</p><p class="f">' + x.f + '</p>' +
+      '<p class="meta">' + ss.length + ' ' + L().threads + ' · ' + fmtCost(cost) + ' ' + L().total + ' · ' + L().dye + ': ' + x.dye.toLowerCase() + '</p><a class="more" href="' + REPO + p.id.toLowerCase() + '/metrics.md" target="_blank" rel="noopener">' + L().more + '</a></div>' +
+      '<dl>' + x.m.map(([a, b]) => '<dt>' + a + '</dt><dd>' + b + '</dd>').join('') + '</dl></article>';
   }).join('');
 }
 function drawSwatches() {
@@ -439,11 +550,30 @@ function drawSwatches() {
   });
 }
 
-/* ---------- Arranque ---------- */
+/* ---------- Language ---------- */
+function applyText() {
+  const d = DICT[lang];
+  document.documentElement.lang = lang;
+  document.title = d['doc.title']; metaDesc.content = d['doc.desc'];
+  document.querySelectorAll('[data-i18n]').forEach((el) => { const v = d[el.dataset.i18n]; if (v != null) el.innerHTML = v; });
+  document.querySelectorAll('[data-i18n-aria]').forEach((el) => { const v = d[el.dataset.i18nAria]; if (v != null) el.setAttribute('aria-label', v); });
+  document.querySelectorAll('.lang button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+}
+function setLang(next) {
+  if (next === lang) return;
+  lang = next;
+  try { localStorage.setItem('harness-lang', lang); } catch (e) { /* the choice just won't persist */ }
+  tip.hidden = true;
+  applyText(); buildDyes(); buildSwatches(); drawPlies(); drawSwatches();
+}
+document.querySelectorAll('.lang button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
+
+/* ---------- Start ---------- */
 function layout() { R = fitCanvas(rope); R.lx = labelX(); drawKeys(); drawPlies(); drawSwatches(); if (reduce) drawRope(performance.now()); }
-function start() { readColors(); buildStrands(); buildSwatches(); layout(); if (!reduce) requestAnimationFrame(loop); }
+function start() { readColors(); buildStrands(); buildDyes(); buildSwatches(); layout(); if (!reduce) requestAnimationFrame(loop); }
+applyText();
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(layout, 120); });
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); layout(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readColors(); buildDyes(); layout(); });
 (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(start);
 </script>
 </body>

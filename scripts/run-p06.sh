@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Corre una variante del P06: arma la carpeta, corre la sesión del agente con la tarea fija,
-# opcionalmente una pasada de limpieza, compila y corre la suite de aceptación oculta.
-# Uso: run-p06.sh <nombre> <carpeta-del-harness|-> <carpeta-de-evidencia> [limpieza]
+# Runs one P06 variant: sets up the folder, runs the agent session with the fixed task,
+# optionally a cleanup pass, builds and runs the hidden acceptance suite.
+# Usage: run-p06.sh <name> <harness-folder|-> <evidence-folder> [cleanup]
 set -u
 NAME="$1"; HARNESS="$2"; EV="$3"; CLEANUP="${4:-}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -19,13 +19,13 @@ if [ "$HARNESS" != "-" ]; then cp -R "$HARNESS"/. "$RUN"/; fi
 mkdir -p "$EV"
 (cd "$RUN" && git init -q && printf 'node_modules/\ndist/\n' >> .git/info/exclude && git add -A && git -c user.name=run -c user.email=run@local commit -qm "starter P06 ($NAME)")
 
-"$HERE/run-session.sh" "$RUN" "$EV/1-tarea" "$TASK"
-if [ "$CLEANUP" = "limpieza" ]; then
+"$HERE/run-session.sh" "$RUN" "$EV/1-task" "$TASK"
+if [ "$CLEANUP" = "cleanup" ]; then
   (cd "$RUN" && npm install --silent >/dev/null 2>&1; env -u NODE_OPTIONS npm run build >/dev/null 2>&1)
-  node --experimental-websocket "$HERE/p06-acceptance.mjs" "$RUN" 9343 2>/dev/null > "$EV/aceptacion-antes-de-limpieza.json"
-  "$HERE/run-session.sh" "$RUN" "$EV/2-limpieza" "Do a cleanup pass on this repository: run bash init.sh, go through clean-state-checklist.md, remove leftovers, fix anything that fails, make sure every feature marked passing in feature_list.json still passes its verification, and update session-handoff.md and claude-progress.md. Do not add new features."
+  node --experimental-websocket "$HERE/p06-acceptance.mjs" "$RUN" 9343 2>/dev/null > "$EV/acceptance-before-cleanup.json"
+  "$HERE/run-session.sh" "$RUN" "$EV/2-cleanup" "Do a cleanup pass on this repository: run bash init.sh, go through clean-state-checklist.md, remove leftovers, fix anything that fails, make sure every feature marked passing in feature_list.json still passes its verification, and update session-handoff.md and claude-progress.md. Do not add new features."
 fi
 (cd "$RUN" && npm install --silent >/dev/null 2>&1; env -u NODE_OPTIONS npm run build > "$EV/build.txt" 2>&1; echo "build-exit=$?" >> "$EV/build.txt")
-node --experimental-websocket "$HERE/p06-acceptance.mjs" "$RUN" 9343 2>/dev/null > "$EV/aceptacion.json"
-(cd "$RUN" && git log --oneline > "$EV/historial-git.txt"; git diff HEAD~0 --stat >/dev/null)
-python3 -I -c "import json,sys; d=json.load(open(sys.argv[1])); print(sys.argv[2], d['passed'], '/', d['total'])" "$EV/aceptacion.json" "$NAME" | tee -a "$(dirname "$EV")/resumen-aceptacion.txt"
+node --experimental-websocket "$HERE/p06-acceptance.mjs" "$RUN" 9343 2>/dev/null > "$EV/acceptance.json"
+(cd "$RUN" && git log --oneline > "$EV/git-log.txt"; git diff HEAD~0 --stat >/dev/null)
+python3 -I -c "import json,sys; d=json.load(open(sys.argv[1])); print(sys.argv[2], d['passed'], '/', d['total'])" "$EV/acceptance.json" "$NAME" | tee -a "$(dirname "$EV")/acceptance-summary.txt"

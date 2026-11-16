@@ -1,10 +1,10 @@
-// Se conecta por Chrome DevTools a una app Electron abierta con --remote-debugging-port
-// y pregunta si la ventana tiene acceso a la API del preload (window.knowledgeBase).
-// Uso: node --experimental-websocket scripts/check-bridge.mjs [puerto]
+// Connects over Chrome DevTools to an Electron app opened with --remote-debugging-port
+// and asks whether the window has access to the preload API (window.knowledgeBase).
+// Usage: node --experimental-websocket scripts/check-bridge.mjs [port]
 const port = process.argv[2] || '9333';
 const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
 const page = targets.find((t) => t.type === 'page');
-if (!page) { console.log('No hay ventana abierta'); process.exit(2); }
+if (!page) { console.log('No window open'); process.exit(2); }
 const ws = new WebSocket(page.webSocketDebuggerUrl);
 await new Promise((r) => ws.addEventListener('open', r));
 const ask = (expression) => new Promise((resolve) => {

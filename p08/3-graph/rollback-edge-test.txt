@@ -1,0 +1,4 @@
+both PASS (expected: approval) → approval
+functional fails on implementation (expected: implement) → implement
+review: the spec misreads the feature (expected: plan) → plan
+both fail, one on requirements (expected: plan) → plan

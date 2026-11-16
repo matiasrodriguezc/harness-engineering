@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Encadena sesiones nuevas sobre la misma carpeta hasta que todas las funciones de
-# feature_list.json estén en "pass" o se llegue al máximo de sesiones.
-# Uso: run-multi.sh <carpeta-de-corrida> <carpeta-de-evidencia> <max-sesiones> <tope-usd> "<prompt-sesión-1>" "<prompt-siguientes>"
+# Chains new sessions on the same folder until every feature in
+# feature_list.json is "pass" or the maximum number of sessions is reached.
+# Usage: run-multi.sh <run-folder> <evidence-folder> <max-sessions> <cap-usd> "<session-1-prompt>" "<next-prompts>"
 set -u
 RUN_DIR="$1"; EVID="$2"; MAX="$3"; BUDGET="$4"; P1="$5"; PN="$6"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -10,8 +10,8 @@ pending() {
 }
 for i in $(seq 1 "$MAX"); do
   if [ "$i" -eq 1 ]; then P="$P1"; else P="$PN"; fi
-  "$HERE/run-session.sh" "$RUN_DIR" "$EVID/sesion-$i" "$P" --max-budget-usd "$BUDGET"
+  "$HERE/run-session.sh" "$RUN_DIR" "$EVID/session-$i" "$P" --max-budget-usd "$BUDGET"
   left=$(pending)
-  echo "sesion-$i: funciones pendientes según feature_list.json = $left" | tee -a "$EVID/resumen-sesiones.txt"
+  echo "session-$i: pending features according to feature_list.json = $left" | tee -a "$EVID/sessions-summary.txt"
   [ "$left" -eq 0 ] && break
 done

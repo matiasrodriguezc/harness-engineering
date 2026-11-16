@@ -1,8 +1,8 @@
 # loop-state.md
 
-Loop: maker-checker para búsqueda de documentos. Para con 2 PASS seguidos o 6 vueltas.
+Loop: maker-checker for document search. Stops after 2 PASS in a row or 6 rounds.
 
-## Vuelta 1
+## Round 1
 
 ### Maker (round 1)
 
@@ -45,7 +45,7 @@ Loop: maker-checker para búsqueda de documentos. Para con 2 PASS seguidos o 6 v
 
 **What I ran:** `npm run check`, `npm test` (38/38), `check-architecture.sh` (PASS), `smoke-bridge.sh` (PASS), `npm run build`. The Maker's e2e scripts: document-search 10/10, answer-feedback 7/7, reset-all-data 6/6, conversation-history 13/13. My own `evaluation/checker-round1.mjs` (real CDP keystrokes, results checked against a brute-force oracle, plus ask/conversation/import regressions): 28/28 passed. Details are in `checker-verdict.md`.
 
-## Vuelta 2
+## Round 2
 
 ### Maker (round 2)
 

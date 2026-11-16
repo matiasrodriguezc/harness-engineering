@@ -1,0 +1,5 @@
+weak 12 / 12
+mine 12 / 12
+no-e2e 12 / 12
+no-feature-list 12 / 12
+no-instructions 12 / 12

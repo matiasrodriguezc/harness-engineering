@@ -1,0 +1,15 @@
+b889634 end of session: session-1
+
+ feature_list.json                          |   26 +-
+ package-lock.json                          | 4092 ++++++++++++++++++++++++++++
+ src/renderer/App.tsx                       |   34 +-
+ src/renderer/components/DocumentDetail.tsx |    7 +-
+ src/renderer/components/DocumentList.tsx   |    3 +-
+ src/renderer/components/ImportPanel.tsx    |    3 +-
+ src/renderer/components/QuestionPanel.tsx  |    2 +-
+ src/renderer/components/StatusBar.tsx      |    8 +-
+ src/services/document-service.ts           |   29 +
+ src/services/indexing-service.ts           |  128 +-
+ src/services/qa-service.ts                 |    2 +-
+ src/shared/types.ts                        |    4 +
+ 12 files changed, 4235 insertions(+), 103 deletions(-)

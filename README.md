@@ -1,69 +1,71 @@
 # Harness Engineering · Portfolio
 
-Ocho experimentos medidos con Claude Code sobre el curso [Learn Harness Engineering](https://github.com/walkinglabs/learn-harness-engineering) (WalkingLabs, licencia MIT): cómo el entorno alrededor de un agente de IA (instrucciones, herramientas, entorno, estado y verificación) cambia lo que entrega el mismo modelo.
+Eight measured experiments with Claude Code on the [Learn Harness Engineering](https://github.com/walkinglabs/learn-harness-engineering) course (WalkingLabs, MIT license): how the environment around an AI agent (instructions, tools, environment, state and verification) changes what the same model delivers.
 
-**Demo en vivo:** https://harness-engineering-matias.vercel.app (el código de la página es [`index.html`](index.html); Vercel publica solo ese archivo, ver `.vercelignore`).
+**Live demo:** https://harness-engineering-matias.vercel.app (the page's code is [`index.html`](index.html); Vercel publishes only that file, see `.vercelignore`).
 
-- **48 sesiones** de agente (Claude Opus 5.5, modo no interactivo), todas con transcript guardado · **US$53,86** en total
-- En cada proyecto, la misma tarea con el mismo modelo, cambiando solo el harness
-- Cada resultado verificado por fuera del agente: typecheck, tests, build, la app real y verificaciones propias que los agentes no veían
+- **48 agent sessions** (Claude Opus 5.5, non-interactive mode), all with saved transcripts · **US$53.86** in total
+- In each project, the same task with the same model, changing only the harness
+- Every result verified outside the agent: typecheck, tests, build, the real app and my own checks that the agents could not see
 
-## Hallazgos principales
+## Key findings
 
-1. **Con un modelo actual, el harness cambia cómo se trabaja más que si se termina.** En casi todos los proyectos las dos versiones entregaron la tarea; el harness movió el costo, la verificación, los tests, los commits y lo que queda escrito para la próxima sesión.
-2. **La evidencia del tipo equivocado produce falsos "terminado".** En P03, dos agentes marcaron 4 funciones como terminadas con la interfaz desconectada. Solo una prueba en la app real lo detecta.
-3. **Las soluciones del curso repiten un bug:** el preload importa un archivo local con el sandbox de Electron activo y la interfaz queda sin acceso a la app (también en la solución del proyecto final, calificada 5/5 por su propia rúbrica). Quedó convertido en una regla ejecutable.
-4. **Una tarea bien especificada hace buena parte del trabajo.** En P06, con nombres de API fijos y "tiene que funcionar en la app real", las cinco variantes pasaron la suite oculta, incluido el harness débil.
-5. **Un evaluador independiente suma; un planificador, no siempre** (P05: juez 3,9 → 4,5 con evaluador; 4,0 con planificador).
-6. **En la ablación, lo que más pesa son las instrucciones** (P06: sin `AGENTS.md`, cero commits y un tercio de los tests).
+1. **With a current model, the harness changes how the work gets done more than whether it gets finished.** In almost every project both versions delivered the task; the harness shifted the cost, the verification, the tests, the commits and what gets written down for the next session.
+2. **The wrong kind of evidence produces false "done".** In P03, two agents marked 4 features as done with the UI disconnected. Only a test in the real app catches it.
+3. **The course solutions repeat a bug:** the preload imports a local file with Electron's sandbox enabled, and the UI is left without access to the app (also in the final project's solution, graded 5/5 by its own rubric). It was turned into an executable rule.
+4. **A well-specified task does much of the work.** In P06, with fixed API names and "it has to work in the real app", all five variants passed the hidden suite, including the weak harness.
+5. **An independent evaluator adds value; a planner, not always** (P05: judge 3.9 → 4.5 with an evaluator; 4.0 with a planner).
+6. **In the ablation, instructions matter most** (P06: without `AGENTS.md`, zero commits and a third of the tests).
 
-## Resultados por proyecto
+## Results by project
 
-| Proyecto | Qué se probó | Corrida débil | Corrida fuerte |
+| Project | What was tested | Weak run | Strong run |
 |---|---|---|---|
-| [P01](p01/metricas.md) | `AGENTS.md`, `init.sh`, `feature_list.json` | 4/4 funciones · 11:40 · 54 turnos · US$3,28 · sin estado para la próxima sesión · alcance decidido por el agente | 4/4 funciones · 9:13 · 31 turnos · US$2,30 · test de punta a punta · estado registrado con evidencia |
-| [P02](p02/metricas.md) | `session-handoff.md` + `AGENTS.md` con reglas de inicio y de cierre (dos sesiones) | 2/3 funciones · 8:49 · US$1,85 · la sesión 2 dejó lo que aprendió solo en el chat | 3/3 funciones · 7:52 · US$2,04 · la sesión 2 retomó desde el traspaso y lo actualizó · sin tests |
-| [P03](p03/metricas.md) | Una función a la vez con commit por función, `init.sh`, checklist de cierre (sesiones cortadas por tope de gasto) | 4/4 en `pass` · 2 sesiones · US$0,78 · las 4 funciones juntas · **interfaz desconectada** | 4/4 en `pass` · 3 sesiones · US$1,27 · un commit por función, el corte no perdió nada · **interfaz desconectada** |
-| [P04](p04/metricas.md) | Logger estructurado, guarda de arquitectura, rutina de inicio y cierre (bug sembrado) | Bug arreglado en 59 s · US$0,29 · repo queda con 14 errores de tipos | Bug arreglado en 92 s · US$0,49 · arregló primero el typecheck roto, todo en verde · los logs no hicieron falta |
-| [P05](p05/metricas.md) | Roles separados: generador + evaluador (B) y además planificador (C), contra un solo rol (A) | A: juez 3,9 · US$2,54 | B: juez **4,5** · US$7,05 · C: juez 4,0 · US$8,60 |
-| [P06](p06/metricas.md) | Mi harness completo (3 capas de verificación, lista con comandos, `init.sh` que abre la app, regla del preload) + ablación | Suite oculta 12/12 · US$1,19 · 0 tests · sandbox desactivado · sin estado | Suite oculta 12/12 · US$2,74 · 22 tests · commit por función · estado completo · la ablación muestra que lo que más pesa son las instrucciones |
-| [P07](p07/metricas.md) | Loops externos: objetivo con parada determinista, timer con chequeo antes del agente, maker-checker | Una pasada: 100% de cobertura · US$0,70 | Loop de objetivo: 99% en 4 vueltas · US$0,74 · timer: 2/2 fallas revertidas por US$0,23 · maker-checker: PASS en la vuelta 1, confirmado 7/7 |
-| [P08](p08/metricas.md) | Grafo explícito: verificación funcional ∥ revisión en worktrees, vuelta atrás según la capa, aprobación humana con timeout | Loop del P07: 4 aristas implícitas encontradas al dibujarlo | Verificación en paralelo 34% más rápida · función 6/6 · regresión 12/12 · detenido esperando aprobación humana |
+| [P01](p01/metrics.md) | `AGENTS.md`, `init.sh`, `feature_list.json` | 4/4 features · 11:40 · 54 turns · US$3.28 · no state for the next session · scope decided by the agent | 4/4 features · 9:13 · 31 turns · US$2.30 · end-to-end test · state recorded with evidence |
+| [P02](p02/metrics.md) | `session-handoff.md` + `AGENTS.md` with startup and wrap-up rules (two sessions) | 2/3 features · 8:49 · US$1.85 · session 2 left what it learned only in the chat | 3/3 features · 7:52 · US$2.04 · session 2 resumed from the handoff and updated it · no tests |
+| [P03](p03/metrics.md) | One feature at a time with a commit per feature, `init.sh`, wrap-up checklist (sessions cut off by a spending cap) | 4/4 in `pass` · 2 sessions · US$0.78 · all 4 features at once · **UI disconnected** | 4/4 in `pass` · 3 sessions · US$1.27 · one commit per feature, the cutoff lost nothing · **UI disconnected** |
+| [P04](p04/metrics.md) | Structured logger, architecture guard, startup and wrap-up routine (seeded bug) | Bug fixed in 59 s · US$0.29 · repo left with 14 type errors | Bug fixed in 92 s · US$0.49 · fixed the broken typecheck first, everything green · the logs were not needed |
+| [P05](p05/metrics.md) | Separate roles: generator + evaluator (B) and also a planner (C), against a single role (A) | A: judge 3.9 · US$2.54 | B: judge **4.5** · US$7.05 · C: judge 4.0 · US$8.60 |
+| [P06](p06/metrics.md) | My full harness (3 verification layers, feature list with commands, `init.sh` that opens the app, preload rule) + ablation | Hidden suite 12/12 · US$1.19 · 0 tests · sandbox disabled · no state | Hidden suite 12/12 · US$2.74 · 22 tests · commit per feature · full state · the ablation shows that instructions matter most |
+| [P07](p07/metrics.md) | External loops: goal with deterministic stop, timer with a check before the agent, maker-checker | Single pass: 100% coverage · US$0.70 | Goal loop: 99% in 4 rounds · US$0.74 · timer: 2/2 failures reverted for US$0.23 · maker-checker: PASS in round 1, confirmed 7/7 |
+| [P08](p08/metrics.md) | Explicit graph: functional verification ∥ review in worktrees, rollback by layer, human approval with timeout | P07 loop: 4 implicit edges found when drawing it | Parallel verification 34% faster · features 6/6 · regression 12/12 · stopped waiting for human approval |
 
-## Estructura
+## Structure
 
-| Carpeta | Qué hay |
+| Folder | Contents |
 |---|---|
-| `p01/` … `p04/` | Corrida con harness débil (`baseline/`) y fuerte (`improved/`): transcript, diff, resumen del agente, harness usado, `metricas.md` |
-| `p05/` | Las tres configuraciones de roles, sus evaluaciones y el informe del juez independiente |
-| `p06/` | Mi harness (`harness-mio/`), las variantes de la ablación y las corridas con su resultado en la suite de aceptación |
-| `p07/` | Los tres loops con sus prompts, el registro del timer y el `loop-state.md` |
-| `p08/` | `graph.md` (el loop del P07 como grafo) y el recorrido del grafo ejecutable, con su pedido de aprobación |
-| `scripts/` | Todo lo necesario para repetir los experimentos |
-| `index.html` | La página de demo |
+| `p01/` … `p04/` | Weak-harness run (`baseline/`) and strong-harness run (`improved/`): transcript, diff, agent summary, harness used, `metrics.md` |
+| `p05/` | The three role configurations, their evaluations and the independent judge's report |
+| `p06/` | My harness (`my-harness/`), the ablation variants and the runs with their hidden acceptance suite results |
+| `p07/` | The three loops with their prompts, the timer log and `loop-state.md` |
+| `p08/` | `graph.md` (the P07 loop as a graph) and the run log of the executable graph, with its approval request |
+| `scripts/` | Everything needed to repeat the experiments |
+| `index.html` | The demo page |
 
-## Herramientas
+Transcripts (`transcript.jsonl`) and diffs (`changes.patch`) are kept exactly as recorded, since they are the evidence. The experiments originally ran with harness files partly written in Spanish, so some notes the agents wrote during the runs (progress logs inside those files) are in Spanish. Everything else in the repo is in English.
 
-| Script | Qué hace |
+## Tools
+
+| Script | What it does |
 |---|---|
-| `run-session.sh` | Corre una sesión no interactiva de Claude Code en una carpeta aislada y guarda transcript, diff y tiempos |
-| `run-multi.sh` | Encadena sesiones nuevas con tope de gasto (simula reinicios) hasta completar `feature_list.json` |
-| `analyze-transcript.py` | Turnos, costo y acciones antes de la primera edición (costo de redescubrimiento) |
-| `check-bridge.mjs` | Se conecta a la app abierta por Chrome DevTools y verifica que la interfaz tenga acceso a la API |
-| `run-p05.sh` | Las tres configuraciones de roles y el juez independiente |
-| `run-p06.sh`, `run-p06-all.sh` | Las variantes del P06 con la suite de aceptación al final |
-| `p06-acceptance.mjs` | Suite de punta a punta oculta: 12 chequeos con dos reinicios de la app |
-| `p07-goal.sh`, `p07-timer.sh`, `p07-maker-checker.sh` | Los tres loops del P07 |
-| `p07-search-accept.mjs`, `p08-export-accept.mjs` | Verificaciones independientes de las funciones de P07 y P08 |
-| `p08-graph.sh` | El grafo: plan, implement, verificación en paralelo en worktrees, ruteo, aprobación humana y timeout |
+| `run-session.sh` | Runs a non-interactive Claude Code session in an isolated folder and saves the transcript, diff and timings |
+| `run-multi.sh` | Chains fresh sessions with a spending cap (simulates restarts) until `feature_list.json` is complete |
+| `analyze-transcript.py` | Turns, cost and actions before the first edit (rediscovery cost) |
+| `check-bridge.mjs` | Connects to the open app via Chrome DevTools and checks that the UI has access to the API |
+| `run-p05.sh` | The three role configurations and the independent judge |
+| `run-p06.sh`, `run-p06-all.sh` | The P06 variants with the acceptance suite at the end |
+| `p06-acceptance.mjs` | Hidden end-to-end suite: 12 checks with two app restarts |
+| `p07-goal.sh`, `p07-timer.sh`, `p07-maker-checker.sh` | The three P07 loops |
+| `p07-search-accept.mjs`, `p08-export-accept.mjs` | Independent checks of the P07 and P08 features |
+| `p08-graph.sh` | The graph: plan, implement, parallel verification in worktrees, routing, human approval and timeout |
 
-## Pendiente: la aprobación humana del P08
+## Pending: P08 human approval
 
-El grafo del P08 está detenido en su nodo de aprobación, esperando la decisión de una persona (a propósito, no se simuló). Para completarlo: leer `p08/3-grafo/approval-request.md`, escribir `approval: approved` o `approval: rejected` en `~/harness-runs/p08-graph/state.md` y correr `scripts/p08-graph.sh resume`.
+The P08 graph is stopped at its approval node, waiting for a person's decision (on purpose; it was not simulated). To complete it: read `p08/3-graph/approval-request.md`, write `approval: approved` or `approval: rejected` in `~/harness-runs/p08-graph/state.md` and run `scripts/p08-graph.sh resume`.
 
-## Límites
+## Limitations
 
-- Una corrida por condición: las diferencias de tiempo y costo son indicativas, no estadísticas.
-- Un solo modelo (Claude Opus 5.5); con otro, varias conclusiones pueden cambiar.
-- Las sesiones corrieron en modo no interactivo, no a mano como propone el curso, para medirlas igual; las intervenciones humanas son cero por diseño.
-- Varios protocolos los diseñé yo porque el curso no los define (P02, P03, P05–P08). Cada ajuste y cada tropiezo está documentado en el `metricas.md` del proyecto.
+- One run per condition: differences in time and cost are indicative, not statistical.
+- A single model (Claude Opus 5.5); with another, several conclusions may change.
+- The sessions ran in non-interactive mode, not by hand as the course suggests, so they could be measured the same way; human interventions are zero by design.
+- I designed several protocols myself because the course does not define them (P02, P03, P05–P08). Every adjustment and every stumble is documented in the project's `metrics.md`.

@@ -1,0 +1,67 @@
+{
+  "app": "/Users/matiasrodriguezc/harness-runs/p06-mio",
+  "passed": 12,
+  "total": 12,
+  "results": [
+    {
+      "name": "1. The UI has the bridge (window.knowledgeBase)",
+      "ok": true,
+      "detail": "object"
+    },
+    {
+      "name": "2. Import the 3 sample documents",
+      "ok": true,
+      "detail": "{\"value\":3}"
+    },
+    {
+      "name": "3. Asking returns an answer with non-empty citations",
+      "ok": true,
+      "detail": "{\"value\":{\"id\":\"5bc5bd1b-4c96-4526-840f-9a92fbd9718d\",\"n\":2,\"ex\":200}}"
+    },
+    {
+      "name": "4. The answer has an id",
+      "ok": true,
+      "detail": "5bc5bd1b-4c96-4526-840f-9a92fbd9718d"
+    },
+    {
+      "name": "5. Rate the answer and see it in feedback.list()",
+      "ok": true,
+      "detail": "{\"value\":true}"
+    },
+    {
+      "name": "6. The history has the question",
+      "ok": true,
+      "detail": "{\"value\":1}"
+    },
+    {
+      "name": "7. The UI shows the rating buttons",
+      "ok": true,
+      "detail": "{\"up\":1,\"down\":1,\"reset\":1}"
+    },
+    {
+      "name": "8. The UI has the \"Reset all data\" button",
+      "ok": true,
+      "detail": "{\"up\":1,\"down\":1,\"reset\":1}"
+    },
+    {
+      "name": "9. After restarting, the rating persists",
+      "ok": true,
+      "detail": "{\"value\":{\"fb\":true,\"docs\":3,\"hist\":1}}"
+    },
+    {
+      "name": "10. After restarting, documents and history persist",
+      "ok": true,
+      "detail": "{\"value\":{\"fb\":true,\"docs\":3,\"hist\":1}}"
+    },
+    {
+      "name": "11. Reset leaves documents, history and ratings at zero",
+      "ok": true,
+      "detail": "{\"value\":{\"docs\":0,\"hist\":0,\"fb\":0}}"
+    },
+    {
+      "name": "12. After restarting, the reset holds",
+      "ok": true,
+      "detail": "{\"value\":{\"docs\":0,\"hist\":0,\"fb\":0}}"
+    }
+  ]
+}

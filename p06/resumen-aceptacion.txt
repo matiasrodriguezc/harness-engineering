@@ -1,5 +1,0 @@
-debil 12 / 12
-mio 12 / 12
-sin-e2e 12 / 12
-sin-lista 12 / 12
-sin-instrucciones 12 / 12

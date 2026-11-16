@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Verificación determinista del objetivo del loop: tests en verde, cobertura de src/services
-# (líneas y funciones >= 95% en total, cada archivo >= 90% de líneas), tipos y arquitectura.
+# Deterministic check of the loop goal: green tests, coverage of src/services
+# (lines and functions >= 95% overall, each file >= 90% lines), types and architecture.
 set -u
 rm -rf .coverage-goal
 npx vitest run --coverage --coverage.provider=v8 --coverage.include='src/services/**' \

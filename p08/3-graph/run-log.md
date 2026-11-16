@@ -1,0 +1,14 @@
+# Graph run log
+- 00:42:46 · start
+- 00:42:46 · plan node (round 1)
+- 00:43:40 · implement node (round 1)
+- 00:47:35 · sequential verification (round 1, only to measure against the parallel one)
+- 00:50:41 · fan-in (sequential): 186 s wall-clock · functional=VERDICT: PASS · review=VERDICT: PASS
+- 00:50:42 · fan-out: verify-functional ∥ verify-review (round 1, separate worktrees)
+- 00:52:45 · fan-in (parallel): 123 s wall-clock · functional=VERDICT: PASS · review=VERDICT: PASS
+- 00:52:45 · route → approval
+- 00:52:45 · approval node: the graph stops and waits for a human decision in state.md
+- 00:53:50 · resume: approval=pending (timeout 0 min)
+- 00:53:50 · timeout: 1 min ≥ 0 → escalated (ESCALATION.md), not approved
+- 00:53:50 · resume: approval=pending (timeout 1440 min)
+- 00:53:50 · still pending (1 min < 1440): does nothing

@@ -1,0 +1,7 @@
+68cc821 docs: record clean-state checklist findings in session handoff
+b69ee5c feat(grounded-qa): show well-grounded vs speculative confidence indicator on answers
+6e6ab0c feat(indexing-status-ui): show indexed count, total chunks and color-coded status in StatusBar
+e978d23 feat(document-chunking): keep index-meta and doc status in sync on single-doc indexing
+3783618 feat(metadata-extraction): extract word/line/paragraph/char counts and file type on import
+9576854 chore: fix baseline type-check (import paths, Electron 33 file path via webUtils)
+4efadfa starter P03 + strong harness

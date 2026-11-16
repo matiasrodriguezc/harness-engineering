@@ -1,8 +1,8 @@
-// Verificación independiente de la búsqueda de documentos (P07). Los agentes NO la ven.
-// Abre la app real (Electron) con una carpeta de datos temporal, usa la API a través del puente
-// del preload (window.knowledgeBase), reinicia la app para probar persistencia y revisa la interfaz.
-// Uso: node --experimental-websocket scripts/p06-acceptance.mjs <carpeta-de-la-app> [puerto]
-// Requiere que la app ya esté compilada (npm run build).
+// Independent check of document search (P07). The agents do NOT see it.
+// Opens the real app (Electron) with a temporary data folder, uses the API through the preload
+// bridge (window.knowledgeBase), restarts the app to test persistence and checks the UI.
+// Usage: node --experimental-websocket scripts/p07-search-accept.mjs <app-folder> [port]
+// Requires the app to be built already (npm run build).
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -35,7 +35,7 @@ async function connect() {
     } catch {}
     await sleep(500);
   }
-  throw new Error('la app no abrió una ventana');
+  throw new Error('the app did not open a window');
 }
 function evaluator(ws) {
   let n = 0;
@@ -72,22 +72,22 @@ const docs = readdirSync(SAMPLES).map((f) => join(SAMPLES, f));
 try {
   await withApp(async (ev) => {
     const b = await ev('typeof window.knowledgeBase');
-    check('1. La interfaz tiene el puente', b.value === 'object', b.value); if (b.value !== 'object') return;
+    check('1. The UI has the bridge', b.value === 'object', b.value); if (b.value !== 'object') return;
     await ev(kb(`for (const p of ${JSON.stringify(docs)}) { await kb.documents.import(p); } return true;`));
     const r = await ev(kb(`const all = (await kb.documents.list()).length;
       const t = (q) => kb.documents.search(q).then(x => x.length);
       return { all, vector: await t('vector'), upper: await t('VECTOR'), none: await t('zzqqxx-no-match'), empty: await t('') };`));
     const v = r.value || {};
-    check('2. search() encuentra documentos por contenido', v.vector > 0 && v.vector <= v.all, JSON.stringify(r));
-    check('3. search() no distingue mayúsculas', v.upper === v.vector, JSON.stringify(r));
-    check('4. search() sin coincidencias devuelve vacío', v.none === 0, JSON.stringify(r));
-    check('5. search(\'\') devuelve todos', v.empty === v.all, JSON.stringify(r));
+    check('2. search() finds documents by content', v.vector > 0 && v.vector <= v.all, JSON.stringify(r));
+    check('3. search() is case-insensitive', v.upper === v.vector, JSON.stringify(r));
+    check('4. search() with no matches returns empty', v.none === 0, JSON.stringify(r));
+    check('5. search(\'\') returns all', v.empty === v.all, JSON.stringify(r));
     await ev('location.reload()'); await sleep(2500);
     const ui = await ev(`document.querySelectorAll('[aria-label="Search documents"]').length`);
-    check('6. La interfaz tiene el campo "Search documents"', ui.value > 0, JSON.stringify(ui));
+    check('6. The UI has the "Search documents" field', ui.value > 0, JSON.stringify(ui));
     const ask = await ev(kb(`await kb.indexing.start(); await new Promise(r => setTimeout(r, 1500)); const a = await kb.qa.ask('What did the team decide about the vector database?'); return a && a.citations ? a.citations.length : 0;`));
-    check('7. Preguntar sigue funcionando (sin regresión)', ask.value > 0, JSON.stringify(ask));
+    check('7. Asking still works (no regression)', ask.value > 0, JSON.stringify(ask));
   });
-} catch (e) { check('La app arrancó', false, String(e)); } finally { rmSync(DATA, { recursive: true, force: true }); }
+} catch (e) { check('The app started', false, String(e)); } finally { rmSync(DATA, { recursive: true, force: true }); }
 const total = 7; const passed = results.filter((r) => r.ok).length;
 console.log(JSON.stringify({ app: APP, passed, total, results }, null, 2));

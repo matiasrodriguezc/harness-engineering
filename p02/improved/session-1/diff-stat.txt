@@ -1,0 +1,21 @@
+9e1eb7e end of session: session-1
+
+ docs/ARCHITECTURE.md                       |   63 +-
+ docs/PRODUCT.md                            |    5 +
+ feature_list.json                          |    6 +-
+ package-lock.json                          | 4093 ++++++++++++++++++++++++++++
+ package.json                               |    4 +-
+ scripts/dev.js                             |    2 +
+ session-handoff.md                         |   36 +-
+ src/preload/preload.ts                     |    5 +-
+ src/renderer/App.tsx                       |   41 +-
+ src/renderer/components/DocumentDetail.tsx |    6 +-
+ src/renderer/components/DocumentList.tsx   |    3 +-
+ src/renderer/components/ImportPanel.tsx    |   97 +-
+ src/renderer/components/StatusBar.tsx      |    8 +-
+ src/renderer/types.d.ts                    |    5 +-
+ src/services/document-service.ts           |   41 +-
+ src/services/indexing-service.ts           |    9 +-
+ src/services/qa-service.ts                 |    2 +-
+ src/shared/types.ts                        |   12 +
+ 18 files changed, 4342 insertions(+), 96 deletions(-)

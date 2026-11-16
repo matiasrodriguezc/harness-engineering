@@ -1,0 +1,5 @@
+69ddafb end of session: r1-verify-functional
+
+ node_modules          |  1 +
+ verdict-functional.md | 46 ++++++++++++++++++++++++++--------------------
+ 2 files changed, 27 insertions(+), 20 deletions(-)

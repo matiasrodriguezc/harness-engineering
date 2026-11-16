@@ -1,0 +1,8 @@
+5258920 end of session: 9-judge
+e91e0eb end of session: 4-evaluator
+cbe074c Fix evaluator defects in conversation history
+9c06b72 end of session: 2-evaluator
+8c65398 Add multi-turn Q&A conversation history
+93d865e Bundle the preload script so the renderer bridge actually loads
+452cc75 Fix broken baseline: renderer import paths, unused imports, remove dead ImportPanel
+1655e02 starter P05 + rubric

@@ -1,0 +1,14 @@
+You are the monitoring agent for this repository. The scheduled health check (bash init.sh) just failed. Last lines of its output:
+
+== 1/6 Environment ==
+WARN: NODE_OPTIONS contains --openssl-legacy-provider, which Electron rejects.
+      This script and scripts/smoke-bridge.sh remove it for Electron. To launch by hand use: env -u NODE_OPTIONS npm run dev
+== 2/6 Dependencies ==
+== 3/6 Types ==
+
+> knowledge-base@0.1.0 check
+> tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.json
+
+src/services/qa-service.ts(180,14): error TS2322: Type 'string' is not assignable to type 'number'.
+
+Find what changed (git log, git diff), fix the root cause with the smallest safe change, and run bash init.sh again. If you cannot fix it safely, do not guess: write ALERT.md for a human explaining what failed and why. Commit your fix with a message that starts with 'monitor:'.
